@@ -100,7 +100,7 @@ def bbox2result(bboxes, labels, num_classes):
     """Convert detection results to a list of numpy arrays.
 
     Args:
-        bboxes (torch.Tensor | np.ndarray): shape (n, 5)
+        bboxes (torch.Tensor | np.ndarray): shape (n, 5) why 5?
         labels (torch.Tensor | np.ndarray): shape (n, )
         num_classes (int): class number, including background class
 
@@ -244,3 +244,71 @@ def bbox_xyxy_to_cxcywh(bbox):
     x1, y1, x2, y2 = bbox.split((1, 1, 1, 1), dim=-1)
     bbox_new = [(x1 + x2) / 2, (y1 + y2) / 2, (x2 - x1), (y2 - y1)]
     return torch.cat(bbox_new, dim=-1)
+
+
+
+
+def bbox2result3d(bboxes, labels, num_classes):
+    """Convert detection results to a list of numpy arrays.
+
+    Args:
+        bboxes (torch.Tensor | np.ndarray): shape (n, 7)
+        labels (torch.Tensor | np.ndarray): shape (n, )
+        num_classes (int): class number, including background class
+
+    Returns:
+        list(ndarray): bbox results of each class
+    """
+    if bboxes.shape[0] == 0:
+        return [np.zeros((0, 7), dtype=np.float32) for i in range(num_classes)]
+    else:
+        if isinstance(bboxes, torch.Tensor):
+            bboxes = bboxes.detach().cpu().numpy()
+            labels = labels.detach().cpu().numpy()
+        return [bboxes[labels == i, :] for i in range(num_classes)]
+
+
+def bbox_flip_3d(bboxes, img_shape, direction='horizontal'):
+    """Flip bboxes horizontally or vertically.
+
+    Args:
+        bboxes (Tensor): Shape (..., 6*k)
+        img_shape (tuple): Image shape. dim order: xyz
+        direction (str): Flip direction, options are
+         "diagonal".  'headfeet', 'all3axis', Default: "horizontal" 
+
+    Returns:
+        Tensor: Flipped bboxes.
+    """
+    assert bboxes.shape[-1] % 6 == 0
+    assert direction in ['diagonal', 'headfeet', 'all3axis']
+    flipped = bboxes.clone()
+    if direction == 'headfeet':
+        flipped[..., 2::6] = img_shape[2] - bboxes[..., 5::6]
+        flipped[..., 5::6] = img_shape[2] - bboxes[..., 2::6]
+    elif direction == 'diagonal':
+        flipped[..., 0::6] = img_shape[0] - bboxes[..., 3::6]
+        flipped[..., 3::6] = img_shape[0] - bboxes[..., 0::6]
+        flipped[..., 1::6] = img_shape[1] - bboxes[..., 4::6]
+        flipped[..., 4::6] = img_shape[1] - bboxes[..., 1::6]
+    else:
+        flipped[..., 0::6] = img_shape[0] - bboxes[..., 3::6]
+        flipped[..., 3::6] = img_shape[0] - bboxes[..., 0::6]
+        flipped[..., 1::6] = img_shape[1] - bboxes[..., 4::6]
+        flipped[..., 4::6] = img_shape[1] - bboxes[..., 1::6]
+        flipped[..., 2::6] = img_shape[2] - bboxes[..., 5::6]
+        flipped[..., 5::6] = img_shape[2] - bboxes[..., 2::6]
+
+    return flipped
+
+
+def bbox_mapping_back_3d(bboxes,
+                      img_shape,
+                      scale_factor,
+                      flip,
+                      flip_direction='horizontal'):
+    """Map bboxes from testing scale to original image scale."""
+    new_bboxes = bbox_flip_3d(bboxes, img_shape,
+                           flip_direction) if flip else bboxes
+    new_bboxes = new_bboxes.view(-1, 6) / new_bboxes.new_tensor(scale_factor)
+    return new_bboxes.view(bboxes.shape)

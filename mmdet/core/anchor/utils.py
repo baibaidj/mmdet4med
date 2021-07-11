@@ -69,3 +69,64 @@ def calc_region(bbox, ratio, featmap_size=None):
         x2 = x2.clamp(min=0, max=featmap_size[1])
         y2 = y2.clamp(min=0, max=featmap_size[0])
     return (x1, y1, x2, y2)
+
+
+
+def anchor_inside_flags_3d(flat_anchors,
+                        valid_flags,
+                        img_shape,
+                        allowed_border=0):
+    """Check whether the anchors are inside the border.
+
+    Args:
+        flat_anchors (torch.Tensor): Flatten anchors, shape (n, 4).
+        valid_flags (torch.Tensor): An existing valid flags of anchors.
+        img_shape (tuple(int)): Shape of current image.
+        allowed_border (int, optional): The border to allow the valid anchor.
+            Defaults to 0.
+
+    Returns:
+        torch.Tensor: Flags indicating whether the anchors are inside a \
+            valid range.
+    """
+    img_h, img_w, img_d = img_shape[:3]
+    if allowed_border >= 0:
+        inside_flags = valid_flags & \
+            (flat_anchors[:, 0] >= -allowed_border) & \
+            (flat_anchors[:, 1] >= -allowed_border) & \
+            (flat_anchors[:, 2] >= -allowed_border) & \
+            (flat_anchors[:, 3] < img_w + allowed_border) & \
+            (flat_anchors[:, 4] < img_h + allowed_border) & \
+            (flat_anchors[:, 5] < img_d + allowed_border)
+    else:
+        inside_flags = valid_flags
+    return inside_flags
+
+
+def calc_region_3d(bbox, ratio, featmap_size=None):
+    """Calculate a proportional bbox region.
+
+    The bbox center are fixed and the new h', w' and d' is h * ratio, w * ratio and d * ration.
+
+    Args:
+        bbox (Tensor): Bboxes to calculate regions, shape (n, 6).
+        ratio (float): Ratio of the output region.
+        featmap_size (tuple): Feature map size used for clipping the boundary.
+
+    Returns:
+        tuple: x1, y1, z1, x2, y2, z2
+    """
+    x1 = torch.round((1 - ratio) * bbox[0] + ratio * bbox[3]).long()
+    y1 = torch.round((1 - ratio) * bbox[1] + ratio * bbox[4]).long()
+    z1 = torch.round((1 - ratio) * bbox[2] + ratio * bbox[5]).long()
+    x2 = torch.round(ratio * bbox[0] + (1 - ratio) * bbox[3]).long()
+    y2 = torch.round(ratio * bbox[1] + (1 - ratio) * bbox[4]).long()
+    z2 = torch.round(ratio * bbox[2] + (1 - ratio) * bbox[5]).long()
+    if featmap_size is not None:
+        x1 = x1.clamp(min=0, max=featmap_size[1])
+        y1 = y1.clamp(min=0, max=featmap_size[0])
+        z1 = z1.clamp(min=0, max=featmap_size[2])
+        x2 = x2.clamp(min=0, max=featmap_size[1])
+        y2 = y2.clamp(min=0, max=featmap_size[0])
+        z2 = z2.clamp(min=0, max=featmap_size[2])
+    return (x1, y1, z1, x2, y2, z2)

@@ -26,7 +26,7 @@ class MaxIoUAssigner(BaseAssigner):
             highest overlap with some gt to that gt.
         ignore_iof_thr (float): IoF threshold for ignoring bboxes (if
             `gt_bboxes_ignore` is specified). Negative values mean not
-            ignoring any bboxes.
+            ignoring any bboxes. "iof" = (intersection over foreground)
         ignore_wrt_candidates (bool): Whether to compute the iof between
             `bboxes` and `gt_bboxes_ignore`, or the contrary.
         match_low_quality (bool): Whether to allow low quality matches. This is

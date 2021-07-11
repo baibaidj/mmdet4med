@@ -13,7 +13,7 @@ model = dict(
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     neck=dict(
         type='FPN',
-        in_channels=[256, 512, 1024, 2048],
+        in_channels=[256, 512, 1024, 2048], 
         out_channels=256,
         start_level=1,
         add_extra_convs='on_input',
@@ -24,8 +24,8 @@ model = dict(
         in_channels=256,
         stacked_convs=4,
         feat_channels=256,
-        anchor_generator=dict(
-            type='AnchorGenerator',
+        anchor_generator=dict( 
+            type='AnchorGenerator', 
             octave_base_scale=4,
             scales_per_octave=3,
             ratios=[0.5, 1.0, 2.0],
@@ -48,7 +48,9 @@ model = dict(
             pos_iou_thr=0.5,
             neg_iou_thr=0.4,
             min_pos_iou=0,
-            ignore_iof_thr=-1),
+            ignore_iof_thr=-1,
+            iou_calculator=dict(type='BboxOverlaps2D')
+            ),
         allowed_border=-1,
         pos_weight=-1,
         debug=False),
