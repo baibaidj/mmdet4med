@@ -7,10 +7,10 @@ from mmcv.utils.parrots_wrapper import _BatchNorm
 from torch.nn.modules.utils import _ntuple, _triple
 
 from ..builder import BACKBONES
-from ..utils import ResLayer, ResLayer3D, ResLayerIso, get_root_logger
+from ..utils import  ResLayerIso
 from .resnet import BasicBlock, Bottleneck
 from .resnet3d import BasicBlock3d, Bottleneck3d
-import pdb
+from ...utils import get_root_logger
 
 print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 class BasicBlockP3D(nn.Module):
@@ -69,8 +69,6 @@ class BasicBlockP3D(nn.Module):
         out = self.relu(out)
 
         return out
-
-
 
 class BottleneckP3D(nn.Module):
     """Bottleneck block for ResNet.
@@ -263,9 +261,9 @@ class ResNet3dIso(nn.Module):
     """
 
     arch_settings = {
-        18: (BasicBlock, (2, 2, 2, 2)), 
-        34: (BasicBlock, (3, 4, 6, 3)),
-        50: (Bottleneck, (3, 4, 6, 3)),
+        18: (BasicBlock, (2, 2, 2, 2, 2)), 
+        34: (BasicBlock, (3, 4, 6, 3, 2)),
+        50: (Bottleneck, (3, 4, 6, 3, 2)),
         101: (Bottleneck, (3, 4, 23, 3)),
         152: (Bottleneck, (3, 8, 36, 3)),
         '34bneck': (Bottleneck, (2, 2, 2, 2)), 
@@ -274,9 +272,9 @@ class ResNet3dIso(nn.Module):
         '34bneckp3d': (BottleneckP3D, (2, 2, 2, 2)),
         '50bneckp3d': (BottleneckP3D, (3, 4, 6, 3)),
         '101bneckp3d': (BottleneckP3D, (3, 4, 23, 3)), 
-        '183d': (BasicBlock3d, (2, 2, 2, 2)), 
-        '343d': (BasicBlock3d, (3, 4, 6, 3)),
-        '503d': (Bottleneck3d, (3, 4, 6, 3)),
+        '183d': (BasicBlock3d, (2, 2, 2, 2, 2)), 
+        '343d': (BasicBlock3d, (3, 4, 6, 3, 2)),
+        '503d': (Bottleneck3d, (3, 4, 6, 3, 2)),
     }
 
     p3d_structs = ['A', 'B', 'C']
@@ -297,7 +295,7 @@ class ResNet3dIso(nn.Module):
                  norm_cfg=dict(type='BN', requires_grad=True),
                  norm_eval=False,
                  dcn=None,
-                 stage_with_dcn=(False, False, False, False),
+                 stage_with_dcn=(False, False, False, False, False),
                  plugins=None,
                  multi_grid=None,
                  contract_dilation=False,
@@ -305,7 +303,7 @@ class ResNet3dIso(nn.Module):
                  zero_init_residual=True,
                  stem_stride_1 = 2,
                  stem_stride_2 = 1, 
-                 non_local=(0, 0, 0, 0),
+                 non_local=(0, 0, 0, 0, 0),
                  non_local_cfg=dict(),
                  verbose = False, 
                  ):
@@ -317,7 +315,7 @@ class ResNet3dIso(nn.Module):
         self.base_channels = base_channels
         # self.kernel_size = kernel_size
         self.num_stages = num_stages
-        assert num_stages >= 1 and num_stages <= 4
+        assert num_stages >= 1 and num_stages <= 5
         self.strides = strides
         self.dilations = dilations
         assert len(strides) == len(dilations) == num_stages
@@ -456,7 +454,7 @@ class ResNet3dIso(nn.Module):
     def make_res_layer(self, **kwargs):
         """Pack all blocks in a stage into a ``ResLayer``."""
 
-        print('ResLayer Kargs', kwargs)
+        # print('ResLayer Kargs', kwargs)
         return ResLayerIso(**kwargs)
 
     @property

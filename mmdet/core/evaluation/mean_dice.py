@@ -196,8 +196,6 @@ def compute_metric1(cm):
         for s in metric_names:
             # print('\tgetattr', s, getattr(metric_obj, s))
             metric_dict[s].append(getattr(metric_obj, s))
-
-
     return metric_dict
 
 def metric_in_cfsmat_1by1(cfs_matrix_list):

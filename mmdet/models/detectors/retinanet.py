@@ -32,6 +32,9 @@ class RetinaNet3D(SingleStageDetector3D):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None, 
+                 **kwargs,
+                 ):
         super(RetinaNet3D, self).__init__(backbone, neck, bbox_head, seg_head, 
-                                          train_cfg, test_cfg, pretrained, init_cfg)
+                                          train_cfg, test_cfg, pretrained, init_cfg, 
+                                          **kwargs)

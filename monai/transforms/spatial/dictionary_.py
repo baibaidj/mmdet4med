@@ -453,7 +453,8 @@ class Rand3DElasticGPUd(Randomizable, MapTransform):
         as_tensor_output: bool = False,
         device: Optional[torch.device] = None,
         verbose = False, 
-    ) -> None:
+        meta_key = 'img_meta_dict',
+    ) -> None: 
         """
         Args:
             keys: keys of the corresponding items to be transformed.
@@ -499,7 +500,7 @@ class Rand3DElasticGPUd(Randomizable, MapTransform):
         super().__init__(keys)
         # rotate_angle * np.pi / 180.0
         rotate_range = [a * np.pi / 180.0 for a in rotate_range]
-
+        
         self.rand_affine_grid = RandAffineGridGPU(rotate_range, shear_range, translate_range, scale_range, device)
         self.resampler = ResampleGPU(as_tensor_output=as_tensor_output, device=device)
 
@@ -515,12 +516,12 @@ class Rand3DElasticGPUd(Randomizable, MapTransform):
         self.rand_offset = None
         self.magnitude = 1.0
         self.sigma = 1.0
-
         self.mode = ensure_tuple_rep(mode, len(self.keys))
         self.padding_mode = ensure_tuple_rep(padding_mode, len(self.keys))
         # self.grid_tensor = create_grid_torch(spatial_size=spatial_size).half()
         self.grid_tensor = totensor(create_grid(spatial_size)).float() #.half()
         self.verbose = verbose
+        self.meta_key = meta_key
 
     def set_random_state(
         self, seed: Optional[int] = None, state: Optional[np.random.RandomState] = None
@@ -560,18 +561,21 @@ class Rand3DElasticGPUd(Randomizable, MapTransform):
             offset_gaus = gaussian(offset4d)[0] # -0.02, 0.02
             grid4d[:3] = grid4d[:3] + offset_gaus * self.magnitude # jitter 1 to 2 depend on the magnitude
 
-            if self.verbose: print_tensor('\ninitial grid', self.grid_tensor)
-            if self.verbose: print_tensor('offset uniform', offset4d)
-            if self.verbose: print_tensor(f'offset gaussian sigma:{self.sigma} mag:{self.magnitude}', offset_gaus)
-            if self.verbose: print_tensor('offset grid', grid4d[:3])
+            if self.verbose: print_tensor('[RElast] initial grid', self.grid_tensor)
+            if self.verbose: print_tensor('[RElast]offset uniform', offset4d)
+            if self.verbose: print_tensor(f'[RElast]offset gaussian sigma:{self.sigma} mag:{self.magnitude}', offset_gaus)
+            if self.verbose: print_tensor('[RElast]offset grid', grid4d[:3])
             # pdb.set_trace()
             grid4d = self.rand_affine_grid(grid=grid4d)
             if self.verbose: print_tensor('affine grid', grid4d)
             for idx, key in enumerate(self.keys):
                 # with Timer(print_tmpl='\tElasticTransform %s {:.3f} seconds' %key):
-                d[key] = self.resampler(
-                    d[key], grid4d, mode=self.mode[idx], padding_mode=self.padding_mode[idx]
-                )
+                if self.verbose: print_tensor(f'[RElast] {key} prev', d[key])
+                d[key] = self.resampler(d[key], grid4d, mode=self.mode[idx], 
+                                        padding_mode=self.padding_mode[idx])
                 d[key] = d[key].to(key2dtype[key])
+                if self.verbose: print_tensor(f'[RElast] {key} after', d[key])
+                # print_tensor(f'[RandElastic] {key}', d[key])
+                for bi, meta_d in enumerate(d[self.meta_key]): meta_d['patch_shape'] = tuple(d[key].shape[-3:])
         return d
 

@@ -82,7 +82,7 @@ class CenterSpatialCropd_(MapTransform):
     def __init__(self, keys: KeysCollection, roi_size: Union[Sequence[int], int], jitter = 0, 
                       fixed_offset = (0, 0, 0)) -> None:
         super().__init__(keys)
-        self.jitter = 0
+        self.jitter = jitter
         # self.fixed_offset = fixed_offset
         self.cropper = CenterSpatialCrop_(roi_size, fixed_offset= fixed_offset)
 
@@ -90,9 +90,60 @@ class CenterSpatialCropd_(MapTransform):
         d = dict(data)
         # rand_jitter = np.random.randint(-self.jitter, self.jitter) if self.jitter else 0
         for key in self.keys:
-            d[key] = self.cropper(d[key], jitter = self.jitter)
+            j4c = d['img_meta_dict'].get('jitter4center', None)
+            d[key], jitter_xyz = self.cropper(d[key], jitter = self.jitter if j4c is None else j4c)
+            d['img_meta_dict']['jitter4center'] = jitter_xyz
         return d
 
+
+from monai.transforms.croppad.array import SpatialPad, Method, NumpyPadMode
+NumpyPadModeSequence = Union[Sequence[Union[NumpyPadMode, str]], NumpyPadMode, str]
+class SpatialPadd_(MapTransform):
+    """
+    Dictionary-based wrapper of :py:class:`monai.transforms.SpatialPad`.
+    Performs padding to the data, symmetric for all sides or all on one side for each dimension.
+    """
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        spatial_size: Union[Sequence[int], int],
+        method: Union[Method, str] = Method.SYMMETRIC,
+        mode: NumpyPadModeSequence = NumpyPadMode.CONSTANT,
+        verbose = False,
+    ) -> None:
+        """
+        Args:
+            keys: keys of the corresponding items to be transformed.
+                See also: :py:class:`monai.transforms.compose.MapTransform`
+            spatial_size: the spatial size of output data after padding.
+                If its components have non-positive values, the corresponding size of input image will be used.
+            method: {``"symmetric"``, ``"end"``}
+                Pad image symmetric on every side or only pad at the end sides. Defaults to ``"symmetric"``.
+            mode: {``"constant"``, ``"edge"``, ``"linear_ramp"``, ``"maximum"``, ``"mean"``,
+                ``"median"``, ``"minimum"``, ``"reflect"``, ``"symmetric"``, ``"wrap"``, ``"empty"``}
+                One of the listed string values or a user supplied function. Defaults to ``"constant"``.
+                See also: https://numpy.org/doc/1.18/reference/generated/numpy.pad.html
+                It also can be a sequence of string, each element corresponds to a key in ``keys``.
+
+        """
+        super().__init__(keys)
+        self.mode = ensure_tuple_rep(mode, len(self.keys))
+        self.padder = SpatialPad(spatial_size, method)
+        self.verbose = verbose
+
+    def __call__(self, data: Mapping[Hashable, np.ndarray]) -> Dict[Hashable, np.ndarray]:
+        d = dict(data)
+        # print('[Pad] data keys', d.keys())
+        for key, m in zip(self.keys, self.mode):
+            # try:
+                # print_tensor(f'[Pad]Pre: {key}', d[key])
+            d[key] = self.padder(d[key], mode=m)
+            d['img_meta_dict'][f'padshape'] = d[key].shape[-3:]
+            if self.verbose: print_tensor(f'[Pad]Post: {key}', d[key])
+            # except ValueError:
+            #     print(f'[Pad] tensor error fn is', d['img_meta_dict']['filename_or_obj'])
+        return d
 
 class RandCropShiftByPosNegLabeld(Randomizable, MapTransform):
     """
@@ -538,7 +589,7 @@ class RandCropByLabelBBoxRegiond(Randomizable, MapTransform):
         self.whole_image_as_bg = whole_image_as_bg
         self.percentile_00_5 = percentile_00_5
         self.return_keys = return_keys
-        self.is_ribfrac = getattr(custom_center_kargs, 'is_ribfrac', False)
+        self.is_ribfrac = custom_center_kargs.pop('is_ribfrac', False)
         print(f'\n@@RandomCrop use ribfrac?  {self.is_ribfrac}')
         self.custom_center_kargs = custom_center_kargs
         self.info_tb = None

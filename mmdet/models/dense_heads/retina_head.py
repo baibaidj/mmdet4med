@@ -139,14 +139,14 @@ class RetinaHead3D(AnchorHead3D):
                  num_classes,
                  in_channels,
                  stacked_convs=4,
-                 conv_cfg=None,
-                 norm_cfg=None,
+                 conv_cfg=dict(type = 'Conv3d'),
+                 norm_cfg=dict(type = 'BN3d', requires_grad=True),
                  anchor_generator=dict(
                      type='AnchorGenerator3D',
                      octave_base_scale=4,
                      scales_per_octave=3,
                      ratios=[0.5, 1.0, 2.0],
-                     strides=[8, 16, 32, 64, 128]),
+                     strides=[4, 8, 16, 32, 64]),
                  init_cfg=dict(
                      type='Normal',
                      layer='Conv3d',
@@ -200,7 +200,7 @@ class RetinaHead3D(AnchorHead3D):
             3,
             padding=1)
         self.retina_reg = convnd(
-            self.feat_channels, self.num_anchors * 4, 3, padding=1)
+            self.feat_channels, self.num_anchors * 6, 3, padding=1)
 
     def forward_single(self, x):
         """Forward feature of a single scale level.

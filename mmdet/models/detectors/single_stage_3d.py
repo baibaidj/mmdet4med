@@ -1,11 +1,21 @@
+from mmdet.utils.resize import list_dict2dict_list
 import warnings
 
-import torch
-from mmdet.core import bbox2result3d
+import torch, pdb
+from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base3d import BaseDetector3D
 from ...datasets.pipelines import Compose
+from ..utils import print_tensor
+from ...utils.resize import resize_3d
 
+from monai.data.utils import dense_patch_slices
+from monai.utils import BlendMode, PytorchPadMode, fall_back_tuple
+from typing import Any, Callable, List, Sequence, Tuple, Union
+from mmdet.core.post_processing.bbox_nms import batched_nms_3d
+
+
+get_meta_dict  = lambda img_meta: img_meta[0]['img_meta_dict'] if isinstance(img_meta, (list, tuple)) else img_meta['img_meta_dict']
 
 @DETECTORS.register_module()
 class SingleStageDetector3D(BaseDetector3D): 
@@ -27,17 +37,18 @@ class SingleStageDetector3D(BaseDetector3D):
                  gpu_aug_pipelines = [],
                  mask2bbox_cfg = [
                     dict(type = 'FindInstances', 
-                        instance_key="gt_instance_seg",
+                        instance_key="seg",
                         save_key="present_instances"), 
                     dict(type = 'Instances2Boxes', 
-                        instance_key="target",
-                        map_key="instance_mapping",
+                        instance_key="seg",
+                        map_key="instances",
                         box_key="gt_bboxes",
                         class_key="gt_labels",
                         present_instances="present_instances"),
                     dict(type = 'Instances2SemanticSeg', 
-                        map_key="instance_mapping",
-                        seg_key = 'gt_semantic_seg',
+                        instance_key = 'seg',
+                        map_key="instances",
+                        seg_key = 'seg',
                         present_instances="present_instances",
                         )]
                  ):
@@ -56,7 +67,8 @@ class SingleStageDetector3D(BaseDetector3D):
         self.test_cfg = test_cfg
         self.seg_head = build_head(seg_head) if seg_head is not None else None
 
-        self.gpu_pipelines = Compose(gpu_aug_pipelines + mask2bbox_cfg) if mask2bbox_cfg is not None else None
+        self.gpu_pipelines = Compose(gpu_aug_pipelines + mask2bbox_cfg) \
+                                    if mask2bbox_cfg is not None else None
 
     def extract_feat(self, img):
         """Directly extract features from the backbone+neck."""
@@ -76,24 +88,18 @@ class SingleStageDetector3D(BaseDetector3D):
         else: mask = None
         return outs, mask
 
-    def update_img_metas(self, imgs, img_metas, gt_instance_seg, **kwargs):
+    @torch.no_grad()
+    def update_img_metas(self, imgs, img_metas, seg, **kwargs):
         # NOTE the batched image size information may be useful, e.g.
         # in DETR, this is needed for the construction of masks, which is
         # then used for the transformer_head.
-        batch_input_shape = tuple(imgs[0].size()[2:])
-        for img_meta in img_metas:
-            img_meta['batch_input_shape'] = batch_input_shape # TODO, what?
-             
-        gt_keys = ['img', 'gt_bboxes', 'gt_labels', 'gt_semantic_seg']
-        # print_tensor('rawgt', gt_semantic_seg) # {key: [meta1, meta],}
-        with torch.no_grad(): 
-            img_meta_dict = [a['img_meta_dict'] for a in img_metas]
-            gt_meta_dict = [a['gt_instance_seg_meta_dict']for a in img_metas]
-            data_dict = self.gpu_pipelines({'img': imgs, 
-                                            'gt_instance_seg': gt_instance_seg, 
-                                            'img_meta_dict' : img_meta_dict, 
-                                            'gt_instance_seg_meta_dict' : gt_meta_dict})
-        return [data_dict[k] for k in gt_keys]
+        # TODO: adjust keys
+        gt_keys = ['img', 'gt_bboxes', 'gt_labels', 'seg'] # 'img_metas'
+        data_dict = list_dict2dict_list(img_metas, verbose=False)
+        data_dict.update({'img': imgs, 'seg': seg})
+        data_dict = self.gpu_pipelines(data_dict)
+        # for b, m in enumerate(img_metas): m['patch_shape'] = data_dict['patch_shape']
+        return [data_dict[k] for k in gt_keys] 
         
     @property
     def with_seghead(self):
@@ -103,7 +109,7 @@ class SingleStageDetector3D(BaseDetector3D):
     def forward_train(self,
                       img,
                       img_metas,
-                      gt_instance_seg,
+                      seg,
                       gt_bboxes_ignore=None):
         """
         Args:
@@ -125,14 +131,299 @@ class SingleStageDetector3D(BaseDetector3D):
         """
 
         img, gt_bboxes, gt_labels, gt_semantic_seg = self.update_img_metas(
-                                            img, img_metas, gt_instance_seg)
+                                            img, img_metas, seg)
         x = self.extract_feat(img)
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
-        if self.with_seghead: 
-            loss_seg = self.seg_head.forward_train(x, img_metas, gt_semantic_seg)
+        if self.with_seghead:
+            # print_tensor('semantic seg', gt_semantic_seg)
+            loss_seg = self.seg_head.forward_train(x, img_metas, gt_semantic_seg, 
+                                                   self.train_cfg)
             losses.update(loss_seg)
         return losses
+
+    def simple_test_tile(self, img, img_metas, rescale=False):
+        """Test function without test-time augmentation.
+
+        Args:
+            img (torch.Tensor): Images with shape (N, C, H, W, D).
+            img_metas (list[dict]): List of image information. 
+            e.g.[{'img_shape': (H, W, D), 'scale_factor': 1}]
+            rescale (bool, optional): Whether to rescale the results.
+                Defaults to False.
+
+        Returns:
+            list[list[np.ndarray]]: BBox results of each image and classes.
+                The outer list corresponds to each image. The inner list
+                corresponds to each class.
+        """
+        # dense_test_mixins.BBoxTestMixin3D.simple_test_bboxes
+        feat = self.extract_feat(img)
+        results_list = self.bbox_head.simple_test(
+            feat, img_metas, rescale=rescale)
+        if self.with_seghead: 
+            mask = self.seg_head.simple_test(feat, img_metas, rescale = rescale)
+        else: mask = None
+        return results_list, mask
+
+    # @auto_fp16(apply_to=('inputs', ))
+    def sliding_window_inference(self, 
+        inputs: torch.Tensor,
+        img_metas, 
+        mode: Union[BlendMode, str] = BlendMode.CONSTANT,
+        sigma_scale = 0.125,
+        padding_mode: Union[PytorchPadMode, str] = PytorchPadMode.CONSTANT,
+        rescale = True
+    ) -> torch.Tensor:
+        """
+        TODO: visualize this method to gain insight on how the patches are cropped
+        TODO: sliding has order, the target may be split during cropping, and optimal sliding order should be determined
+        Sliding window inference on `inputs` with `predictor`.
+
+        When roi_size is larger than the inputs' spatial size, the input image are padded during inference.
+        To maintain the same spatial sizes, the output image will be cropped to the original input size.
+
+        Args:
+            inputs: input image to be processed (assuming NCHW[D])
+            roi_size: the spatial window size for inferences.
+                When its components have None or non-positives, the corresponding inputs dimension will be used.
+                if the components of the `roi_size` are non-positive values, the transform will use the
+                corresponding components of img size. For example, `roi_size=(32, -1)` will be adapted
+                to `(32, 64)` if the second spatial dimension size of img is `64`.
+            sw_batch_size: the batch size to run window slices.
+            predictor: given input tensor `patch_data` in shape NCHW[D], `predictor(patch_data)`
+                should return a prediction with the same spatial shape and batch_size, i.e. NMHW[D];
+                where HW[D] represents the patch spatial size, M is the number of output channels, N is `sw_batch_size`.
+            overlap: Amount of overlap between scans.
+            mode: {``"constant"``, ``"gaussian"``}
+                How to blend output of overlapping windows. Defaults to ``"constant"``.
+
+                - ``"constant``": gives equal weight to all predictions.
+                - ``"gaussian``": gives less weight to predictions on edges of windows.
+
+            sigma_scale: the standard deviation coefficient of the Gaussian window when `mode` is ``"gaussian"``.
+                Default: 0.125. Actual window sigma is ``sigma_scale`` * ``dim_size``.
+                When sigma_scale is a sequence of floats, the values denote sigma_scale at the corresponding
+                spatial dimensions.
+            padding_mode: {``"constant"``, ``"reflect"``, ``"replicate"``, ``"circular"``}
+                Padding mode for ``inputs``, when ``roi_size`` is larger than inputs. Defaults to ``"constant"``
+                See also: https://pytorch.org/docs/stable/nn.functional.html#pad
+            cval: fill value for 'constant' padding mode. Default: 0
+            sw_device: device for the window data.
+                By default the device (and accordingly the memory) of the `inputs` is used.
+                Normally `sw_device` should be consistent with the device where `predictor` is defined.
+            device: device for the stitched output prediction.
+                By default the device (and accordingly the memory) of the `inputs` is used. If for example
+                set to device=torch.device('cpu') the gpu memory consumption is less and independent of the
+                `inputs` and `roi_size`. Output is on the `device`.
+            args: optional args to be passed to ``predictor``.
+            kwargs: optional keyword args to be passed to ``predictor``.
+
+        Note:
+            - input must be channel-first and have a batch dim, supports N-D sliding window.
+
+        """
+
+        if (self.overlap < 0) or (self.overlap >= 1):
+            raise AssertionError("overlap must be >= 0 and < 1.")
+        # ip_dtype = torch.float #inputs.dtype
+        device = inputs.device; sw_device = device#'cpu'
+        batch_size = inputs.shape[0]
+        Shaper = ShapeHolder(inputs.shape[2:], self.test_cfg.get('patch_size', 128))
+        scan_interval = _get_scan_interval(Shaper.ready_shape_safe, Shaper.patch_shape, 
+                                           Shaper.spatial_dim, self.overlap)
+        slices = dense_patch_slices(Shaper.ready_shape_safe, Shaper.patch_shape, scan_interval)
+        num_win = len(slices)  # number of windows per image
+        # Perform predictions
+        # print_tensor('original inputs', inputs) BCHWD
+        ensembler = BboxSegEnsembler1Case(Shaper.ready_shape_safe, Shaper.patch_shape, 
+                                            self.num_class, self.test_cfg, deviece = device)
+        ensembler.initial_tile_weight_map(Shaper.patch_shape, mode, sigma_scale)
+        # print_tensor('inputs after pad', inputs)
+        det_results, seg_results = [], []
+        for bix in range(batch_size):
+            img_meta = img_metas[bix]
+            for six in range(0, num_win, self.sw_batch_size):
+                slice_range = range(six, min(six + self.sw_batch_size, num_win))
+                unravel_slice = [ [slice(bix, bix + 1), slice(None)] + list(slices[idx])
+                                for idx in slice_range]
+                img_meta_tiles = [img_meta] * self.sw_batch_size
+                for i, m in enumerate(img_meta_tiles): 
+                    m['tile_origin'] = [unravel_slice[i][d+2][0] for d in range(Shaper.spatial_dim)]
+                window_data = torch.cat([inputs[win_slice] for win_slice in unravel_slice]).to(device)
+                det_results, seg_results = self.simple_test_tile(window_data, img_meta_tiles)  # batched patch segmentation
+                ensembler.store_det_output(det_results)
+                ensembler.update_seg_output_batch(seg_results)
+
+            det_result_img = ensembler.finalize_det_bbox() # (bboxes_nx7, labels_nx1)
+            seg_result_img = ensembler.finalize_segmap() # 1CHWD
+
+            det_result_img = ensembler.offset_preprocess4detect(det_result_img, img_meta, 
+                                                            Shaper.ready_shape_safe, rescale)
+            seg_result_img = ensembler.offset_preprocess4seg(seg_result_img, img_meta, 
+                                                            Shaper.ready_shape_safe, rescale)                                               
+            det_results.append(det_result_img)
+            seg_results.append(seg_result_img)
+            ensembler.reset_seg_output(); ensembler.reset_seg_countmap()
+
+        return det_results, seg_results
+
+    def inference(self, imgs, img_metas, rescale):
+        """Inference with slide/whole style.
+
+        Args:
+            img (Tensor): The input image of shape (N, 3, H, W, D).
+            img_meta (dict): Image info dict where each dict has: 'img_shape',
+                'scale_factor', 'flip', and may also contain
+                'filename', 'ori_shape', 'pad_shape', and 'img_norm_cfg'.
+                For details on the values of these keys see
+                `mmseg/datasets/pipelines/formatting.py:Collect`.
+            rescale (bool): Whether rescale back to original shape.
+
+        Returns:
+            Tensor: The output segmentation map.
+        """
+        assert imgs.shape[0] == 1 and len(img_metas) == 1
+
+        assert self.test_cfg.mode in ['slide', 'whole']
+        # print('[Infer] mode', self.test_cfg.mode)
+
+        # print(f'INFER: Flip {flip} Direction {flip_direction} dims {flip_dims}')
+        if self.test_cfg.mode == 'slide':
+            det_results, seg_results = self.sliding_window_inference(imgs, img_metas, mode = self.blend_mode, 
+                                                                    padding_mode= self.padding_mode,
+                                                                    sigma_scale=self.sigma_scale, 
+                                                                    rescale= rescale)
+        else:
+            # NOTE: whole inference should be implemented
+            det_results, seg_results= self.whole_inference(imgs, img_metas, rescale)
+
+        seg_results = torch.cat([torch.softmax(seg, dim=1) if seg.shape[1] > 1 else torch.sigmoid(seg)
+                                for seg in seg_results], axis = 0)
+        return det_results, seg_results 
+
+
+    def simple_test_global(self, img, img_meta, rescale=True, need_probs = False):
+        """Simple test with single image."""
+        det_results, seg_results = self.inference(img, img_meta, rescale)
+        # print_tensor('simple test %s' %need_logits, seg_logit)
+        if need_probs:
+            seg_pred = seg_results.cpu() #.float().cpu().numpy()
+        else:
+            seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
+            # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
+            seg_pred = seg_pred.to(torch.uint8).cpu()
+            # unravel batch dim
+            seg_pred = list(seg_pred)
+        
+        bbox_results = [
+            bbox2result3d(det_bboxes, det_labels, self.bbox_head.num_classes)
+            for det_bboxes, det_labels in det_results
+        ]
+        return bbox_results, seg_pred
+
+    def aug_test_global(self, imgs, img_metas, rescale=True, need_probs = False):
+        """Test with augmentations.
+
+        Only rescale=True is supported.
+        """
+        # aug_test rescale all imgs back to ori_shape for now
+        assert rescale
+        # to save memory, we get augmented seg logit inplace
+        # print(img_metas)
+        det_resutls, seg_results = self.inference(imgs[0], img_metas[0], rescale)
+
+        # print('aug, post inference', seg_logit.shape)
+        for i in range(1, len(imgs)):
+            cur_det_results, cur_seg_results = self.inference(imgs[i], img_metas[i], rescale)
+            seg_results += cur_seg_results
+            det_resutls.extend(cur_det_results)
+
+        seg_results /= len(imgs)
+        if need_probs:
+            seg_pred = seg_results.cpu() #.float().cpu().numpy()
+        else:
+            seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
+            # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
+            seg_pred = seg_pred.to(torch.uint8).cpu()
+            # unravel batch dim
+            seg_pred = list(seg_pred)
+
+        # detection
+        bbox_nx7 = torch.cat([d1[0] for d1 in det_resutls], axis = 0)
+        label_nx1 = torch.cat([d1[1] for d1 in det_resutls], axis = 0)
+
+        dets_clean, keep_idx = batched_nms_3d(bbox_nx7[:, :6], bbox_nx7[:, 6], 
+                                             label_nx1, self.test_cfg['nms'])
+        dets_clean = torch.cat([dets_clean, bbox_nx7[keep_idx, -1]], axis = 1)
+        label_nx1 = label_nx1[keep_idx]
+
+        if self.test_cfg['max_per_img'] > 0:
+            dets_clean = dets_clean[:self.test_cfg['max_per_img']]
+            label_nx1 = label_nx1[:self.test_cfg['max_per_img']]
+        
+        bbox_results = [bbox2result3d(dets_clean, label_nx1, self.bbox_head.num_classes) ]
+        return bbox_results, seg_pred
+
+    def forward_test(self, imgs, img_metas, **kwargs):
+            """
+            Args:
+                imgs (List[Tensor]): the outer list indicates test-time
+                    augmentations and inner Tensor should have a shape NxCxHxW,
+                    which contains all images in the batch.
+                img_metas (List[List[dict]]): the outer list indicates test-time
+                    augs (multiscale, flip, etc.) and the inner list indicates
+                    images in a batch.
+            """
+            for var, name in [(imgs, 'imgs'), (img_metas, 'img_metas')]:
+                if not isinstance(var, list):
+                    raise TypeError(f'{name} must be a list, but got {type(var)}')
+
+            num_augs = len(imgs)
+            if num_augs != len(img_metas):
+                raise ValueError(f'num of augmentations ({len(imgs)}) '
+                                f'!= num of image meta ({len(img_metas)})')
+
+            # NOTE the batched image size information may be useful, e.g.
+            # in DETR, this is needed for the construction of masks, which is
+            # then used for the transformer_head.
+            for img, img_meta in zip(imgs, img_metas):
+                batch_size = len(img_meta)
+                for img_id in range(batch_size):
+                    img_meta[img_id]['batch_input_shape'] = tuple(img.size()[-2:])
+
+            if num_augs == 1:
+                # proposals (List[List[Tensor]]): the outer list indicates
+                # test-time augs (multiscale, flip, etc.) and the inner list
+                # indicates images in a batch.
+                # The Tensor should have a shape Px4, where P is the number of
+                # proposals.
+                if 'proposals' in kwargs:
+                    kwargs['proposals'] = kwargs['proposals'][0]
+                return self.simple_test_global(imgs[0], img_metas[0], **kwargs)
+            else:
+                assert imgs[0].size(0) == 1, 'aug test does not support ' \
+                                            'inference with batch size ' \
+                                            f'{imgs[0].size(0)}'
+                # TODO: support test augmentation for predefined proposals
+                assert 'proposals' not in kwargs
+                return self.aug_test_global(imgs, img_metas, **kwargs)
+
+    def whole_inference(self, img, img_meta, rescale):
+        """Inference with full image."""
+        preds, *aux_output = self.encode_decode(img, img_meta)
+        img_meta_dict = get_meta_dict(img_meta)
+        # print(img_meta[0])
+        target_shape = img_meta_dict['spatial_shape'] # TODO: determine the key word in image_meta_dict for original shape
+        if img_meta_dict.get('new_pixdim', False):
+            if rescale and (preds.shape[-3:] != target_shape):    
+                preds = resize_3d(
+                    preds,
+                    size=target_shape,
+                    mode=self.get_output_mode(), #'bilinear'
+                    align_corners=self.align_corners,
+                    warning=False)
+        return preds
 
     def simple_test(self, img, img_metas, rescale=False):
         """Test function without test-time augmentation.
@@ -140,7 +431,7 @@ class SingleStageDetector3D(BaseDetector3D):
         Args:
             img (torch.Tensor): Images with shape (N, C, H, W, D).
             img_metas (list[dict]): List of image information. 
-            e.g.[{'img_shape': (32, 32, 3), 'scale_factor': 1}]
+            e.g.[{'img_shape': (H, W, D), 'scale_factor': 1}]
             rescale (bool, optional): Whether to rescale the results.
                 Defaults to False.
 
@@ -156,7 +447,6 @@ class SingleStageDetector3D(BaseDetector3D):
             bbox2result3d(det_bboxes, det_labels, self.bbox_head.num_classes)
             for det_bboxes, det_labels in results_list
         ]
-
         if self.with_seghead: 
             mask = self.seg_head.simple_test(feat, img_metas, rescale = rescale)
         else: mask = None
@@ -225,3 +515,29 @@ class SingleStageDetector3D(BaseDetector3D):
         det_bboxes, det_labels = self.bbox_head.get_bboxes(*outs, img_metas)
 
         return det_bboxes, det_labels
+
+
+get_meta_dict  = lambda img_meta: img_meta[0]['img_meta_dict'] if isinstance(img_meta, (list, tuple)) else img_meta['img_meta_dict']
+
+def _get_scan_interval(
+    image_size: Sequence[int], roi_size: Sequence[int], num_spatial_dims: int, overlap: float
+) -> Tuple[int, ...]:
+    """
+    Compute scan interval according to the image size, roi size and overlap.
+    Scan interval will be `int((1 - overlap) * roi_size)`, if interval is 0,
+    use 1 instead to make sure sliding window works.
+
+    """
+    if len(image_size) != num_spatial_dims:
+        raise ValueError("image coord different from spatial dims.")
+    if len(roi_size) != num_spatial_dims:
+        raise ValueError("roi coord different from spatial dims.")
+
+    scan_interval = []
+    for i in range(num_spatial_dims):
+        if roi_size[i] == image_size[i]:
+            scan_interval.append(int(roi_size[i]))
+        else:
+            interval = int(roi_size[i] * (1 - overlap))
+            scan_interval.append(interval if interval > 0 else 1)
+    return tuple(scan_interval)

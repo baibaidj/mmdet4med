@@ -205,7 +205,7 @@ class SaveImaged(MapTransform):
         d = dict(data)
         # pdb.set_trace()
         for key in self.keys:
-            meta_key = f"{key}_{self.meta_key_postfix}"
+            meta_key = f"img_{self.meta_key_postfix}"
             meta_data = d[meta_key] if self.meta_key_postfix is not None else None
             self._saver.saver.output_postfix = f'{key}_{self.counter:04}'
             # print(f'check output postfix', self._saver.saver.output_postfix)

@@ -17,6 +17,7 @@ from monai.transforms.utils_ import (
 from monai.utils import ensure_tuple, fall_back_tuple
 from monai.utils.utils_ import resize
 import torch
+import random
 
 
 class SpatialCrop_(Transform):
@@ -141,7 +142,7 @@ class SpatialMultiPyramidCrop_(Transform):
         return img_pyramids
 
 
-randint = lambda x: np.random.randint(-x, x)
+randint = lambda x: random.randrange(-x, x)
 
 class CenterSpatialCrop_(Transform):
     """
@@ -164,9 +165,13 @@ class CenterSpatialCrop_(Transform):
         self.roi_size = fall_back_tuple(self.roi_size, img.shape[1:])
         jitter_xyz = [randint(jitter) if jitter else 0 for _ in range(3)]
         img_shape = list(img.shape[1:])
-        center = [min(max(s // 2 + jitter_xyz[i] + self.fixed_offset[i], 0), s) for i, s in enumerate(img_shape)]
+        center = [min(s - self.roi_size[i]//2,
+                    max(s // 2 + jitter_xyz[i] + self.fixed_offset[i], self.roi_size[i]//2)
+                    )
+                 for i, s in enumerate(img_shape)]
         cropper = SpatialCrop_(roi_center=center, roi_size=self.roi_size)
-        return cropper(img)
+        
+        return cropper(img), jitter_xyz
 
 
 class RandCropByPosNegMultiLabel(Randomizable, Transform):

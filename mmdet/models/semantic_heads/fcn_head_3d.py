@@ -1,12 +1,10 @@
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule
-from mmcv.utils.parrots_wrapper import _BatchNorm
 from ..builder import HEADS
 from .decode_head_med import BaseDecodeHeadMed, print_tensor
-from ..utils.implicit_semantic_data_aug import EstimatorCV, ISDALoss
+from ..utils.implicit_semantic_data_aug import ISDALoss
 from ...utils.resize import bnchw2bchw
-import pdb
 
 @HEADS.register_module()
 class FCNHead3D(BaseDecodeHeadMed):
@@ -153,5 +151,24 @@ class FCNHead3D(BaseDecodeHeadMed):
 
         return losses
 
-    # def forward_test(self, inputs, img_metas, test_cfg):
-    #     return self.forward(inputs)
+    def simple_test(self, feats, img_metas, rescale=False):
+        """Test det bboxes without test-time augmentation, can be applied in
+        DenseHead except for ``RPNHead`` and its variants, e.g., ``GARPNHead``,
+        etc.
+
+        Args:
+            feats (tuple[torch.Tensor]): Multi-level features from the
+                upstream network, each is a 5D-tensor.
+            img_metas (list[dict]): List of image information.
+            rescale (bool, optional): Whether to rescale the results.
+                Defaults to False.
+
+        Returns:
+            list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
+                The first item is ``bboxes`` with shape (n, 7),
+                where 57represent (tl_x, tl_y, tl_z, br_x, br_y, br_z, score).
+                The shape of the second tensor in the tuple is ``labels``
+                with shape (n,)
+        """
+        outs = self.forward(feats)
+        return outs

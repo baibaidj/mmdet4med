@@ -1,7 +1,7 @@
 _base_ = [
     '../datasets/ribfrac_instance_semantic.py',
 ]
-
+num_classes = 1
 # model settings
 conv_cfg = dict(type = 'Conv3d')
 norm_cfg = dict(type='BN3d', requires_grad=True) #Sync
@@ -45,7 +45,7 @@ model = dict(
         num_outs=6),
     bbox_head=dict(
         type='RetinaHead3D', 
-        num_classes=2,
+        num_classes=num_classes,
         in_channels=fpn_channel,
         stacked_convs=4,
         feat_channels=fpn_channel,
@@ -79,7 +79,7 @@ model = dict(
         num_convs=1,
         concat_input=False,
         dropout_ratio=0.1,
-        num_classes=2,
+        num_classes=num_classes,
         conv_cfg = conv_cfg, 
         norm_cfg=norm_cfg,
         align_corners=False,
@@ -94,9 +94,9 @@ model = dict(
         # sampler=dict(type='OHEMPixelSampler', min_kept=600000),
         loss_decode =dict(
                     type='ComboLossMed', loss_weight=(1.0, 0.66), 
-                    num_classes = 2, 
-                    class_weight = (0.33, 1.0),  verbose = False,  
-                    dice_cfg = dict(ignore_0 = True),  #
+                    num_classes = num_classes, 
+                    class_weight = (1.0, ),  verbose = False,  
+                    dice_cfg = dict(ignore_0 = False, act = 'sigmoid' ), 
                     # focal_loss_gamma = 1.0
                     ),
             ),
@@ -106,13 +106,13 @@ model = dict(
                         save_key="present_instances"), 
                     dict(type = 'Instances2Boxes', 
                         instance_key="seg",
-                        map_key="instance_mapping",
+                        map_key="instances",
                         box_key="gt_bboxes",
                         class_key="gt_labels",
                         present_instances="present_instances"),
                     dict(type = 'Instances2SemanticSeg', 
                         instance_key = 'seg',
-                        map_key="instance_mapping",
+                        map_key="instances",
                         seg_key = 'seg',
                         present_instances="present_instances",
                         )],
@@ -131,10 +131,18 @@ model = dict(
         pos_weight=-1,
         debug=False),
     test_cfg=dict(
-        nms_pre=1000,
-        min_bbox_size=0,
+        nms_pre=10000,
+        nms_pre_tiles = 1000, 
+        min_bbox_size=0.01,
         score_thr=0.05,
-        nms=dict(type='nms', iou_threshold=0.25), # TODO: nms 3D
-        max_per_img=100)
-    
+        nms=dict(type='nms', iou_threshold=0.6), # TODO: nms 3D
+        max_per_img=100, 
+
+        )
     )
+
+    # detections_per_img = plan_arch.get("detections_per_img", 100)
+    # score_thresh = plan_arch.get("score_thresh", 0)
+    # topk_candidates = plan_arch.get("topk_candidates", 10000)
+    # remove_small_boxes = plan_arch.get("remove_small_boxes", 0.01)
+    # nms_thresh = plan_arch.get("nms_thresh", 0.6)

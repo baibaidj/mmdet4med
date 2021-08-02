@@ -4,16 +4,19 @@ from mmcv.runner import force_fp32
 
 from mmdet.core import (anchor_inside_flags_3d, build_anchor_generator,
                         build_assigner, build_bbox_coder, build_sampler,
-                        images_to_levels, multi_apply, multiclass_nms, unmap)
+                        images_to_levels, multi_apply, unmap, 
+                        AnchorGenerator3D)
 from ..builder import HEADS, build_loss
 from .base_dense_head import BaseDenseHead
-from .dense_test_mixins import BBoxTestMixin3D
+from .dense_test_mixins import BBoxTestMixin3D, reset_offset_bbox_batch
+from mmdet.core.post_processing.bbox_nms import multiclass_nms_3d
+from ..utils import print_tensor
 
 
 chn2last_order = lambda x: tuple([0, *[a + 2 for a in range(x)],  1])
 
 @HEADS.register_module()
-class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
+class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
     """Anchor-based head (RPN, RetinaNet, SSD, etc.).
 
     Args:
@@ -39,6 +42,7 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
                  num_classes,
                  in_channels,
                  feat_channels=256,
+                 start_level = 2, 
                  anchor_generator=dict(
                      type='AnchorGenerator3D', # TODO: debug
                      scales=[8, 16, 32],
@@ -58,12 +62,13 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
                      type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=1.0),
                  train_cfg=None,
                  test_cfg=None,
-                 init_cfg=dict(type='Normal', layers='Conv3d', std=0.01)):
+                 init_cfg=dict(type='Normal', layer='Conv3d', std=0.01)):
         super(AnchorHead3D, self).__init__(init_cfg)
-        self.spatial_dim = int(init_cfg['layers'][-2])
+        self.spatial_dim = int(init_cfg['layer'][-2])
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.feat_channels = feat_channels
+        self.start_level = start_level
         self.use_sigmoid_cls = loss_cls.get('use_sigmoid', False)
         # TODO better way to determine whether sample or not
         self.sampling = loss_cls['type'] not in [
@@ -93,11 +98,13 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
             self.sampler = build_sampler(sampler_cfg, context=self) #TODO: unsure usage
         self.fp16_enabled = False
 
-        self.anchor_generator = build_anchor_generator(anchor_generator)
+        self.anchor_generator : AnchorGenerator3D = build_anchor_generator(anchor_generator)
         # usually the numbers of anchors for each level are the same
         # except SSD detectors
         self.num_anchors = self.anchor_generator.num_base_anchors[0]
         self._init_layers()
+        print(f'[AnchorHead] spatial dim {self.spatial_dim} anchor/pixle {self.num_anchors}' )
+        print(f'[AnchorHead] inchannels {self.in_channels} start level {self.start_level}')
 
     def _init_layers(self):
         """Initialize layers of the head."""
@@ -139,10 +146,11 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
                     scale levels, each is a 4D-tensor, the channels number \
                     is num_anchors * 4.
         """
-        return multi_apply(self.forward_single, feats)
+        return multi_apply(self.forward_single, feats[self.start_level:])
 
     def get_anchors(self, featmap_sizes, img_metas, device='cuda'):
         """Get anchors according to feature map sizes.
+            by image
 
         Args:
             featmap_sizes (list[tuple]): Multi-level feature map sizes.
@@ -158,15 +166,16 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
 
         # since feature map sizes of all images are the same, we only compute
         # anchors for one time
-        multi_level_anchors = self.anchor_generator.grid_anchors(
-            featmap_sizes, device)
+        multi_level_anchors = self.anchor_generator.grid_priors(
+            featmap_sizes, device) #  Tensor shape Ax6
         anchor_list = [multi_level_anchors for _ in range(num_imgs)]
 
         # for each image, we compute valid flags of multi level anchors
         valid_flag_list = []
         for img_id, img_meta in enumerate(img_metas):
+            # print(f'[AnchorHead] {img_id} meta', img_meta['patch_shape'])
             multi_level_flags = self.anchor_generator.valid_flags(
-                featmap_sizes, img_meta['pad_shape'], device) #TODO: pad_shape should rewrite 
+                featmap_sizes, img_meta['img_meta_dict']['patch_shape'], device) #NOTE: pad_shape rewrited
             valid_flag_list.append(multi_level_flags)
 
         return anchor_list, valid_flag_list
@@ -210,15 +219,16 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
                 num_total_neg (int): Number of negative samples in all images
         """
         inside_flags = anchor_inside_flags_3d(flat_anchors, valid_flags,
-                                           img_meta['img_shape'][:self.spatial_dim], #TODO: adjust image shape 
+                                           img_meta['img_meta_dict']['patch_shape'][:self.spatial_dim], #NOTE: adjust image shape 
                                            self.train_cfg.allowed_border)
         if not inside_flags.any():
             return (None, ) * 7
         # assign gt and sample anchors
-        anchors = flat_anchors[inside_flags, :]
-
-        assign_result = self.assigner.assign(anchors, gt_bboxes, gt_bboxes_ignore, 
-                                            None if self.sampling else gt_labels)
+        anchors = flat_anchors[inside_flags, :] # Nx6
+        # NOTE: debug
+        # print_tensor('[AssignSingle] anchor', anchors)
+        # print_tensor('[AssignSingle] gtbboxes', gt_bboxes)
+        assign_result = self.assigner.assign(anchors, gt_bboxes, gt_bboxes_ignore, None if self.sampling else gt_labels)
         # @[bbox.samplers.pseudo_sampler]                                   
         sampling_result = self.sampler.sample(assign_result, anchors, gt_bboxes)
 
@@ -284,7 +294,7 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
             anchor_list (list[list[Tensor]]): Multi level anchors of each
                 image. The outer list indicates images, and the inner list
                 corresponds to feature levels of the image. Each element of
-                the inner list is a tensor of shape (num_anchors, 4).
+                the inner list is a tensor of shape (num_anchors, 6).
             valid_flag_list (list[list[Tensor]]): Multi level valid flags of
                 each image. The outer list indicates images, and the inner list
                 corresponds to feature levels of the image. Each element of
@@ -395,6 +405,13 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
+        # print_tensor('cls', cls_score)
+        # print_tensor('label', labels)
+        # print_tensor('label weight', label_weights)
+        # print_tensor('bbox pred', bbox_pred)
+        # print_tensor('bbox target', bbox_targets)
+        # print_tensor('bbox weight', bbox_weights)
+
         # classification loss
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
@@ -403,9 +420,13 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
         loss_cls = self.loss_cls(
             cls_score, labels, label_weights, avg_factor=num_total_samples)
         # regression loss
+        
         bbox_targets = bbox_targets.reshape(-1, self.spatial_dim * 2)
         bbox_weights = bbox_weights.reshape(-1, self.spatial_dim * 2)
         bbox_pred = bbox_pred.permute(*chn2last_order(self.spatial_dim)).reshape(-1, self.spatial_dim * 2)
+
+        # print_tensor('bbox pred', bbox_pred)
+        # print_tensor('bbox target', bbox_targets)
         if self.reg_decoded_bbox:
             # When the regression loss (e.g. `IouLoss`, `GIouLoss`)
             # is applied directly on the decoded bounding boxes, it
@@ -450,10 +471,10 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
 
         device = cls_scores[0].device
 
-        anchor_list, valid_flag_list = self.get_anchors(
-            featmap_sizes, img_metas, device=device)
+        anchor_list, valid_flag_list = self.get_anchors( # by image 
+            featmap_sizes, img_metas, device=device) # outer list by image; inner list by level
         label_channels = self.cls_out_channels if self.use_sigmoid_cls else 1
-        cls_reg_targets = self.get_targets(
+        cls_reg_targets = self.get_targets( # by image 
             anchor_list,
             valid_flag_list,
             gt_bboxes,
@@ -471,15 +492,15 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
         # anchor number of multi levels
         num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
         # concat all level anchors and flags to a single tensor
-        concat_anchor_list = []
+        concat_anchor_list = [] # multilevel into on Nx6, then by image
         for i in range(len(anchor_list)):
             concat_anchor_list.append(torch.cat(anchor_list[i]))
         all_anchor_list = images_to_levels(concat_anchor_list,
                                            num_level_anchors)
 
-        losses_cls, losses_bbox = multi_apply(
+        losses_cls, losses_bbox = multi_apply( # by level
             self.loss_single,
-            cls_scores,
+            cls_scores, 
             bbox_preds,
             all_anchor_list,
             labels_list,
@@ -487,6 +508,8 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
             bbox_targets_list,
             bbox_weights_list,
             num_total_samples=num_total_samples)
+        
+        # NOTE: add accuracy? recall? precision? 
         return dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
@@ -620,8 +643,8 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
 
         Returns:
             list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
-                The first item is an (n, 5) tensor, where 5 represent
-                (tl_x, tl_y, br_x, br_y, score) and the score between 0 and 1.
+                The first item is an (n, 7) tensor, where 5 represent
+                (tl_x, tl_y, tl_z, br_x, br_y, br_z, score) and the score between 0 and 1.
                 The shape of the second tensor in the tuple is (n,), and
                 each element represents the class label of the corresponding
                 box.
@@ -712,7 +735,7 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
             for (mlvl_bboxes, mlvl_scores) in zip(batch_mlvl_bboxes,
                                                   batch_mlvl_scores):
                 #TODO: nms there                                  
-                det_bbox, det_label = multiclass_nms(mlvl_bboxes, mlvl_scores,
+                det_bbox, det_label = multiclass_nms_3d(mlvl_bboxes, mlvl_scores,
                                                      cfg.score_thr, cfg.nms,
                                                      cfg.max_per_img)
                 det_results.append(tuple([det_bbox, det_label]))
@@ -723,24 +746,51 @@ class AnchorHead3D(BaseDenseHead, BBoxTestMixin3D):
             ]
         return det_results
 
-    def aug_test(self, feats, img_metas, rescale=False):
-        """Test function with test time augmentation.
+    def simple_test_bboxes(self, feats, img_metas, rescale=False):
+        """Test det bboxes without test-time augmentation, can be applied in
+        DenseHead except for ``RPNHead`` and its variants, e.g., ``GARPNHead``,
+        etc.
 
         Args:
-            feats (list[Tensor]): the outer list indicates test-time
-                augmentations and inner Tensor should have a shape NxCxHxW,
-                which contains features for all images in the batch.
-            img_metas (list[list[dict]]): the outer list indicates test-time
-                augs (multiscale, flip, etc.) and the inner list indicates
-                images in a batch. each dict has image information.
+            feats (tuple[torch.Tensor]): Multi-level features from the
+                upstream network, each is a 5D-tensor.
+            img_metas (list[dict]): List of image information.
             rescale (bool, optional): Whether to rescale the results.
                 Defaults to False.
 
         Returns:
             list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
-                The first item is ``bboxes`` with shape (n, 5), where
-                5 represent (tl_x, tl_y, br_x, br_y, score).
+                The first item is ``bboxes`` with shape (n, 7),
+                where 57represent (tl_x, tl_y, tl_z, br_x, br_y, br_z, score).
                 The shape of the second tensor in the tuple is ``labels``
-                with shape (n,), The length of list should always be 1.
+                with shape (n,)
         """
-        return self.aug_test_bboxes(feats, img_metas, rescale=rescale)
+        outs = self.forward(feats)
+        results_list = self.get_bboxes(*outs, img_metas, rescale=rescale)
+        # TODO: put tile_origin into the img_metas for bbox offset
+        results_list = reset_offset_bbox_batch(results_list, img_metas)
+        return results_list
+
+    def aug_test(self, feats, img_metas, rescale=False):
+        # NOTE: tta has been implemented in the detector, rather than here in head.
+        NotImplementedError
+        # """Test function with test time augmentation.
+
+        # Args:
+        #     feats (list[Tensor]): the outer list indicates test-time
+        #         augmentations and inner Tensor should have a shape NxCxHxW,
+        #         which contains features for all images in the batch.
+        #     img_metas (list[list[dict]]): the outer list indicates test-time
+        #         augs (multiscale, flip, etc.) and the inner list indicates
+        #         images in a batch. each dict has image information.
+        #     rescale (bool, optional): Whether to rescale the results.
+        #         Defaults to False.
+
+        # Returns:
+        #     list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
+        #         The first item is ``bboxes`` with shape (n, 5), where
+        #         5 represent (tl_x, tl_y, br_x, br_y, score).
+        #         The shape of the second tensor in the tuple is ``labels``
+        #         with shape (n,), The length of list should always be 1.
+        # """
+        # return self.aug_test_bboxes(feats, img_metas, rescale=rescale)

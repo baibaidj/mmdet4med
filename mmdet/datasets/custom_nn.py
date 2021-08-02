@@ -5,7 +5,6 @@ from functools import reduce
 from mmcv.utils import print_log
 from torch.utils.data import Dataset
 
-from ..core import cfsmat4mask_batched, metric_in_cfsmat_1by1
 from .builder import DATASETS
 from .pipelines import Compose
 import torch, json
@@ -17,6 +16,9 @@ import torch, pdb
 from .transform4med.io4med import print_tensor, random, convert_label
 from .transform4med.paths import load_dataset_id
 from .transform4med.load_nn import load_pickle
+from .transform4med.load_ops import property2affine
+from mmdet.core.evaluation.metric_custom import *
+from mmdet.core import eval_map_3d, eval_recalls_3d
 
 def decide_cid_in_fn(fn):
     fn_stem = fn.split('.')[0]
@@ -139,7 +141,8 @@ class CustomDatasetNN(Dataset):
 
     def __len__(self):
         """Total number of samples of data."""
-        return len(self.instance_cache)
+        if self.split == 'train': return len(self.instance_cache)
+        else: return len(self.img_infos)
 
     def _img_list2dataset(self, data_folder:str, mode = 'train ', 
                         key2suffix = {'img_fp': '.npy', 'seg_fp': '_seg.npy', 
@@ -210,6 +213,7 @@ class CustomDatasetNN(Dataset):
             sample_indexes = sorted(sample_indexes)                                
             fp_list = [fp_list[a] for a in sample_indexes]
         return fp_list
+
     def __getitem__(self, idx):
         """Get training/test data after pipeline.
 
@@ -238,8 +242,9 @@ class CustomDatasetNN(Dataset):
         instance_cache = []
         print("Building Sampling Cache for Dataset")
         for cix, item in enumerate(self.img_infos):
-            if cix< 2: print(item)
             instances = load_pickle(item['bboxes_fp'])["instances"] 
+            if cix < 2: 
+                print(f'{item} \n[BuildCache] {cix} {instances} ')
             if instances:
                 for instance_id in instances:
                     instance_cache.append((cix, instance_id))
@@ -268,12 +273,13 @@ class CustomDatasetNN(Dataset):
                 introduced by pipeline.
         """
         cix, c_ins_ix = self.instance_cache[idx]
+        # print(f'[start] {idx} caseid {cix} insid {c_ins_ix}')
         pos_sample_info = self.img_infos[cix]
-        pos_sample_info['instance_ix'] = c_ins_ix
+        pos_sample_info['instance_ix'] = c_ins_ix #instance_ix
         
         cix4neg = random.randrange(0, len(self.img_infos))
         neg_sample_info = self.img_infos[cix4neg]
-        pos_sample_info['instance_ix'] = -1
+        neg_sample_info['instance_ix'] = -1
         results = [pos_sample_info, neg_sample_info]
         # self.pre_pipeline(results)
         return self.pipeline(results)
@@ -290,6 +296,7 @@ class CustomDatasetNN(Dataset):
         """
 
         results = self.img_infos[idx]
+        results['instance_ix'] = -1
         # self.pre_pipeline(results)
         return self.pipeline(results)
 
@@ -297,57 +304,48 @@ class CustomDatasetNN(Dataset):
         """Place holder to format result to dataset specific output."""
         pass
 
-    def get_gt_seg_maps(self):
+    def get_anno_infos(self):
         """Get ground truth segmentation maps for evaluation."""
         # if self.gt_seg_maps is not None:
         #     return self.gt_seg_maps
-        if getattr(self, 'gt_seg_maps', None) is not None:
-            return getattr(self, 'gt_seg_maps', None)
+        if getattr(self, 'anno_by_pids', None) is not None:
+            return getattr(self, 'anno_by_pids', None)
 
+        array_zyx2xyz = lambda arr: arr.transpose(0, 3, 2, 1)[..., ::-1]
         # num_slices = self.pipeline.transforms[0].num_slice
-        gt_seg_maps = {}
+        anno_by_pids = OrderedDict()
         for i, img_info in enumerate(self.img_infos):
-            fp = Path(img_info['gt_semantic_seg'])
-            subdir = str(fp.stem) #view2axis[self.view_channel]
+            # 'img_fp', 'seg_fp', 'property_fp', 'bboxes_fp'
+            mask_fp, prop_fp, bbox_fp = Path(img_info['seg_fp']), img_info['property_fp'], img_info['bboxes']
+            subdir = str(mask_fp.stem) #view2axis[self.view_channel]
+            # 1. load seg mask 
             # img_full, af_mat = IO4Nii.read(fp, verbose=True, axis_order= None, dtype=np.uint8)
-            img = self.reader.read(fp)
-            img_full, meta_data = self.reader.get_data(img)
-            af_mat = meta_data['original_affine']
-            if i < 3: 
-                print_tensor(f'\n[GT] {subdir} {self.view_channel}', img_full) #
-                print('[GT] af matrix\n', af_mat)
+            img_full = array_zyx2xyz(np.load(mask_fp, self.memmap_mode, allow_pickle=True))[0]
             gt_seg_map  = np.array(img_full, dtype = np.uint8)
-            # print('Eval select transform', len(result_dicts))
+
+            # 2. load property, image meta dict
+            meta_data = load_pickle(prop_fp)
+            af_mat = property2affine(meta_data)
+
+            # 3. load bboxes
+            bboxes_info = load_pickle(bbox_fp)
+            if i < 3: 
+                print_tensor(f'\n[GT] {subdir} ', img_full) #
+                print('[GT] af matrix\n', af_mat)
+                print('[GT] bboxes info', bboxes_info)
             # pdb.set_trace()
-            gt_seg_maps.setdefault(subdir, {'gix':[], 'pix' :[], 'affine':None, 'gt': [], 'ixs': []})
-            gt_seg_maps[subdir]['gix'].append(i)
-            gt_seg_maps[subdir]['affine'] = af_mat
+            anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})
+            anno_by_pids[subdir]['gt_seg'] = gt_seg_map
+            anno_by_pids[subdir]['bboxes'] = np.array(bboxes_info.pop('boxes', np.zeros(0, 6)))
+            anno_by_pids[subdir]['labels'] = np.array(bboxes_info['labels'])
 
+        self.anno_by_pids = anno_by_pids
+        return anno_by_pids
 
-            # if i < 3: print_tensor(f'gt-convertlabel {label_mapping}' , gt_seg_map) #
-            # print('eval, mask', gt_seg_map.shape, gt_seg_map.min(), gt_seg_map.max())
-            gt_seg_maps[subdir]['gt'].append(gt_seg_map)
-        self.gt_seg_maps = gt_seg_maps
-        return gt_seg_maps
-
-    def get_gt_map_idx(self, idx):
-        load_mask_func = lambda fp: mmcv.imread(fp, flag='unchanged', backend='pillow')
-        tmpf = [f for f in self.pipeline.transforms if hasattr(f, 'label_mapping')]
-        label_mapping = None if len(tmpf) ==0 else tmpf[0].label_mapping
-
-        # gt_seg_maps = []
-        img_info = self.img_infos[idx]
-        gt_seg_map = load_mask_func(img_info['ann']['seg_map'])
-        if self.reduce_zero_label:
-            # avoid using underflow conversion
-            gt_seg_map[gt_seg_map == 0] = 255
-            gt_seg_map = gt_seg_map - 1
-            gt_seg_map[gt_seg_map == 254] = 255
-        if label_mapping is not None: gt_seg_map = convert_label(gt_seg_map, label_mapping)
-        # print('eval, mask', gt_seg_map.shape, gt_seg_map.min(), gt_seg_map.max())
-        return gt_seg_map
-
-    def evaluate(self, results, metric='mIoU', logger=None, **kwargs):
+    def evaluate(self, results, metric='mIoU', logger=None, 
+                 proposal_nums=(100, 300, 1000),
+                 iou_thr=0.5,
+                 scale_ranges=None, **kwargs):
         """Evaluate the dataset. will be called by core/evalutation/eval_hooks.py
 
         Args:
@@ -366,112 +364,52 @@ class CustomDatasetNN(Dataset):
         allowed_metrics = ['mIoU']
         if metric not in allowed_metrics:
             raise KeyError('metric {} is not supported'.format(metric))
-
         eval_results = {}
-        gt_seg_maps = self.get_gt_seg_maps()
-        if self.CLASSES is None:
-            num_classes = len(
-                reduce(np.union1d, [np.unique(_) for _ in gt_seg_maps]))
-        else:
-            num_classes = len(self.CLASSES)
+        anno_by_pids = self.get_anno_infos()
+        num_classes_seg = 2
 
+        pred_det_list = [a[0] for a in results]
+        annotations = [info for pid, info in anno_by_pids.items()]
 
-        all_acc, acc, iou, dice2d, dice3d, recall3d, precision3d = [list() for _ in range(7)]
-        msg_by_pid = '\n\tpid\t\tacc\trecall\tprecision\tdice2d\tdice3d\n'
-        # f24 = lambda x: '%0.4f'%f24
-        # prog_bar = mmcv.ProgressBar(len(gt_seg_maps))
+        eval_results = OrderedDict()
+        iou_thrs = [iou_thr] if isinstance(iou_thr, float) else iou_thr
 
-        verbose = True
-        # reorganize the pred and gt by pids
-        # find all the gix that belong to individual pids. 
-        i = 0
-        for pid, info in gt_seg_maps.items():
-            # pid = pid.split('/')[3]
-            # gt_list = info['gt']
-            # pred_list = [norm_dim_4_torch(results[s], verbose= verbose) for s in info['gix']] #results[info['gix']] #
-            # pred_tensor = overlap_handler_zaxis(pred_list, info['ixs'], verbose= verbose)
-            pred_tensor = results[info['gix'][0]]
-            gt_tensor = info['gt'][0]
-            if i < 3: print_tensor(f'[Metric]{pid} pred {np.unique(pred_tensor)}', pred_tensor)
-            if i < 3: print_tensor(f'[Metric]{pid} gt {np.unique(gt_tensor)}', gt_tensor)
-            # store_root = '/home/dejuns/check_infer'
-            # IO4Nii.write(gt_tensor, store_root, pid + '_gt', affine_matrix=info['affine'])
-            # IO4Nii.write(pred_tensor, store_root, pid + '_pred', affine_matrix=info['affine'])
-            # by class
-            # acc_cls1 = np.sum((pred_tensor == gt_tensor) * (gt_tensor == 1))
-            # pdb.set_trace()
-            cfs_matrix_list = cfsmat4mask_batched(list(pred_tensor), list(gt_tensor), num_classes, self.ignore_index)
-            metric2ds, metric3d = metric_in_cfsmat_1by1(cfs_matrix_list)
-            gt_seg_maps[pid]['metric2ds']  = metric2ds
-            gt_seg_maps[pid]['metric3d'] = metric3d
-            acc_e = np.array(metric3d['acc']).round(4)
-            all_acc_e = np.array(metric3d['all_acc'][0]).round(4)
-            iou_e = np.array(metric3d['iou']).round(4)
-            dice2d_e = np.array([a['dice'] for a in metric2ds]).mean(0).round(4)
-            dice3d_e = np.array(metric3d['dice']).round(4)
-            recall_e = np.array(metric3d['recall']).round(4)
-            precision_e = np.array(metric3d['precision']).round(4)
-            pid_short = pid ##str(pid.split('_')[1])
-            msg_by_pid += f'\t{pid_short}\t{acc_e}\t{recall_e}\t{precision_e}\t{dice2d_e}\t{dice3d_e}\n'
-            all_acc.append(all_acc_e)
-            acc.append(acc_e); iou.append(iou_e); dice2d.append(dice2d_e);dice3d.append(dice3d_e)
-            recall3d.append(recall_e); precision3d.append(precision_e)
-            
-            i += 1
-            # prog_bar.update()
-        # print(msg_by_pid)
-        all_acc, acc, iou, dice2d, dice3d, recall3d, precision3d = [np.nanmean(np.array(a), axis = 0) for a in 
-                                                                    [all_acc, acc, iou, dice2d, dice3d, recall3d, precision3d]]
-        # print('\tcheck all acc', all_acc)
+        if metric == 'mAP':
+            assert isinstance(iou_thrs, list)
+            mean_aps = []
+            for iou_thr in iou_thrs:
+                print_log(f'\n{"-" * 15}iou_thr: {iou_thr}{"-" * 15}')
+                mean_ap, _ = eval_map_3d(
+                    pred_det_list,
+                    annotations,
+                    scale_ranges=scale_ranges,
+                    iou_thr=iou_thr,
+                    dataset=self.CLASSES,
+                    logger=logger)
+                mean_aps.append(mean_ap)
+                eval_results[f'AP{int(iou_thr * 100):02d}'] = round(mean_ap, 3)
+            eval_results['mAP'] = sum(mean_aps) / len(mean_aps)
+        elif metric == 'recall':
+            gt_bboxes = [ann['bboxes'] for ann in annotations]
+            recalls = eval_recalls_3d(
+                gt_bboxes, pred_det_list, proposal_nums, iou_thr, logger=logger)
+            for i, num in enumerate(proposal_nums):
+                for j, iou in enumerate(iou_thrs):
+                    eval_results[f'recall@{num}@{iou}'] = recalls[i, j]
+            if recalls.shape[1] > 1:
+                ar = recalls.mean(axis=1)
+                for i, num in enumerate(proposal_nums):
+                    eval_results[f'AR@{num}'] = ar[i]
 
-        summary_str = msg_by_pid
-        summary_str += 'per class results:\n'
-
-        line_format = '{:<15} {:>10} {:>10} {:>10} {:>10}\n'
-        summary_str += line_format.format('Class', 'IoU', 'Acc', 'Dice2d', 'Dice3d', 'Recall3d', 'Precision3d')
-        if self.CLASSES is None:
-            class_names = tuple(range(num_classes))
-        else:
-            class_names = self.CLASSES
-
-        remove_bg_item = lambda x: [x[i] for i in range(x.size) if class_names[i] != 'background']
-        acc, iou, dice2d, dice3d = [remove_bg_item(metrics) for metrics in (acc, iou, dice2d, dice3d)]
-        class_names = [a for a in class_names if a != 'background']
+        pred_seg_list = [a[1] for a in results]
+        gt_seg_list = [info['gt_seg'] for pid, info in anno_by_pids.items()]
+        seg_metric_detail, seg_metric_cls = segmentation_performance(pred_seg_list, gt_seg_list, num_classes_seg)
+        seg_mean_results = organize_seg_performance(seg_metric_cls, self.CLASSES[:num_classes_seg], 
+                                                    logger=logger) # 
         
-        # the resultant metrics will a list
-        for i in range(len(acc)):
-            iou_str = '{:.2f}'.format(iou[i] * 100)
-            acc_str = '{:.2f}'.format(acc[i] * 100)
-            dice2d_str = '{:.2f}'.format(dice2d[i] * 100)
-            dice3d_str = '{:.2f}'.format(dice3d[i] * 100)
-            recall3d_str = '{:.2f}'.format(recall3d[i] * 100)
-            precision3d_str = '{:.2f}'.format(precision3d[i] * 100)
-            summary_str += line_format.format(class_names[i], iou_str, acc_str, dice2d_str, dice3d_str, 
-                                            recall3d_str, precision3d_str)
-        summary_str += 'Summary:\n'
-        line_format = '{:<15} {:>10} {:>10} {:>10} {:>10} {:>10} {:>10}\n'
-        summary_str += line_format.format('Scope', 'mIoU', 'mAcc', 'aAcc', 'mDice2d', 'mDice3d', 'mRecall', 'mPrecision')
-
-        iou_str = '{:.2f}'.format(np.nanmean(iou) * 100)
-        acc_str = '{:.2f}'.format(np.nanmean(acc) * 100)
-        all_acc_str = '{:.2f}'.format(all_acc * 100)
-        dice2d_str = '{:.2f}'.format(np.nanmean(dice2d) * 100)
-        dice3d_str = '{:.2f}'.format(np.nanmean(dice3d) * 100)
-        recall3d_str = '{:.2f}'.format(np.nanmean(recall3d) * 100)
-        precision3d_str = '{:.2f}'.format(np.nanmean(precision3d) * 100)
-        summary_str += line_format.format('global', iou_str, acc_str, all_acc_str, 
-                                        dice2d_str, dice3d_str, recall3d_str, precision3d_str)
-        print_log(summary_str, logger)
-
-        eval_results['mIoU'] = np.nanmean(iou)
-        eval_results['mAcc'] = np.nanmean(acc)
-        eval_results['aAcc'] = all_acc
-        eval_results['mDice2d'] = np.nanmean(dice2d)
-        eval_results['mDice3d'] = np.nanmean(dice3d)
-        eval_results['mRecall3d'] = np.nanmean(recall3d)
-        eval_results['mPrecision3d'] = np.nanmean(precision3d)
-        # eval_results['mDice_obj'] = np.nanmean(dice[1:])
-
+        for k, seg_tb in seg_metric_detail.items():
+            print(f'[SegMetric]{k}\n', seg_tb[:5])
+        
         return eval_results
 
 

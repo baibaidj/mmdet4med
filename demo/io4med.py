@@ -6,7 +6,7 @@ from PIL import Image
 from pathlib import Path
 import time, json, random
 import SimpleITK as sitk
-from .png_rw_ import read_png2array, IO4Png
+# from .png_rw_ import read_png2array, IO4Png
 import pdb
 
 print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
@@ -359,27 +359,23 @@ class IO4Nii(object):
         return image_shape_xyz
 
     @staticmethod
-    def write(image_3d, store_root, file_name, affine_matrix = None, nii_obj= None,
+    def write(mask_3d, store_root, file_name, affine_matrix = None, nii_obj= None,
                 is_compress = True, axis_order = None):
         """
-        
         must transform the input tensor to xyz, which then can be properly saved.
-        
         将输入图像存储为nii
-        输入维度是 x y z; natural/intuitive to human perception 
-                 from left to right; from anterior to posteiro, from head to feet
+        输入维度是z, r=y, c=x
         输出维度是x=c, y=r, z
-        :param image_3d:
+        :param mask_3d:
         :param store_root:
         :param file_name:
-        :param affine_matrix: 4x4, the diagnal elements are normally negative
         :param nii_obj:
         :return:
         """
         extension = 'nii.gz' if is_compress else 'nii'
         permute_order = axis_reorder_map[axis_order]
         if permute_order is not None:
-            image_3d = image_3d.transpose(permute_order)
+            mask_3d = mask_3d.transpose(permute_order)
         # mask_3d = mask_3d[::-1,::-1,:] # be cautious to uncomment this line
         store_path = osp.join(store_root, '.'.join([file_name, extension]))
         if nii_obj is None:
@@ -389,9 +385,9 @@ class IO4Nii(object):
             xyz_dim_index = list(np.argmax(np.abs(affine_matrix[:3, :3]), axis= 1))
             xyz_sign = [int(np.sign(-1 * affine_matrix[d,i] )) for i, d in enumerate(xyz_dim_index)]
             # print(affine_matrix, x_col_sign, y_row_sign)
-            nb_ojb = nb.Nifti1Image(image_3d[::xyz_sign[0], ::xyz_sign[1], ::xyz_sign[2]], affine_matrix)
+            nb_ojb = nb.Nifti1Image(mask_3d[::xyz_sign[0], ::xyz_sign[1], ::xyz_sign[2]], affine_matrix)
         else:
-            nb_ojb = nb.Nifti1Image(image_3d, nii_obj.affine, nii_obj.header)
+            nb_ojb = nb.Nifti1Image(mask_3d, nii_obj.affine, nii_obj.header)
 
         nb.save(nb_ojb, store_path)
         return store_path

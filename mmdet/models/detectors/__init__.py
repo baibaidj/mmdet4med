@@ -21,7 +21,7 @@ from .nasfcos import NASFCOS
 from .paa import PAA
 from .point_rend import PointRend
 from .reppoints_detector import RepPointsDetector
-from .retinanet import RetinaNet
+from .retinanet import RetinaNet, RetinaNet3D
 from .rpn import RPN
 from .scnet import SCNet
 from .single_stage import SingleStageDetector
@@ -32,6 +32,7 @@ from .vfnet import VFNet
 from .yolact import YOLACT
 from .yolo import YOLOV3
 from .yolof import YOLOF
+from .single_stage_3d import SingleStageDetector3D
 
 __all__ = [
     'ATSS', 'BaseDetector', 'SingleStageDetector', 'TwoStageDetector', 'RPN',
@@ -40,5 +41,6 @@ __all__ = [
     'GridRCNN', 'MaskScoringRCNN', 'RepPointsDetector', 'FOVEA', 'FSAF',
     'NASFCOS', 'PointRend', 'GFL', 'CornerNet', 'PAA', 'YOLOV3', 'YOLACT',
     'VFNet', 'DETR', 'TridentFasterRCNN', 'SparseRCNN', 'SCNet',
-    'DeformableDETR', 'AutoAssign', 'YOLOF', 'CenterNet'
+    'DeformableDETR', 'AutoAssign', 'YOLOF', 'CenterNet', 
+    'RetinaNet3D', 'SingleStageDetector3D'
 ]

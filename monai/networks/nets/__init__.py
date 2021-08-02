@@ -43,4 +43,3 @@ from .gan_ import FC3DDiscriminator
 # self define
 from .vnet_crop_ import VNet_crop_
 from .retina_net_ import RetinaNet
-from .fcn3ds4_hrnet import FCN_HRnet3d

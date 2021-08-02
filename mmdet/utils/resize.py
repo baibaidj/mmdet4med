@@ -28,8 +28,6 @@ def resize(input,
         size = tuple(int(x) for x in size)
     return F.interpolate(input, size, scale_factor, mode, align_corners)
 
-
-
 def resize_3d(input,
            size=None,
            scale_factor=None,
@@ -98,6 +96,28 @@ def bnchw2bchw(imgs, use_tsm = True):
     else:
         num_segs = None
     return imgs, num_segs
+
+print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
+
+def list_dict2dict_list(list_dict, verbose = False):
+    dict_list = {key: list() for key in list_dict[0]}
+    tensor_keys = set()
+    for i, data in enumerate(list_dict):
+        for key, val in data.items():
+            if isinstance(val, list):
+                dict_list[key].extend(val)
+            else:
+                dict_list[key].append(val)
+
+            if isinstance(val, torch.Tensor): 
+                if verbose: print_tensor(f'[list2dict] {i} {key}', val)
+                tensor_keys.add(key)
+    # concat tensors into mini-batch
+    for k in tensor_keys:
+        if verbose: print(f'[Concat] {k} len', len(dict_list[k]))
+        dict_list[k] = torch.cat(dict_list[k], axis = 0)    
+    return dict_list
+
 
 
 # class Reshape4BNCHW():

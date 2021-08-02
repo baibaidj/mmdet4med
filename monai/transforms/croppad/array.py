@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from monai.config import IndexSelection
-from monai.data.utils import get_random_patch, get_valid_patch_size
+# from monai.data.utils import get_random_patch, get_valid_patch_size
 from monai.transforms.transform import Randomizable, Transform
 from monai.transforms.utils import (
     generate_pos_neg_label_crop_centers,

@@ -169,7 +169,7 @@ def fast_nms(multi_bboxes,
     cls_dets = torch.cat([boxes, scores[:, None]], dim=1)
     return cls_dets, classes, coeffs
 
-
+from .nms_nn import batched_nms_3d
 def multiclass_nms_3d(multi_bboxes,
                     multi_scores,
                     score_thr,
@@ -248,7 +248,8 @@ def multiclass_nms_3d(multi_bboxes,
         else:
             return dets, labels
 
-    dets, keep = batched_nms(bboxes, scores, labels, nms_cfg) # TODO: nms core implemented on CUDA
+    # TODO: nms core implemented on CUDA
+    dets, keep = batched_nms_3d(bboxes, scores, labels, nms_cfg)
 
     if max_num > 0:
         dets = dets[:max_num]

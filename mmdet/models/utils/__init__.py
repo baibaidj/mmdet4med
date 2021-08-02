@@ -5,10 +5,11 @@ from .make_divisible import make_divisible
 from .normed_predictor import NormedConv2d, NormedLinear
 from .positional_encoding import (LearnedPositionalEncoding,
                                   SinePositionalEncoding)
-from .res_layer import ResLayer, SimplifiedBasicBlock
+from .res_layer import ResLayer, SimplifiedBasicBlock, ResLayer3D, ResLayerIso
 from .se_layer import SELayer
 from .transformer import (DetrTransformerDecoder, DetrTransformerDecoderLayer,
                           DynamicConv, Transformer)
+print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 
 __all__ = [
     'ResLayer', 'gaussian_radius', 'gen_gaussian_target',
@@ -16,5 +17,5 @@ __all__ = [
     'build_transformer', 'build_linear_layer', 'SinePositionalEncoding',
     'LearnedPositionalEncoding', 'DynamicConv', 'SimplifiedBasicBlock',
     'NormedLinear', 'NormedConv2d', 'make_divisible', 'InvertedResidual',
-    'SELayer'
+    'SELayer', 'ResLayer3D', 'ResLayerIso', 'print_tensor'
 ]

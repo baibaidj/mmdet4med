@@ -1,8 +1,9 @@
 from abc import ABCMeta, abstractmethod
 
 from mmcv.runner import BaseModule
+import pdb
 
-
+print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 class BaseDenseHead(BaseModule, metaclass=ABCMeta):
     """Base class for DenseHeads."""
 

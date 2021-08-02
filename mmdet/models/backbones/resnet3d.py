@@ -1095,5 +1095,5 @@ class ResNet3dLayer(nn.Module):
                     m.eval()
 
 
-if mmdet_imported:
-    MMDET_SHARED_HEADS.register_module()(ResNet3dLayer)
+# if mmdet_imported:
+#     MMDET_SHARED_HEADS.register_module()(ResNet3dLayer)

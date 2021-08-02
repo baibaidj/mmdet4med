@@ -95,6 +95,7 @@ class SpatialPadd(MapTransform):
         spatial_size: Union[Sequence[int], int],
         method: Union[Method, str] = Method.SYMMETRIC,
         mode: NumpyPadModeSequence = NumpyPadMode.CONSTANT,
+        verbose = False,
     ) -> None:
         """
         Args:
@@ -114,15 +115,19 @@ class SpatialPadd(MapTransform):
         super().__init__(keys)
         self.mode = ensure_tuple_rep(mode, len(self.keys))
         self.padder = SpatialPad(spatial_size, method)
+        self.verbose = verbose
 
     def __call__(self, data: Mapping[Hashable, np.ndarray]) -> Dict[Hashable, np.ndarray]:
         d = dict(data)
         # print('[Pad] data keys', d.keys())
         for key, m in zip(self.keys, self.mode):
-            
-            # print_tensor(f'PadPre: {key}', d[key])
+            # try:
+                # print_tensor(f'[Pad]Pre: {key}', d[key])
             d[key] = self.padder(d[key], mode=m)
-            # print_tensor(f'PadPost: {key}', d[key])
+            d['img_meta_dict'][f'padshape'] = d[key].shape[-3:]
+            if self.verbose: print_tensor(f'[Pad]Post: {key}', d[key])
+            # except ValueError:
+            #     print(f'[Pad] tensor error fn is', d['img_meta_dict']['filename_or_obj'])
         return d
 
 

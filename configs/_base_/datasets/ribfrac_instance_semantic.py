@@ -17,14 +17,15 @@ interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
 ext_patch_size = (192, 224, 192) # avoid artifacts such as boarder reflection
 patch_size = (160, 192, 160)
-rotate_angle = 20.0
+rotate_angle = 20.0 
 use_aux_sdm = False
 train_pipeline = [
     dict(type = 'Load1CaseNN', keys = ('img', 'seg', 'property', 'bboxes'), verbose = False),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
     # dict(type = 'AddChanneld', keys= keys), 
     # dict(type = 'ConvertLabeld', keys = 'seg', label_mapping = label_mapping, value4outlier = 1), 
-    dict(type = 'InstanceBasedCrop', keys=keys, patch_size= ext_patch_size, verbose = False),
-    dict(type = 'SpatialPadd', keys=keys, spatial_size= ext_patch_size, mode='reflect', verbose = False),  
+    dict(type = 'InstanceBasedCrop', keys=keys, patch_size= ext_patch_size, verbose = False), # cropshape
+    dict(type = 'SpatialPadd', keys=keys, spatial_size= ext_patch_size, # padshape
+                                mode='reflect', verbose = False),  
     dict(type = 'CastToTyped_', keys = keys,  dtype=dtypes), 
     dict(type = 'ToTensord', keys = keys),
     dict(type = 'RandFlipd_', keys = keys, spatial_axis=(0, 1), prob=0.4),
@@ -35,8 +36,7 @@ train_pipeline = [
     #                 output_dir = '/home/dejuns/git/mmseg4med/work_dirs/AbdoVeinDataset/vnet3d_res18_4l8c_160x256x256_200eps_sw173_fp16_sgd_mimic_sup_top/debug', 
     #                 resample = False),
     dict(type='FormatShapeMonai', verbose = False, keys = keys[:core_key_num],  channels = in_channel),
-    dict(type='Collect', keys=keys[:core_key_num], verbose = False, 
-                meta_keys = ('property', 'instance_mapping', 'bboxes', 'img_padshape', 'img_cropshape')),
+    dict(type='Collect', keys=keys[:core_key_num], verbose = False, meta_keys = ('img_meta_dict', 'bboxes')),
 ]
 test_keys = ('img', )
 test_pipeline = [
@@ -48,12 +48,9 @@ test_pipeline = [
             flip=False,
             flip_direction= ['diagonal'],
             transforms=[
-                dict(type = 'AddChanneld', keys= test_keys), 
                 dict(type = 'SpacingTTAd', keys = test_keys, pixdim = None),
                 dict(type = 'SpatialPadd', keys= test_keys, spatial_size= patch_size, mode='reflect', method = 'end'), 
-                dict(type = 'FlipTTAd_', keys = test_keys), 
-                # dict(type = 'ConvertLabeld', keys = ['gt_instance_seg'],  label_mapping = label_mapping), 
-                # dict(type = 'SelectChanneld', channel_dim = 0),   
+                dict(type = 'FlipTTAd_', keys = test_keys),  
                 dict(type = 'CastToTyped_', keys = 'img',  dtype= ('float', )),
                 dict(type = 'ToTensord', keys = 'img'), 
                 # dict(type = 'NormalizeIntensityGPUd', keys='img',
@@ -64,8 +61,7 @@ test_pipeline = [
                 #     ),
                 dict(type= 'FormatShapeMonai', keys=['img'], use_datacontainer = False,
                                              channels = in_channel),
-                dict(type='Collect', keys=['img'], meta_keys = ('property', 'instance_mapping', 
-                                                    'bboxes', 'img_padshape', 'img_cropshape'))
+                dict(type='Collect', keys=['img'], meta_keys = ('img_meta_dict', ))
                 ], 
             )
 ]
@@ -99,7 +95,6 @@ data = dict(
         # fn_spliter = ['-', 0]
         ))
 
-
 gpu_aug_pipelines = [
         # # data in torch tensor, not necessarily on gpu
         dict(type = 'Rand3DElasticGPUd', keys=keys[:core_key_num],
@@ -120,7 +115,6 @@ gpu_aug_pipelines = [
         #             ),
         dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.1), 
         # dict(type = 'SaveImaged', keys = keys[:core_key_num], 
-        #     output_dir = f'/home/dejuns/git/mmseg4med/work_dirs/{dataset_type}/vnet3d_res18_4l8c_64x64x64_200eps_rf420_fp16_adamw_mimic_sup_balance/debug', 
+        #     output_dir = f'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls/debug', 
         #     resample = False, save_batch = True, on_gpu = True),    
-
         ]

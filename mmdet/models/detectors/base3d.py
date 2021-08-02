@@ -3,11 +3,12 @@ from collections import OrderedDict
 
 import mmcv
 import numpy as np
-import torch
+import torch, pdb
 import torch.distributed as dist
 from mmcv.runner import BaseModule, auto_fp16
 
 from mmdet.core.visualization import imshow_det_bboxes
+from mmdet.utils.resize import list_dict2dict_list
 
 
 class BaseDetector3D(BaseModule, metaclass=ABCMeta): 
@@ -234,6 +235,7 @@ class BaseDetector3D(BaseModule, metaclass=ABCMeta):
                 DDP, it means the batch size on each GPU), which is used for \
                 averaging the logs.
         """
+        if isinstance(data, (list, tuple)): data = list_dict2dict_list(data)
         losses = self(**data)
         loss, log_vars = self._parse_losses(losses)
 

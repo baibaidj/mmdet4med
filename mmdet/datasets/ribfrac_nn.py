@@ -6,7 +6,7 @@ from .builder import DATASETS
 @DATASETS.register_module()
 class RibFractureNN(CustomDatasetNN):
 
-    CLASSES = ('bg', 'ribfrac')
+    CLASSES = ('ribfrac', )
 
     def __init__(self, *args, **kwargs):
         super(RibFractureNN, self).__init__(*args, **kwargs)

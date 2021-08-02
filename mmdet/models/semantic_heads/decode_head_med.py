@@ -1,9 +1,12 @@
 
 from ...utils.resize import resize_3d, bnchw2bchw
 from .decode_head import *
+import pdb
 
+print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 
-print_tensor = lambda n, x: print(n, type(x), x.shape, x.min(), x.max())
+chn2last_order = lambda x: tuple([0, *[a + 2 for a in range(x)],  1])
+
 class BaseDecodeHeadMed(BaseDecodeHead):
     """Base class for BaseDecodeHead 3d.
 
@@ -164,7 +167,9 @@ class BaseDecodeHeadMed(BaseDecodeHead):
             weight=seg_weight,
             ignore_index=self.ignore_index)
         if self.is_3d and seg_label.dim() == 5: seg_label = seg_label[:, acc_gt_index, ...]
-        loss['acc_seg'] = accuracy(seg_logit, seg_label)
+        dim_order = chn2last_order(seg_logit.dim() - 2)
+        loss['acc_seg'] = accuracy(seg_logit.permute(*dim_order).reshape(-1, self.num_classes), 
+                                    seg_label.reshape(-1))
         return loss
 
     def forward_train(self, inputs, img_metas, gt_semantic_seg, train_cfg):

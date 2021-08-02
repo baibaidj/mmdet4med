@@ -28,21 +28,24 @@ from .io4med import print_tensor, pdb
 @PIPELINES.register_module()
 class FindInstances(AbstractTransform):
     def __init__(self, instance_key: str = 'gt_instance_seg', save_key: str = "present_instances", 
-                    verbose = False, **kwargs):
+                 meta_key = 'img_meta_dict', verbose = False, **kwargs):
         super().__init__(grad=False)
         self.instance_key = instance_key # target
         self.save_key = save_key
         self.verbose = verbose
+        self.meta_key = meta_key
 
     def forward(self, data) -> dict:
         """ input data is a dict """
         present_instances = []
+        # pdb.set_trace()
+        # print(f'[meta_key] len' , len(data[self.meta_key]))
         # 1 means how many channels per chunk, split dim is defaulted to 0
         for bix, instance_element in enumerate(data[self.instance_key].split(1)):
             if self.verbose: print_tensor(f'[FindIn]', instance_element)
             tmp = instance_element.to(dtype=torch.int).unique(sorted=True)
             if tmp.max() > 64:
-                print(f'[Instance] {tmp} exceed 64; case info is \n', data['property'][bix])
+                print(f'[Instance] {tmp} exceed 64; case info is \n', data[self.meta_key][bix])
             tmp = tmp[tmp > 0]
             present_instances.append(tmp)
         data[self.save_key] = present_instances
@@ -53,7 +56,7 @@ class Instances2Boxes(AbstractTransform):
     def __init__(self, instance_key: str, map_key: str,
                  box_key: str, class_key: str, grad: bool = False,
                  present_instances: Optional[str] = None,
-                 verbose = False,
+                 meta_key = 'img_meta_dict',  verbose = True,
                  **kwargs):
         """
         Convert instance segmentation to bounding boxes
@@ -74,6 +77,7 @@ class Instances2Boxes(AbstractTransform):
         self.map_key = map_key
         self.instance_key = instance_key
         self.present_instances = present_instances
+        self.meta_key = meta_key
         self.verbose = verbose
 
     def forward(self, data) -> dict:
@@ -86,19 +90,18 @@ class Instances2Boxes(AbstractTransform):
         Returns:
             dict: processed batch
         """
-        data[self.box_key] = []
+        data[self.box_key] = [] 
         data[self.class_key] = []
         for batch_idx, instance_element in enumerate(data[self.instance_key].split(1)):
             _present_instances = data[self.present_instances][batch_idx] if self.present_instances is not None else None
             _boxes, instance_idx = instances_to_boxes(
                 instance_element, instance_element.ndim - 2, instances=_present_instances)
-            # pdb.set_trace()
-            # if self.verbose: print_tensor(f'[Getbox] bx {batch_idx} instance mask', instance_element)
-            if self.verbose: print(f'[Getbox] bx {batch_idx} instance ix {instance_idx}, box', _boxes.shape)
-            _classes = get_instance_class_from_properties(
-                instance_idx, data[self.map_key][batch_idx])
+            inst2class_map = data[self.meta_key][batch_idx][self.map_key]
+            _classes = get_instance_class_from_properties(instance_idx, inst2class_map)
             _classes = _classes.to(device=_boxes.device)
 
+            if self.verbose: print(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
+                                    + f'ins {instance_idx}  cls {_classes}')
             data[self.box_key].append(_boxes)
             data[self.class_key].append(_classes)
         return data
@@ -134,9 +137,9 @@ def instances_to_boxes(seg: Tensor,
         instances = instances[instances > 0]
 
     for _idx in instances:
-        instance_idx = (_seg == _idx).nonzero(as_tuple=False)
+        instance_idx = (_seg == _idx).nonzero(as_tuple=False) # xyz
 
-        _mins = instance_idx[:, -3:].min(dim=0)[0]
+        _mins = instance_idx[:, -3:].min(dim=0)[0] # 
         _maxs = instance_idx[:, -3:].max(dim=0)[0]
         x1, y1, x2, y2 = _mins[-dim] - 1, _mins[(-dim) + 1] - 1, _maxs[-dim] + 1, _maxs[(-dim) + 1] + 1
         box = [x1, y1, x2, y2]
@@ -235,6 +238,7 @@ class Instances2SemanticSeg(AbstractTransform):
     def __init__(self, instance_key: str, map_key: str, seg_key: str = None,
                  add_background: bool = True, grad: bool = False,
                  present_instances: Optional[str] = None,
+                 meta_key = 'img_meta_dict',
                  ):
         """
         Convert instances to semantic segmentation
@@ -255,6 +259,7 @@ class Instances2SemanticSeg(AbstractTransform):
         self.map_key = map_key
         self.instance_key = instance_key
         self.present_instances = present_instances
+        self.meta_key = meta_key
 
     def forward(self, data) -> dict:
         """
@@ -269,8 +274,11 @@ class Instances2SemanticSeg(AbstractTransform):
         semantic = torch.zeros_like(data[self.instance_key])
         _present_instances = data[self.present_instances] if self.present_instances is not None else None
         for batch_idx in range(semantic.shape[0]):
+            ins2cls = data[self.meta_key][batch_idx][self.map_key]
+
+            # TODO: check classes 
             instances_to_segmentation(data[self.instance_key][batch_idx],
-                                      data[self.map_key][batch_idx],
+                                      data[self.meta_key][batch_idx][self.map_key],
                                       add_background=self.add_background,
                                       instance_idx=_present_instances[batch_idx],
                                       out=semantic[batch_idx])

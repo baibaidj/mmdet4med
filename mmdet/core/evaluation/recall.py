@@ -4,7 +4,7 @@ import numpy as np
 from mmcv.utils import print_log
 from terminaltables import AsciiTable
 
-from .bbox_overlaps import bbox_overlaps
+from .bbox_overlaps import bbox_overlaps, bbox_overlaps_3d
 
 
 def _recalls(all_ious, proposal_nums, thrs):
@@ -187,3 +187,50 @@ def plot_iou_recall(recalls, iou_thrs):
     plt.ylabel('Recall')
     plt.axis([iou_thrs.min(), 1, 0, 1])
     f.show()
+
+
+
+
+def eval_recalls_3d(gts,
+                 proposals,
+                 proposal_nums=None,
+                 iou_thrs=0.5,
+                 logger=None):
+    """Calculate recalls.
+
+    Args:
+        gts (list[ndarray]): a list of arrays of shape (n, 6)
+        proposals (list[ndarray]): a list of arrays of shape (k, 6) or (k, 7)
+        proposal_nums (int | Sequence[int]): Top N proposals to be evaluated.
+        iou_thrs (float | Sequence[float]): IoU thresholds. Default: 0.5.
+        logger (logging.Logger | str | None): The way to print the recall
+            summary. See `mmcv.utils.print_log()` for details. Default: None.
+
+    Returns:
+        ndarray: recalls of different ious and proposal nums
+    """
+
+    img_num = len(gts)
+    assert img_num == len(proposals)
+
+    proposal_nums, iou_thrs = set_recall_param(proposal_nums, iou_thrs)
+
+    all_ious = []
+    for i in range(img_num):
+        if proposals[i].ndim == 2 and proposals[i].shape[1] == 7:
+            scores = proposals[i][:, 6]
+            sort_idx = np.argsort(scores)[::-1]
+            img_proposal = proposals[i][sort_idx, :]
+        else:
+            img_proposal = proposals[i]
+        prop_num = min(img_proposal.shape[0], proposal_nums[-1])
+        if gts[i] is None or gts[i].shape[0] == 0:
+            ious = np.zeros((0, img_proposal.shape[0]), dtype=np.float32)
+        else:
+            ious = bbox_overlaps_3d(gts[i], img_proposal[:prop_num, :4])
+        all_ious.append(ious)
+    all_ious = np.array(all_ious)
+    recalls = _recalls(all_ious, proposal_nums, iou_thrs)
+
+    print_recall_summary(recalls, proposal_nums, iou_thrs, logger=logger)
+    return recalls

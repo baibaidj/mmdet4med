@@ -5,11 +5,11 @@ _base_ = [
 ]
 
 find_unused_parameters=True
-load_from =  None #'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft/latest.pth' #
-resume_from = 'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn/latest.pth'
+load_from =  'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls/latest.pth' #
+resume_from = None #'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls/latest.pth'
 
 # optimizer
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(_delete_=True, type='Fp16OptimizerHook', loss_scale=512.,
                         grad_clip = dict(max_norm = 16, norm_type = 2)
                         ) #only reduce from 10G->7G
@@ -23,5 +23,5 @@ log_config = dict(interval=20, hooks=[dict(type='TextLoggerHook'),
                 # dict(type='TensorboardLoggerHook')
                 ])
 
-# CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn.py --no-validate
-# CUDA_VISIBLE_DEVICES=1,2,4,5 PORT=29001 bash ./tools/dist_train.sh configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn.py 4 --no-validate
+# CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls.py --no-validate
+# CUDA_VISIBLE_DEVICES=1,2,4,5 PORT=29001 bash ./tools/dist_train.sh configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls.py 4 --no-validate

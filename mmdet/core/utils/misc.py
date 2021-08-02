@@ -82,3 +82,6 @@ def flip_tensor(src_tensor, flip_direction):
     else:
         out_tensor = torch.flip(src_tensor, [2, 3])
     return out_tensor
+
+
+print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
