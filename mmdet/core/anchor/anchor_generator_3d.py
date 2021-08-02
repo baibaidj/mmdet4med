@@ -1,13 +1,11 @@
 import warnings
 
-import mmcv
 import numpy as np
 import torch
-from torch._C import strided
 from torch.nn.modules.utils import _pair, _triple
 
 from .builder import PRIOR_GENERATORS
-
+print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 
 @PRIOR_GENERATORS.register_module()
 class AnchorGenerator3D:
@@ -275,6 +273,9 @@ class AnchorGenerator3D:
         all_anchors = all_anchors.view(-1, 6)
         # first A rows correspond to A anchors of (0, 0, 0) in feature map,
         # then (0, 0, 1), (0, 0, 2), ...
+        
+        # print_tensor(f'[AnchorGen] l {level_idx} stride {self.strides[level_idx]} feat {featmap_size} ', all_anchors)
+        # print_tensor(f'[AnchorGen] base anchor', base_anchors)
         return all_anchors
 
     def sparse_priors(self,
@@ -312,79 +313,6 @@ class AnchorGenerator3D:
 
         return priors
 
-    def grid_anchors(self, featmap_sizes, device='cuda'):
-        """Generate grid anchors in multiple feature levels.
-
-        Args:
-            featmap_sizes (list[tuple]): List of feature map sizes in
-                multiple feature levels.
-            device (str): Device where the anchors will be put on.
-
-        Return:
-            list[torch.Tensor]: Anchors in multiple feature levels. \
-                The sizes of each tensor should be [N, 4], where \
-                N = width * height * num_base_anchors, width and height \
-                are the sizes of the corresponding feature level, \
-                num_base_anchors is the number of anchors for that level.
-        """
-        warnings.warn('``grid_anchors`` would be deprecated soon. '
-                      'Please use ``grid_priors`` ')
-
-        assert self.num_levels == len(featmap_sizes)
-        multi_level_anchors = []
-        for i in range(self.num_levels):
-            anchors = self.single_level_grid_anchors(
-                self.base_anchors[i].to(device),
-                featmap_sizes[i],
-                self.strides[i],
-                device=device)
-            multi_level_anchors.append(anchors)
-        return multi_level_anchors
-
-    def single_level_grid_anchors(self,
-                                  base_anchors,
-                                  featmap_size,
-                                  stride=(16, 16),
-                                  device='cuda'):
-        """Generate grid anchors of a single level.
-
-        Note:
-            This function is usually called by method ``self.grid_anchors``.
-
-        Args:
-            base_anchors (torch.Tensor): The base anchors of a feature grid.
-            featmap_size (tuple[int]): Size of the feature maps.
-            stride (tuple[int], optional): Stride of the feature map in order
-                (w, h). Defaults to (16, 16).
-            device (str, optional): Device the tensor will be put on.
-                Defaults to 'cuda'.
-
-        Returns:
-            torch.Tensor: Anchors in the overall feature maps.
-        """
-
-        warnings.warn(
-            '``single_level_grid_anchors`` would be deprecated soon. '
-            'Please use ``single_level_grid_priors`` ')
-
-        # keep featmap_size as Tensor instead of int, so that we
-        # can covert to ONNX correctly
-        feat_h, feat_w = featmap_size
-        shift_x = torch.arange(0, feat_w, device=device) * stride[0]
-        shift_y = torch.arange(0, feat_h, device=device) * stride[1]
-
-        shift_xx, shift_yy = self._meshgrid(shift_x, shift_y)
-        shifts = torch.stack([shift_xx, shift_yy, shift_xx, shift_yy], dim=-1)
-        shifts = shifts.type_as(base_anchors)
-        # first feat_w elements correspond to the first row of shifts
-        # add A anchors (1, A, 4) to K shifts (K, 1, 4) to get
-        # shifted anchors (K, A, 4), reshape to (K*A, 4)
-
-        all_anchors = base_anchors[None, :, :] + shifts[:, None, :]
-        all_anchors = all_anchors.view(-1, 4)
-        # first A rows correspond to A anchors of (0, 0) in feature map,
-        # then (0, 1), (0, 2), ...
-        return all_anchors
 
     def valid_flags(self, featmap_sizes, pad_shape, device='cuda'):
         """Generate valid flags of anchors in multiple feature levels.
@@ -403,10 +331,11 @@ class AnchorGenerator3D:
         for i in range(self.num_levels):
             anchor_stride = self.strides[i]
             feat_h, feat_w, feat_d = featmap_sizes[i]
-            h, w, d = pad_shape[:2]
+            h, w, d = list(pad_shape)[:3]
             valid_feat_h = min(int(np.ceil(h / anchor_stride[1])), feat_h)
             valid_feat_w = min(int(np.ceil(w / anchor_stride[0])), feat_w)
             valid_feat_d = min(int(np.ceil(d / anchor_stride[2])), feat_d)
+            # print(f'[AnchorGen] level {i} stride {anchor_stride} feat shape {featmap_sizes[i]} img shape {pad_shape} ')
             flags = self.single_level_valid_flags((feat_h, feat_w, feat_d),
                                                   (valid_feat_h, valid_feat_w, valid_feat_d),
                                                   self.num_base_anchors[i],

@@ -1,4 +1,3 @@
-from collections import OrderedDict
 import os.path as osp
 import numpy as np
 import mmcv, sys, warnings, os
@@ -8,18 +7,16 @@ from torch.utils.data import Dataset
 
 from ..core import cfsmat4mask_batched, metric_in_cfsmat_1by1
 from .builder import DATASETS
-from .pipelines import Compose, convert_label
+from .pipelines import Compose
 import torch, json
-from copy import deepcopy
-from multiprocessing.pool import ThreadPool
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Union
 
-import torch
+import torch, pdb
 
-from monai.data.image_reader import NibabelReader
-from .pipelines.io4med import print_tensor
-from .pipelines.paths import load_dataset_id
+# from monai.data.image_reader import NibabelReader
+from .transform4med.io4med import print_tensor, random, convert_label
+from .transform4med.paths import load_dataset_id
+from .transform4med.load_nn import load_pickle
 
 def decide_cid_in_fn(fn):
     fn_stem = fn.split('.')[0]
@@ -97,12 +94,13 @@ class CustomDatasetNN(Dataset):
                  sample_rate = 1.0,
                  view_channel = None,
                  verbose = False,
-                 key2suffix = {'img_fp': '.npy', 'label_fp': '_seg.npy', 
+                 key2suffix = {'img_fp': '.npy', 'seg_fp': '_seg.npy', 
                             'property_fp':'.pkl', 'bboxes_fp': '_boxes.pkl'},
                  keys = ('img', 'gt_instance_seg'),
                  exclude_pids = None,
                  json_filename = 'dataset.json',
-                 fn_spliter = ['_', 1]
+                 fn_spliter = ['_', 1],
+                 pos_neg_ratio = 0.5, 
                  ):
 
         self.key2suffix = key2suffix
@@ -122,31 +120,37 @@ class CustomDatasetNN(Dataset):
         self.exclude_pids = exclude_pids
         self.json_filename  = json_filename
         self.fn_spliter = fn_spliter
-        self.reader = NibabelReader()
+        self.pos_neg_ratio = pos_neg_ratio
 
         # load annotations
         self.img_infos = self._img_list2dataset(self.img_dir, mode = self.split, key2suffix = key2suffix)
         self.img_infos = self._sample_img_data(self.img_infos, self.sample_rate)
+        self.instance_cache = self.build_instance_list()
+        self._set_group_flag()
         # print(self.img_infos)
 
-    def map_key(self, key):
-        # mm2monai_map = self.keysmap#{'img' : 'image', 'gt_semantic_seg' : 'label'}
-        return self.key2suffix.get(key, key)
+    def _set_group_flag(self):
+        """Set flag according to image aspect ratio.
+
+        Images with aspect ratio greater than 1 will be set as group 1,
+        otherwise group 0.
+        """
+        self.flag = np.ones(len(self), dtype=np.uint8)
 
     def __len__(self):
         """Total number of samples of data."""
-        return len(self.img_infos)
+        return len(self.instance_cache)
 
     def _img_list2dataset(self, data_folder:str, mode = 'train ', 
-                        key2suffix = {'img': '.npy', 'gt_instance_seg': '_seg.npy',  
-                                     'property':'.pkl', 'bboxes': '_boxes.pkl'}):
+                        key2suffix = {'img_fp': '.npy', 'seg_fp': '_seg.npy', 
+                            'property_fp':'.pkl', 'bboxes_fp': '_boxes.pkl'},):
         """
 
-        data_file = f"{c}.npy"
+        img_fp = f"{c}.npy"
             np.ndarray
-        seg_file = f"{c}_seg.npy"
+        seg_fp = f"{c}_seg.npy"
             np.ndarray
-        properties_file = "{c}.pkl"
+        property_fp = "{c}.pkl"
             original_size_of_raw_data :	 [380 512 512]
             original_spacing :	 [1.         0.79296875 0.79296875]
             list_of_data_files :	 [PosixPath('/data/lung_algorithm/data/nnDet_data/Task020FG_RibFrac/raw_splitted/imagesTr/RibFrac343_0000.nii.gz')]
@@ -161,7 +165,7 @@ class CustomDatasetNN(Dataset):
             size_after_resampling :	 (304, 550, 550)
             spacing_after_resampling :	 [1.25       0.73828101 0.73828101]
             use_nonzero_mask_for_norm :	 OrderedDict([(0, False)])
-        boxes_file = f"{c}_boxes.pkl"
+        bboxes_fp = f"{c}_boxes.pkl"
             boxes :	 [[ 23 314  33 341  76  91]
                     [166 164 185 211 377 414]
                     [141 159 162 225 388 442]
@@ -191,8 +195,9 @@ class CustomDatasetNN(Dataset):
             this_holder = {'cid': cid}
             for k, suffix in key2suffix.items(): 
                 this_holder[k] = osp.join(data_folder, part_fn + suffix)
+                if ix < 3: print(f'\t{k}', this_holder[k])
             pid2pathpairs.append(this_holder)
-        pathpairs_orderd = sorted(pid2pathpairs, lambda x: x['cid']) # TODO: debug
+        pathpairs_orderd = sorted(pid2pathpairs, key = lambda x: x['cid']) # TODO: debug
         return pathpairs_orderd
 
     def _sample_img_data(self, fp_list, sample_rate = 1.0, rand_seed = 42):
@@ -205,23 +210,6 @@ class CustomDatasetNN(Dataset):
             sample_indexes = sorted(sample_indexes)                                
             fp_list = [fp_list[a] for a in sample_indexes]
         return fp_list
-
-    def get_ann_info(self, idx):
-        """Get annotation by index.
-
-        Args:
-            idx (int): Index of data.
-
-        Returns:
-            dict: Annotation info of specified index.
-        """
-
-        return self.img_infos[idx]['ann']
-
-    def pre_pipeline(self, results):
-        """Prepare results dict for pipeline."""
-        results['seg_fields'] = []
-
     def __getitem__(self, idx):
         """Get training/test data after pipeline.
 
@@ -238,8 +226,39 @@ class CustomDatasetNN(Dataset):
         else:
             return self.prepare_train_img(idx)
 
+    def build_instance_list(self):
+        """
+        Build up cache for sampling, only cases with lesions
+
+        Returns:
+            Dict[str, List]: cache for sampling
+                `case`: list with all case identifiers
+                `instances`: list with tuple of (case_id, instance_id)
+        """
+        instance_cache = []
+        print("Building Sampling Cache for Dataset")
+        for cix, item in enumerate(self.img_infos):
+            if cix< 2: print(item)
+            instances = load_pickle(item['bboxes_fp'])["instances"] 
+            if instances:
+                for instance_id in instances:
+                    instance_cache.append((cix, instance_id))
+        return instance_cache
+
+    # def pre_pipeline(self, results):
+    #     """Prepare results dict for pipeline."""
+    #     results['seg_fields'] = []
+
     def prepare_train_img(self, idx):
         """Get training data and annotations after pipeline.
+
+        Selects cases and instances. If instance id is -1 a random background
+        patch will be sampled.
+
+        Foreground sampling: sample uniformly from all the foreground classes
+            and enforce the respective class while patch sampling.
+        Background sampling: We jsut sample a random case
+        
 
         Args:
             idx (int): Index of data.
@@ -248,9 +267,15 @@ class CustomDatasetNN(Dataset):
             dict: Training data and annotation after pipeline with new keys
                 introduced by pipeline.
         """
-
-        results = self.img_infos[idx]
-        self.pre_pipeline(results)
+        cix, c_ins_ix = self.instance_cache[idx]
+        pos_sample_info = self.img_infos[cix]
+        pos_sample_info['instance_ix'] = c_ins_ix
+        
+        cix4neg = random.randrange(0, len(self.img_infos))
+        neg_sample_info = self.img_infos[cix4neg]
+        pos_sample_info['instance_ix'] = -1
+        results = [pos_sample_info, neg_sample_info]
+        # self.pre_pipeline(results)
         return self.pipeline(results)
 
     def prepare_test_img(self, idx):
@@ -265,7 +290,7 @@ class CustomDatasetNN(Dataset):
         """
 
         results = self.img_infos[idx]
-        self.pre_pipeline(results)
+        # self.pre_pipeline(results)
         return self.pipeline(results)
 
     def format_results(self, results, **kwargs):
@@ -279,9 +304,6 @@ class CustomDatasetNN(Dataset):
         if getattr(self, 'gt_seg_maps', None) is not None:
             return getattr(self, 'gt_seg_maps', None)
 
-        # attr_in_transform = lambda x, trans: [f for f in trans if hasattr(f, x)]
-        label_mapping = self.pipeline.transforms[1].label_mapping
-        value4outlier = getattr(self.pipeline.transforms[1], 'value4outlier', 0)
         # num_slices = self.pipeline.transforms[0].num_slice
         gt_seg_maps = {}
         for i, img_info in enumerate(self.img_infos):
@@ -301,15 +323,8 @@ class CustomDatasetNN(Dataset):
             gt_seg_maps[subdir]['gix'].append(i)
             gt_seg_maps[subdir]['affine'] = af_mat
 
-            if self.reduce_zero_label:
-                # avoid using underflow conversion
-                gt_seg_map[gt_seg_map == 0] = 255
-                gt_seg_map = gt_seg_map - 1
-                gt_seg_map[gt_seg_map == 254] = 255
-            if label_mapping is not None: gt_seg_map = convert_label(gt_seg_map, label_mapping, 
-                                                        value4outlier = value4outlier)
 
-            if i < 3: print_tensor(f'gt-convertlabel {label_mapping}' , gt_seg_map) #
+            # if i < 3: print_tensor(f'gt-convertlabel {label_mapping}' , gt_seg_map) #
             # print('eval, mask', gt_seg_map.shape, gt_seg_map.min(), gt_seg_map.max())
             gt_seg_maps[subdir]['gt'].append(gt_seg_map)
         self.gt_seg_maps = gt_seg_maps
@@ -458,127 +473,6 @@ class CustomDatasetNN(Dataset):
         # eval_results['mDice_obj'] = np.nanmean(dice[1:])
 
         return eval_results
-
-
-# if TYPE_CHECKING:
-#     from tqdm import tqdm
-#     has_tqdm = True
-# else:
-# #     tqdm, has_tqdm = optional_import("tqdm", "4.47.0", min_version, "tqdm")
-# from monai.utils import  min_version, optional_import,
-# from monai.transforms import Randomizable, Transform, apply_transform
-# class CacheDatasetMonai(CustomDatasetMonai):
-#     """
-#     Dataset with cache mechanism that can load data and cache deterministic transforms' result during training.
-
-#     By caching the results of non-random preprocessing transforms, it accelerates the training data pipeline.
-#     If the requested data is not in the cache, all transforms will run normally
-#     (see also :py:class:`monai.data.dataset.Dataset`).
-
-#     Users can set the cache rate or number of items to cache.
-#     It is recommended to experiment with different `cache_num` or `cache_rate` to identify the best training speed.
-
-#     To improve the caching efficiency, please always put as many as possible non-random transforms
-#     before the randomized ones when composing the chain of transforms.
-
-#     For example, if the transform is a `Compose` of::
-
-#         transforms = Compose([
-#             LoadImaged(),
-#             AddChanneld(),
-#             Spacingd(),
-#             Orientationd(),
-#             ScaleIntensityRanged(),
-#             RandCropByPosNegLabeld(),
-#             ToTensord()
-#         ])
-
-#     when `transforms` is used in a multi-epoch training pipeline, before the first training epoch,
-#     this dataset will cache the results up to ``ScaleIntensityRanged``, as
-#     all non-random transforms `LoadImaged`, `AddChanneld`, `Spacingd`, `Orientationd`, `ScaleIntensityRanged`
-#     can be cached. During training, the dataset will load the cached results and run
-#     ``RandCropByPosNegLabeld`` and ``ToTensord``, as ``RandCropByPosNegLabeld`` is a randomized transform
-#     and the outcome not cached.
-#     """
-
-#     def __init__(
-#         self,
-#         *args,
-#         cache_num: int = sys.maxsize,
-#         cache_rate: float = 1.0,
-#         num_workers: Optional[int] = None,
-#         progress: bool = True,
-#         **kwargs
-#     ) -> None:
-#         """
-#         Args:
-#             data: input data to load and transform to generate dataset for model.
-#             transform: transforms to execute operations on input data.
-#             cache_num: number of items to be cached. Default is `sys.maxsize`.
-#                 will take the minimum of (cache_num, data_length x cache_rate, data_length).
-#             cache_rate: percentage of cached data in total, default is 1.0 (cache all).
-#                 will take the minimum of (cache_num, data_length x cache_rate, data_length).
-#             num_workers: the number of worker processes to use.
-#                 If num_workers is None then the number returned by os.cpu_count() is used.
-#             progress: whether to display a progress bar.
-#         """
-#         # if not isinstance(transform, Compose):
-#         #     transform = Compose(transform)
-#         self.progress = progress
-#         super(CacheDatasetMonai, self).__init__(*args, **kwargs)
-#         self.cache_num = min(int(cache_num), int(len(self) * cache_rate), len(self))
-#         self.num_workers = num_workers
-#         if self.num_workers is not None:
-#             self.num_workers = max(int(self.num_workers), 1)
-#         self._cache: List = self._fill_cache()
-
-#     def _fill_cache(self) -> List:
-#         if self.cache_num <= 0:
-#             return []
-#         if self.progress and not has_tqdm:
-#             warnings.warn("tqdm is not installed, will not show the caching progress bar.")
-#         with ThreadPool(self.num_workers) as p:
-#             if self.progress and has_tqdm:
-#                 return list(
-#                     tqdm(
-#                         p.imap(self._load_cache_item, range(self.cache_num)),
-#                         total=self.cache_num,
-#                         desc="Loading dataset",
-#                     )
-#                 )
-#             return list(p.imap(self._load_cache_item, range(self.cache_num)))
-
-#     def _load_cache_item(self, idx: int):
-#         """
-#         Args:
-#             idx: the index of the input data sequence.
-#         """
-#         item = self.img_infos[idx]; self.pre_pipeline(item)
-#         if not isinstance(self.pipeline, Compose):
-#             raise ValueError("transform must be an instance of monai.transforms.Compose.")
-#         for _transform in self.pipeline.transforms:
-#             # execute all the deterministic transforms
-#             if isinstance(_transform, Randomizable) or not isinstance(_transform, Transform):
-#                 break
-#             item = apply_transform(_transform, item)
-#         return item
-
-#     def __getitem__(self, index):
-#         if index >= self.cache_num:
-#             # no cache for this index, execute all the transforms directly
-#             return super(CacheDatasetMonai, self).__getitem__(index)
-#         # load data from cache and execute from the first random transform
-#         start_run = False
-#         if self._cache is None:
-#             self._cache = self._fill_cache()
-#         data = self._cache[index]
-#         if not isinstance(self.pipeline, Compose):
-#             raise ValueError("transform must be an instance of monai.transforms.Compose.")
-#         for _transform in self.pipeline.transforms:
-#             if start_run or isinstance(_transform, Randomizable) or not isinstance(_transform, Transform):
-#                 start_run = True
-#                 data = apply_transform(_transform, data)
-#         return data
 
 
 def overlap_handler_zaxis(tensor_list, indices_list, stack_axis = 0, verbose = True):
