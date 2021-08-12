@@ -22,7 +22,7 @@ from torchvision.ops.boxes import nms as nms_2d
 from ..utils._C import nms as nms_3d
 # from nndet.core.boxes.ops import box_iou
 from ..bbox.iou_calculators.iou3d_calculator import bbox_overlaps_3d as box_iou
-
+import pdb
 
 def nms_cpu(boxes, scores, thresh):
     """
@@ -129,7 +129,7 @@ def batched_nms_3d(boxes, scores, idxs, nms_cfg, class_agnostic=False):
         nms_cfg (dict): specify nms type and other parameters like iou_thr.
             Possible keys includes the following.
 
-            - iou_thr (float): IoU threshold used for NMS.
+            - iou_threshold (float): IoU threshold used for NMS.
             - split_thr (float): threshold number of boxes. In some cases the
                 number of boxes is large (e.g., 200k). To avoid OOM during
                 training, the users could set `split_thr` to a small value.
@@ -151,42 +151,32 @@ def batched_nms_3d(boxes, scores, idxs, nms_cfg, class_agnostic=False):
         max_coordinate = boxes.max()
         offsets = idxs.to(boxes) * (max_coordinate + torch.tensor(1).to(boxes))
         boxes_for_nms = boxes + offsets[:, None]
-
-    boxes_for_nms = xyz2xy1z(boxes_for_nms) # compatible to the NMS operation developed by nndet
-    nms_type = nms_cfg_.pop('type', 'nms')
+    # compatible to the NMS operation developed by nndet
+    boxes_for_nms = xyz2xy1z(boxes_for_nms)
+    # nms_type = nms_cfg_.pop('type', 'nms')
     # nms_op = eval(nms_type)
+    # split_thr = nms_cfg_.pop('split_thr', 10000)
 
-    split_thr = nms_cfg_.pop('split_thr', 10000)
-    # Won't split to multiple nms nodes when exporting to onnx
-    if boxes_for_nms.shape[0] < split_thr or torch.onnx.is_in_onnx_export():
-        dets, keep = nms_3d(boxes_for_nms, scores, **nms_cfg_)
-        boxes = boxes[keep]
-        # -1 indexing works abnormal in TensorRT
-        # This assumes `dets` has 5 dimensions where
-        # the last dimension is score.
-        # TODO: more elegant way to handle the dimension issue.
-        # Some type of nms would reweight the score, such as SoftNMS
-        scores = dets[:, 4]
-    else:
-        max_num = nms_cfg_.pop('max_num', -1)
-        total_mask = scores.new_zeros(scores.size(), dtype=torch.bool)
-        # Some type of nms would reweight the score, such as SoftNMS
-        scores_after_nms = scores.new_zeros(scores.size())
-        for id in torch.unique(idxs):
-            mask = (idxs == id).nonzero(as_tuple=False).view(-1)
-            # NOTE: nms 3d applied here
-            keep = nms_3d(boxes_for_nms[mask], scores[mask], **nms_cfg_)
-            total_mask[mask[keep]] = True
-            scores_after_nms[mask[keep]] = scores[mask[keep]]
-        keep = total_mask.nonzero(as_tuple=False).view(-1)
+    max_num = nms_cfg_.pop('max_num', -1)
+    total_mask = scores.new_zeros(scores.size(), dtype=torch.bool)
+    # Some type of nms would reweight the score, such as SoftNMS
+    scores_after_nms = scores.new_zeros(scores.size())
+    for id in torch.unique(idxs):
+        mask = (idxs == id).nonzero(as_tuple=False).view(-1)
+        # NOTE: nms 3d applied here
+        # pdb.set_trace()
+        keep = nms_3d(boxes_for_nms[mask], scores[mask], nms_cfg_['iou_threshold'])
+        total_mask[mask[keep]] = True
+        scores_after_nms[mask[keep]] = scores[mask[keep]]
+    keep = total_mask.nonzero(as_tuple=False).view(-1)
 
-        scores, inds = scores_after_nms[keep].sort(descending=True)
-        keep = keep[inds]
-        boxes = boxes[keep]
+    scores, inds = scores_after_nms[keep].sort(descending=True)
+    keep = keep[inds]
+    boxes = boxes[keep]
 
-        if max_num > 0:
-            keep = keep[:max_num]
-            boxes = boxes[:max_num]
-            scores = scores[:max_num]
+    if max_num > 0:
+        keep = keep[:max_num]
+        boxes = boxes[:max_num]
+        scores = scores[:max_num]
 
     return torch.cat([boxes, scores[:, None]], -1), keep

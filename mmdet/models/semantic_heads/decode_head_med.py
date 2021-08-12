@@ -84,10 +84,10 @@ class BaseDecodeHeadMed(BaseDecodeHead):
 
         if isinstance(self.conv_seg, torch.nn.ModuleList):
             for conv_seg in self.conv_seg:
-                normal_init(conv_seg, mean=0, std=0.01)
+                normal_init(conv_seg, mean=0, std=0.1)
         else:
             if isinstance(self.conv_seg, (nn.Conv2d, nn.Conv3d)):
-                normal_init(self.conv_seg, mean=0, std=0.01)
+                normal_init(self.conv_seg, mean=0, std=0.1)
 
     def cls_seg(self, feat):
         """Classify each pixel."""

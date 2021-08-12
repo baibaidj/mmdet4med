@@ -89,8 +89,9 @@ def bbox_overlaps_3d(bboxes1, bboxes2, mode='iou', eps=1e-6):
         y_end = inner_end_dim(bboxes1[i], bboxes2[i], 4) #np.minimum(bboxes1[i, 3], bboxes2[:, 3])
         z_end = inner_end_dim(bboxes1[i], bboxes2[i], 5)
 
-        overlap = np.maximum(x_end - x_start, 0) * np.maximum(
-            y_end - y_start, 0) * np.maximum(z_end - z_start)
+        overlap = np.maximum(x_end - x_start, 0) * \
+                        np.maximum(y_end - y_start, 0) * \
+                                np.maximum(z_end - z_start, 0)
         if mode == 'iou':
             union = area1[i] + area2 - overlap
         else:

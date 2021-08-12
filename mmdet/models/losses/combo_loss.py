@@ -89,9 +89,6 @@ class ComboLossMed(nn.Module):
             self.class_weight = torch.tensor(self.class_weight, device=cls_score.device, dtype= cls_score.dtype)
             # if self.verbose: print(f'[Loss] class weight', self.class_weight)
 
-        # with torch.no_grad():
-        #     if weight is None and self.just_foreground: weight = (label > 0)
-        #     if weight is not None and self.just_foreground: weight = weight * (label > 0)
         loss_1 = self.loss_weights[0] * self.criterion_list[0](
                                             cls_score,
                                             label,
@@ -110,8 +107,8 @@ class ComboLossMed(nn.Module):
                         weight, 
                         class_weight = self.class_weight.clone().detach()) if self.loss_weights[1] != 0 else 0
 
-        if self.verbose: print_tensor('BCE', loss_1)
-        if self.verbose and isinstance(loss_2, torch.Tensor): print_tensor('Dloss', loss_2)
+        if self.verbose: print_tensor('[ComboLoss] BCE', loss_1)
+        if self.verbose and isinstance(loss_2, torch.Tensor): print_tensor('[ComboLoss] Dloss', loss_2)
         total_loss = loss_1 + loss_2 
         return total_loss
 
@@ -120,9 +117,9 @@ class ComboLossMed(nn.Module):
         # pdb.set_trace(header=...)
         if self.verbose:
             with torch.no_grad():
-                print_tensor('predscore', cls_score)
-                print_tensor('predmask', cls_score.argmax(1))
-                # print_tensor('truemask', label)
+                print_tensor('[ComboLoss] predscore', cls_score)
+                # print_tensor('predmask', cls_score.argmax(1) if self.num_classes > 1 else cls)
+                print_tensor('[ComboLoss] truemask', label)
 
         self.class_weight = copy.deepcopy(self.class_weight_origin)
         if self.loss_weights[1] !=0: self.criterion_list[1].update1hot_encoder(self.num_classes4loss)

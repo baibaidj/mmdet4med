@@ -19,7 +19,7 @@ from typing import Tuple
 import torch
 
 
-def clip_boxes_to_image_(boxes: torch.Tensor, img_shape: Tuple[int]):
+def clip_boxes_to_image_(boxes: torch.Tensor, img_shape: Tuple[int], is_xyz = True):
     """
     Clip boxes to image dimensions inplace
 
@@ -36,12 +36,12 @@ def clip_boxes_to_image_(boxes: torch.Tensor, img_shape: Tuple[int]):
     if boxes.shape[-1] == 4:
         return clip_boxes_to_image_2d_(boxes, img_shape)
     elif boxes.shape[-1] == 6:
-        return clip_boxes_to_image_3d_(boxes, img_shape)
+        return clip_boxes_to_image_3d_(boxes, img_shape, is_xyz)
     else:
         raise ValueError(f"Boxes with {boxes.shape[-1]} are not supported.")
 
 
-def clip_boxes_to_image(boxes: torch.Tensor, img_shape: Tuple[int]):
+def clip_boxes_to_image(boxes: torch.Tensor, img_shape: Tuple[int], is_xyz = True):
     """
     Clip boxes to image dimensions
 
@@ -58,7 +58,7 @@ def clip_boxes_to_image(boxes: torch.Tensor, img_shape: Tuple[int]):
     if boxes.shape[-1] == 4:
         return clip_boxes_to_image_2d(boxes, img_shape)
     elif boxes.shape[-1] == 6:
-        return clip_boxes_to_image_3d(boxes, img_shape)
+        return clip_boxes_to_image_3d(boxes, img_shape, is_xyz)
     else:
         raise ValueError(f"Boxes with {boxes.shape[-1]} are not supported.")
 

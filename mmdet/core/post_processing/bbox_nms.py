@@ -3,7 +3,6 @@ from mmcv.ops.nms import batched_nms
 
 from mmdet.core.bbox.iou_calculators import bbox_overlaps
 
-
 def multiclass_nms(multi_bboxes,
                    multi_scores,
                    score_thr,
@@ -170,6 +169,7 @@ def fast_nms(multi_bboxes,
     return cls_dets, classes, coeffs
 
 from .nms_nn import batched_nms_3d
+import pdb
 def multiclass_nms_3d(multi_bboxes,
                     multi_scores,
                     score_thr,
@@ -204,8 +204,7 @@ def multiclass_nms_3d(multi_bboxes,
     else:
         bboxes = multi_bboxes[:, None].expand(
             multi_scores.size(0), num_classes, 6)
-
-    scores = multi_scores[:, :-1] # TODO: why last column is background??
+    scores = multi_scores[:, :-1] # TODO: why last column is background?? refer to anchor_head_3d.py#722
 
     labels = torch.arange(num_classes, dtype=torch.long)
     labels = labels.view(1, -1).expand_as(scores)

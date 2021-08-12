@@ -7,6 +7,7 @@ from .mean_dice import metric_in_cfsmat_1by1, cfsmat4mask_batched
 from collections import OrderedDict
 from prettytable import PrettyTable
 from ..utils.misc import print_tensor
+import pdb
 
 
 def classifier_performance(cls_results, gt_labels):
@@ -97,7 +98,7 @@ def segmentation_performance(seg_results, seg_gt_masks, num_classes_seg = 2, ign
 
     assert len(seg_results) == len(seg_gt_masks)
     metric3d_list = []
-    for i, pred_seg, gt_seg in enumerate(zip(seg_results, seg_gt_masks)):
+    for i, (pred_seg, gt_seg) in enumerate(zip(seg_results, seg_gt_masks)):
         if pred_seg[0].shape != gt_seg.shape: 
             print(f'[EvalSeg] {i} pred {pred_seg[0].shape} not equal to gt {gt_seg.shape} in shape ')
             continue
@@ -108,39 +109,35 @@ def segmentation_performance(seg_results, seg_gt_masks, num_classes_seg = 2, ign
     
     metric_keys = list(metric3d_list[0].keys())
     key2metric_detail = {}
-    
-    for k in metric_keys:
-        pidxcls_values = np.array([ a[k] for a in metric3d_list]) # nxcls
-        key2metric_detail.append(pidxcls_values)
-
+    # pdb.set_trace()
+    for k in metric_keys: key2metric_detail[k] = np.array([a[k] for a in metric3d_list])  # nxcls
     # cx1
-    key2metric_cls = {list(np.nanmean(key2metric_detail[k], axis = 0)) for k in metric_keys}
+    key2metric_cls = {k: list(np.nanmean(key2metric_detail[k], axis = 0)) for k in metric_keys}
     return key2metric_detail, key2metric_cls
 
 
 def organize_seg_performance(ret_metrics, class_names, logger=None,):
-
+    num_cls = len(class_names)
+    # pdb.set_trace()
     # summary table
-    ret_metrics_summary = OrderedDict({
-        ret_metric: np.round(np.nanmean(ret_metric_value) * 100, 2)
-        for ret_metric, ret_metric_value in ret_metrics.items()
-    })
+    ret_metrics_summary = OrderedDict({ 
+        ret_metric: np.round(np.nanmean(ret_metric_value[-num_cls:]) * 100, 2) for  
+            ret_metric, ret_metric_value in ret_metrics.items() })
 
     # each class table
     ret_metrics.pop('aAcc', None)
     ret_metrics_class = OrderedDict({
-        ret_metric: np.round(ret_metric_value * 100, 2)
-        for ret_metric, ret_metric_value in ret_metrics.items()
-    })
-    ret_metrics_class.update({'Class': class_names})
+            ret_metric: list(np.round(ret_metric_value[-num_cls:], 2)) for 
+                        ret_metric, ret_metric_value in ret_metrics.items()})
+
+    ret_metrics_class.update({'Class': list(class_names)})
     ret_metrics_class.move_to_end('Class', last=False)
 
     # for logger
     class_table_data = PrettyTable()
-    for key, val in ret_metrics_class.items():
-        class_table_data.add_column(key, val)
+    for key, val in ret_metrics_class.items(): class_table_data.add_column(key, val)
 
-    summary_table_data = PrettyTable()
+    summary_table_data = PrettyTable() 
     for key, val in ret_metrics_summary.items():
         if key == 'aAcc':
             summary_table_data.add_column(key, [val])

@@ -28,8 +28,8 @@ class Load1CaseNN:
     # use_nonzero_mask_for_norm :	 OrderedDict([(0, False)])
 
 
-    bboxes:
-    # boxes : [[ 23 314  33 341  76  91]
+    bboxes: # zyx
+    # boxes : [[ 23 314  33 341  76  91] 
     #         [166 164 185 211 377 414]
     #         [141 159 162 225 388 442]
     #         [117 175 138 234 427 462]
@@ -41,11 +41,13 @@ class Load1CaseNN:
     def __init__(self, np_load_mode = 'r+', 
                  keys = ('img', 'seg', 'property', 'bboxes'), 
                  meta_key = 'img_meta_dict', verbose = False,
+                 axis_reorder = True
                 ) -> None:
         self.memmap_mode = np_load_mode
         self.keys = keys
         self.meta_key = meta_key
         self.verbose = verbose
+        self.axis_reorder = axis_reorder
 
     def __call__(self, data):
         data = dict(data)
@@ -57,14 +59,18 @@ class Load1CaseNN:
                 data[k] = None
             else:
                 if fp.endswith('npy') or fp.endswith('npz'):
-                    data[k] = array_zyx2xyz(np.load(fp, self.memmap_mode, allow_pickle=True))
+                    data[k] = np.load(fp, self.memmap_mode, allow_pickle=True)
+                    if self.axis_reorder: data[k] = array_zyx2xyz(data[k])
                     data['img_meta_dict']['spatial_shape'] = data[k].shape
                     if self.verbose: print_tensor(f'[load] {k}', data[k])
                 elif fp.endswith('pkl'):
                     data[k] = load_pickle(fp)
+                    if self.axis_reorder and k == 'bboxes': # zyx > xyz
+                        data[k]['boxes'] = np.array(data[k]['boxes'][:, [2, 1, 0, 5, 4, 3]])
                     if self.verbose: print(f'[load] {k}', data[k])
                 else:
                     raise ValueError(f'load only npy or pkl but got {fp}')
+
         if data.get('property', None) is not None:
             data[self.meta_key] = data.pop('property')
             # data['instance_mapping'] = data['property'].pop('instances')    
@@ -72,7 +78,7 @@ class Load1CaseNN:
             data[self.meta_key]['filename_or_obj'] = data[self.meta_key]['seg_file']
         return data
 
-array_zyx2xyz = lambda arr: arr.transpose(0, 3, 2, 1)[..., ::-1]
+array_zyx2xyz = lambda arr: arr.transpose(0, 3, 2, 1)
 
 def property2affine(property_dict, show_result = False):
     # keys='spacing_after_resampling' , 'itk_direction', 'itk_origin'
@@ -126,8 +132,10 @@ class InstanceBasedCrop:
         if bbox is None:
             center_c3 = self.random_background_center(image_shape, self.patch_size)
         else:
-            center_c3 = self.random_foreground_center(bbox, z_size=image_shape[-1])
+            center_c3 = self.random_foreground_center(bbox)
         
+        # check if box match image coordinates
+        # 
         if self.verbose: print(f'[FindCenter] instance {instance_ix} bbox{bbox} center {center_c3}')
         # create cropper    
         cropper = SpatialMultiPyramidCrop_(roi_center=tuple(center_c3), 
@@ -137,6 +145,10 @@ class InstanceBasedCrop:
         # crop key by key
         for k in self.keys:
             # prior_shape = data[k].shape
+            if (bbox is not None) and k == 'img':
+                print(f'@@@@@@### +32 {k}  @@@@@@@####')
+                bbox_slicer = tuple([slice(None)] + [slice(bbox[i], bbox[i+3]) for i in range(3)])
+                data[k][bbox_slicer] += 32
             data[k] = cropper(data[k])
             data['img_meta_dict'][f'cropshape'] = tuple(data[k].shape[1:])
             if k == 'seg': data[k] = data[k].clip(min = 0)
@@ -158,8 +170,8 @@ class InstanceBasedCrop:
         return center_bg
 
 
-    def random_foreground_center(self, bbox_c6, z_size = None, is_nn_order = True, 
-                                      zyx2xyz = True,  verbose = False):
+    def random_foreground_center(self, bbox_c6, is_nn_order = True, 
+                                verbose = False): # zyx2xyz = True,  
         """
         nnDet: dim order zyx, image permute to xyz, here bbox also should be permuted 
                z reordered
@@ -179,10 +191,11 @@ class InstanceBasedCrop:
         else:
             x1, y1, z1, x2, y2, z2 = bbox_c6
 
-        if zyx2xyz: 
-            x1, y1, z1, x2, y2, z2 = z1, y1, x1, z2, y2, x2
-        if isinstance(z_size, int): 
-            z1, z2 = max(z_size - z2, 0), max(z_size - z1, 0)
+        # if zyx2xyz: 
+        #     x1, y1, z1, x2, y2, z2 = z1, y1, x1, z2, y2, x2
+
+        # if isinstance(z_size, int): 
+        #     z1, z2 = max(z_size - z2, 0), max(z_size - z1, 0)
         if verbose: print(f'\t[FGCenter] xyz1,xyz2 ', x1, y1, z1, x2, y2, z2)
         center_fg = []
         for center_min, center_max in zip((x1, y1, z1), (x2, y2, z2)):

@@ -3,6 +3,8 @@ dataset_type = 'RibFractureNN'
 img_dir = 'data/Task101_RibFracture'
 in_channel=  1
 num_classes = 2
+# 91: lung, 92: heart, 93: liver, 94: kidney
+# label_mapping =  {1:1, 91:0, 92:0, 93:0, 94:0}
 norm_param = {
     "mean": 330, "std": 562.5, "median": 221,
     "mn": -1024, "mx": 3071,
@@ -13,8 +15,8 @@ keys = ('img', 'seg') #, seg='instance_seg'
 dtypes = ('float', 'int',) # , 'float', 
 interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
-ext_patch_size = (192, 192, 192) # avoid artifacts such as boarder reflection
-patch_size = (160, 160, 160)
+ext_patch_size = (192, 224, 192) # avoid artifacts such as boarder reflection
+patch_size = (160, 192, 160)
 rotate_angle = 20.0 
 use_aux_sdm = False
 train_pipeline = [
@@ -45,7 +47,7 @@ test_pipeline = [
             target_spacings = None,  # TODO debug
             flip=False,
             flip_direction= ['diagonal'],
-            transforms=[ #target spacing [1.25       0.73828101 0.73828101]
+            transforms=[
                 dict(type = 'SpacingTTAd', keys = test_keys, pixdim = None),
                 dict(type = 'SpatialPadd', keys= test_keys, spatial_size= patch_size, mode='reflect', method = 'end'), 
                 dict(type = 'FlipTTAd_', keys = test_keys),  
@@ -57,7 +59,8 @@ test_pipeline = [
                 #     percentile_99_5=norm_param['percentile_99_5'],
                 #     percentile_00_5=norm_param['percentile_00_5']
                 #     ),
-                dict(type= 'FormatShapeMonai', keys=['img'], use_datacontainer = False, channels = in_channel),
+                dict(type= 'FormatShapeMonai', keys=['img'], use_datacontainer = False,
+                                             channels = in_channel),
                 dict(type='Collect', keys=['img'], meta_keys = ('img_meta_dict', ))
                 ], 
             )
@@ -65,13 +68,13 @@ test_pipeline = [
 
 # draw_step = 8
 total_samples = 160 #// draw_step #9842
-sample_per_gpu = 3# bs2 >> 24.5 G  # 
-train_sample_rate = 0.1
-val_sample_rate = 0.1
+sample_per_gpu = 2# bs2 >> 24.5 G  # 
+train_sample_rate = 1.0
+val_sample_rate = 0.30
 
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
-    workers_per_gpu= 6, 
+    workers_per_gpu= 2, 
     train=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = train_sample_rate, split='train',
@@ -82,15 +85,13 @@ data = dict(
     val=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = val_sample_rate, split='test', 
-        pipeline=test_pipeline, 
-        test_mode = True,
+        pipeline=test_pipeline,
         # fn_spliter = ['-', 0]
         ),
     test=dict(
         type=dataset_type, img_dir=img_dir, 
-        sample_rate = 0.05, split='test', 
+        sample_rate = 0.1, split='test', 
         pipeline=test_pipeline,
-        test_mode = True,
         # fn_spliter = ['-', 0]
         ))
 
@@ -113,7 +114,7 @@ gpu_aug_pipelines = [
         #             percentile_00_5=norm_param['percentile_00_5']
         #             ),
         dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.1), 
-        dict(type = 'SaveImaged', keys = keys[:core_key_num], 
-            output_dir = f'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_1cls/debug', 
-            resample = False, save_batch = True, on_gpu = True),    
+        # dict(type = 'SaveImaged', keys = keys[:core_key_num], 
+        #     output_dir = f'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls/debug', 
+        #     resample = False, save_batch = True, on_gpu = True),    
         ]

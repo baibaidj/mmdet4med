@@ -227,7 +227,7 @@ def eval_recalls_3d(gts,
         if gts[i] is None or gts[i].shape[0] == 0:
             ious = np.zeros((0, img_proposal.shape[0]), dtype=np.float32)
         else:
-            ious = bbox_overlaps_3d(gts[i], img_proposal[:prop_num, :4])
+            ious = bbox_overlaps_3d(gts[i], img_proposal[:prop_num, :6])
         all_ious.append(ious)
     all_ious = np.array(all_ious)
     recalls = _recalls(all_ious, proposal_nums, iou_thrs)

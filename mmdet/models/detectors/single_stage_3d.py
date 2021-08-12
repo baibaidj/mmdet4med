@@ -1,13 +1,13 @@
 from mmdet.utils.resize import list_dict2dict_list
 import warnings
 
-import torch, pdb
+import torch, pdb, copy
 from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base3d import BaseDetector3D
 from ...datasets.pipelines import Compose
 from ..utils import print_tensor
-from ...utils.resize import resize_3d
+from ...utils.resize import resize, resize_3d
 
 from monai.data.utils import dense_patch_slices
 from monai.utils import BlendMode, PytorchPadMode, fall_back_tuple
@@ -49,8 +49,8 @@ class SingleStageDetector3D(BaseDetector3D):
                         instance_key = 'seg',
                         map_key="instances",
                         seg_key = 'seg',
-                        present_instances="present_instances",
-                        )]
+                        present_instances="present_instances"), 
+                    ]
                  ):
         super(SingleStageDetector3D, self).__init__(init_cfg)
         if pretrained:
@@ -66,9 +66,16 @@ class SingleStageDetector3D(BaseDetector3D):
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self.seg_head = build_head(seg_head) if seg_head is not None else None
-
+        self.seg_num_classes = getattr(self.seg_head, 'num_classes', 2)
         self.gpu_pipelines = Compose(gpu_aug_pipelines + mask2bbox_cfg) \
                                     if mask2bbox_cfg is not None else None
+
+        self.roi_size = self.test_cfg.pop('roi_size', None)
+        self.sw_batch_size = self.test_cfg.pop('sw_batch_size', 2)
+        self.overlap = self.test_cfg.pop('overlap', 0.25)
+        self.blend_mode = self.test_cfg.pop('blend_mode', 'constant')
+        self.padding_mode = self.test_cfg.pop('padding_mode', 'constant')
+        self.sigma_scale = self.test_cfg.pop('sigma_scale', 0.125)
 
     def extract_feat(self, img):
         """Directly extract features from the backbone+neck."""
@@ -229,44 +236,52 @@ class SingleStageDetector3D(BaseDetector3D):
         # ip_dtype = torch.float #inputs.dtype
         device = inputs.device; sw_device = device#'cpu'
         batch_size = inputs.shape[0]
-        Shaper = ShapeHolder(inputs.shape[2:], self.test_cfg.get('patch_size', 128))
+        Shaper = ShapeHolder(inputs.shape[2:], self.roi_size)
         scan_interval = _get_scan_interval(Shaper.ready_shape_safe, Shaper.patch_shape, 
                                            Shaper.spatial_dim, self.overlap)
-        slices = dense_patch_slices(Shaper.ready_shape_safe, Shaper.patch_shape, scan_interval)
-        num_win = len(slices)  # number of windows per image
+        window_slices = dense_patch_slices(Shaper.ready_shape_safe, Shaper.patch_shape, scan_interval)
+        num_win = len(window_slices)  # number of windows per image
         # Perform predictions
         # print_tensor('original inputs', inputs) BCHWD
         ensembler = BboxSegEnsembler1Case(Shaper.ready_shape_safe, Shaper.patch_shape, 
-                                            self.num_class, self.test_cfg, deviece = device)
-        ensembler.initial_tile_weight_map(Shaper.patch_shape, mode, sigma_scale)
-        # print_tensor('inputs after pad', inputs)
-        det_results, seg_results = [], []
+                                    self.seg_num_classes, self.test_cfg, device = device)
+        ensembler.initial_tile_weight_map(Shaper.patch_shape, mode = mode, sigma_scale = sigma_scale)
+        # print_tensor('[Ensemble] initalize', ensembler.seg_output_4d)
+        # print_tensor('[Ensemble] initalize', ensembler.seg_countmap_4d)
+        det_result_batch, seg_result_batch = [], []
         for bix in range(batch_size):
             img_meta = img_metas[bix]
             for six in range(0, num_win, self.sw_batch_size):
                 slice_range = range(six, min(six + self.sw_batch_size, num_win))
-                unravel_slice = [ [slice(bix, bix + 1), slice(None)] + list(slices[idx])
-                                for idx in slice_range]
-                img_meta_tiles = [img_meta] * self.sw_batch_size
+                tiles_slicer = [[slice(bix, bix + 1), slice(None)] + list(window_slices[idx]) 
+                                                                    for idx in slice_range]
+                img_meta_tiles = [copy.deepcopy(img_meta)  for _ in range(len(slice_range))]#[img_meta] * len(slice_range)
                 for i, m in enumerate(img_meta_tiles): 
-                    m['tile_origin'] = [unravel_slice[i][d+2][0] for d in range(Shaper.spatial_dim)]
-                window_data = torch.cat([inputs[win_slice] for win_slice in unravel_slice]).to(device)
+                    m['tile_origin'] = [window_slices[slice_range[i]][d].start for d in range(Shaper.spatial_dim)]
+                    m['img_shape'] = Shaper.patch_shape
+                    m['scale_factor'] = [1 for _ in range(Shaper.spatial_dim * 2)]
+                window_data = torch.cat([inputs[win_slice] for win_slice in tiles_slicer]).to(device)
                 det_results, seg_results = self.simple_test_tile(window_data, img_meta_tiles)  # batched patch segmentation
+                # if six % 30 ==0 : 
+                #     print_tensor(f'\n[SliceInfer] seg results batch{bix} win{six}', seg_results)
                 ensembler.store_det_output(det_results)
-                ensembler.update_seg_output_batch(seg_results)
-
-            det_result_img = ensembler.finalize_det_bbox() # (bboxes_nx7, labels_nx1)
+                ensembler.update_seg_output_batch(seg_results, tiles_slicer)
+            
+            # pdb.set_trace()
+            det_result_img = ensembler.finalize_det_bbox(verbose=True) # (bboxes_nx7, labels_nx1)
             seg_result_img = ensembler.finalize_segmap() # 1CHWD
-
+            # print_tensor(f'[SliceInfer] seg results ensemble {bix}', seg_result_img)
             det_result_img = ensembler.offset_preprocess4detect(det_result_img, img_meta, 
                                                             Shaper.ready_shape_safe, rescale)
             seg_result_img = ensembler.offset_preprocess4seg(seg_result_img, img_meta, 
                                                             Shaper.ready_shape_safe, rescale)                                               
-            det_results.append(det_result_img)
-            seg_results.append(seg_result_img)
+            det_result_batch.append(det_result_img)
+            seg_result_batch.append(seg_result_img)
             ensembler.reset_seg_output(); ensembler.reset_seg_countmap()
-
-        return det_results, seg_results
+            ensembler.reset_det_storage()
+            # print_tensor('[Ensemble] reset', ensembler.seg_output_4d)
+            # print_tensor('[Ensemble] reset', ensembler.seg_countmap_4d)
+        return det_result_batch, seg_result_batch
 
     def inference(self, imgs, img_metas, rescale):
         """Inference with slide/whole style.
@@ -286,7 +301,6 @@ class SingleStageDetector3D(BaseDetector3D):
         assert imgs.shape[0] == 1 and len(img_metas) == 1
 
         assert self.test_cfg.mode in ['slide', 'whole']
-        # print('[Infer] mode', self.test_cfg.mode)
 
         # print(f'INFER: Flip {flip} Direction {flip_direction} dims {flip_dims}')
         if self.test_cfg.mode == 'slide':
@@ -298,6 +312,21 @@ class SingleStageDetector3D(BaseDetector3D):
             # NOTE: whole inference should be implemented
             det_results, seg_results= self.whole_inference(imgs, img_metas, rescale)
 
+        # img_meta_dict = get_meta_dict(img_metas)
+        # origin_shape = tuple(img_meta_dict['spatial_shape']) # array does not support comparison directly
+        # resize_shape = (resh, resw, resd) = img_meta_dict.get('shape_post_resize', origin_shape)
+
+        # # 3. address resize or respacing
+        # if img_meta_dict.get('new_pixdim', False):
+        #     if rescale and (resize_shape != origin_shape):    
+        #         seg_results = [resize_3d(seg, size=origin_shape,
+        #                         mode='trilinear', #'bilinear'
+        #                         align_corners=None,
+        #                         warning=False) for seg in seg_results]
+        #         scale_factors = [ors/res for ors, res in zip(origin_shape, resize_shape)]
+        #         scale_factors += scale_factors + [1] # 7 
+        #         scale_factors = imgs.new_tensor(scale_factors) 
+        #         det_results = [det.mul(scale_factors[None, :]) for det in det_results] # nx7
         seg_results = torch.cat([torch.softmax(seg, dim=1) if seg.shape[1] > 1 else torch.sigmoid(seg)
                                 for seg in seg_results], axis = 0)
         return det_results, seg_results 
@@ -319,7 +348,8 @@ class SingleStageDetector3D(BaseDetector3D):
         bbox_results = [
             bbox2result3d(det_bboxes, det_labels, self.bbox_head.num_classes)
             for det_bboxes, det_labels in det_results
-        ]
+        ] # most outer image level; next inner class level; most inner 
+        # pdb.set_trace()
         return bbox_results, seg_pred
 
     def aug_test_global(self, imgs, img_metas, rescale=True, need_probs = False):
@@ -355,7 +385,6 @@ class SingleStageDetector3D(BaseDetector3D):
 
         dets_clean, keep_idx = batched_nms_3d(bbox_nx7[:, :6], bbox_nx7[:, 6], 
                                              label_nx1, self.test_cfg['nms'])
-        dets_clean = torch.cat([dets_clean, bbox_nx7[keep_idx, -1]], axis = 1)
         label_nx1 = label_nx1[keep_idx]
 
         if self.test_cfg['max_per_img'] > 0:
@@ -390,7 +419,7 @@ class SingleStageDetector3D(BaseDetector3D):
             for img, img_meta in zip(imgs, img_metas):
                 batch_size = len(img_meta)
                 for img_id in range(batch_size):
-                    img_meta[img_id]['batch_input_shape'] = tuple(img.size()[-2:])
+                    img_meta[img_id]['batch_input_shape'] = tuple(img.size()[-3:])
 
             if num_augs == 1:
                 # proposals (List[List[Tensor]]): the outer list indicates

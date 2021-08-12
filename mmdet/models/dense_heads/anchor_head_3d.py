@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from mmcv.runner import force_fp32
 
-from mmdet.core import (anchor_inside_flags_3d, build_anchor_generator,
+from mmdet.core import (anchor, anchor_inside_flags_3d, build_prior_generator,
                         build_assigner, build_bbox_coder, build_sampler,
                         images_to_levels, multi_apply, unmap, 
                         AnchorGenerator3D)
@@ -11,6 +11,7 @@ from .base_dense_head import BaseDenseHead
 from .dense_test_mixins import BBoxTestMixin3D, reset_offset_bbox_batch
 from mmdet.core.post_processing.bbox_nms import multiclass_nms_3d
 from ..utils import print_tensor
+import pdb
 
 
 chn2last_order = lambda x: tuple([0, *[a + 2 for a in range(x)],  1])
@@ -62,7 +63,8 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                      type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=1.0),
                  train_cfg=None,
                  test_cfg=None,
-                 init_cfg=dict(type='Normal', layer='Conv3d', std=0.01)):
+                 init_cfg=dict(type='Normal', layer='Conv3d', std=0.01), 
+                 verbose = False):
         super(AnchorHead3D, self).__init__(init_cfg)
         self.spatial_dim = int(init_cfg['layer'][-2])
         self.in_channels = in_channels
@@ -70,6 +72,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         self.feat_channels = feat_channels
         self.start_level = start_level
         self.use_sigmoid_cls = loss_cls.get('use_sigmoid', False)
+        self.verbose = verbose
         # TODO better way to determine whether sample or not
         self.sampling = loss_cls['type'] not in [
             'FocalLoss', 'GHMC', 'QualityFocalLoss'
@@ -98,13 +101,14 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             self.sampler = build_sampler(sampler_cfg, context=self) #TODO: unsure usage
         self.fp16_enabled = False
 
-        self.anchor_generator : AnchorGenerator3D = build_anchor_generator(anchor_generator)
+        self.anchor_generator : AnchorGenerator3D = build_prior_generator(anchor_generator)
         # usually the numbers of anchors for each level are the same
         # except SSD detectors
         self.num_anchors = self.anchor_generator.num_base_anchors[0]
         self._init_layers()
         print(f'[AnchorHead] spatial dim {self.spatial_dim} anchor/pixle {self.num_anchors}' )
         print(f'[AnchorHead] inchannels {self.in_channels} start level {self.start_level}')
+        
 
     def _init_layers(self):
         """Initialize layers of the head."""
@@ -127,6 +131,10 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         """
         cls_score = self.conv_cls(x)
         bbox_pred = self.conv_reg(x)
+        if self.verbose: 
+            print_tensor('\n[AnchorHead] in feat', x)
+            print_tensor('[AnchorHead] cls score', cls_score)
+            print_tensor('[AnchorHead] bbox pred', bbox_pred)
         return cls_score, bbox_pred
 
     def forward(self, feats):
@@ -226,8 +234,9 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         # assign gt and sample anchors
         anchors = flat_anchors[inside_flags, :] # Nx6
         # NOTE: debug
-        # print_tensor('[AssignSingle] anchor', anchors)
-        # print_tensor('[AssignSingle] gtbboxes', gt_bboxes)
+        if self.verbose: 
+            print_tensor('[AssignSingle] anchor', anchors)
+            print_tensor('[AssignSingle] gtbboxes', gt_bboxes)
         assign_result = self.assigner.assign(anchors, gt_bboxes, gt_bboxes_ignore, None if self.sampling else gt_labels)
         # @[bbox.samplers.pseudo_sampler]                                   
         sampling_result = self.sampler.sample(assign_result, anchors, gt_bboxes)
@@ -528,7 +537,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                 (N, num_anchors * num_classes, H, W, D).
             bbox_preds (list[Tensor]): Box energies / deltas for each
                 level in the feature pyramid, has shape
-                (N, num_anchors * 4, H, W, D).
+                (N, num_anchors * 6, H, W, D).
             img_metas (list[dict]): Meta information of each image, e.g.,
                 image size, scaling factor, etc. {'img_shape', 'scale_factor'}
             cfg (mmcv.Config | None): Test / postprocessing configuration,
@@ -577,8 +586,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
 
         device = cls_scores[0].device
         featmap_sizes = [cls_scores[i].shape[-self.spatial_dim:] for i in range(num_levels)]
-        mlvl_anchors = self.anchor_generator.grid_anchors(
-            featmap_sizes, device=device)
+        mlvl_anchors = self.anchor_generator.grid_priors(featmap_sizes, device=device)
 
         mlvl_cls_scores = [cls_scores[i].detach() for i in range(num_levels)]
         mlvl_bbox_preds = [bbox_preds[i].detach() for i in range(num_levels)]
@@ -589,12 +597,10 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             ) == 1, 'Only support one input image while in exporting to ONNX'
             img_shapes = img_metas[0]['img_shape_for_onnx']
         else:
-            img_shapes = [
-                img_metas[i]['img_shape']
+            img_shapes = [img_metas[i]['img_shape']
                 for i in range(cls_scores[0].shape[0])
             ]
-        scale_factors = [
-            img_metas[i]['scale_factor'] for i in range(cls_scores[0].shape[0])
+        scale_factors = [img_metas[i]['scale_factor'] for i in range(cls_scores[0].shape[0])
         ]
 
         if with_nms:
@@ -631,7 +637,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                 the anchors of single level in feature pyramid, has shape
                 (num_anchors, 6).
             img_shapes (list[tuple[int]]): Each tuple in the list represent
-                the shape(height, width, depth, 3) of single image in the batch.
+                the shape(height, width, depth) of single image in the batch.
             scale_factors (list[ndarray]): Scale factor of the batch #TODO: resize3d ??
                 image arange as list[(w_scale, h_scale, d_scale, w_scale, h_scale, d_scale)].
             cfg (mmcv.Config): Test / postprocessing configuration,
@@ -643,7 +649,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
 
         Returns:
             list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
-                The first item is an (n, 7) tensor, where 5 represent
+                The first item is an (n, 7) tensor, where 7 represent
                 (tl_x, tl_y, tl_z, br_x, br_y, br_z, score) and the score between 0 and 1.
                 The shape of the second tensor in the tuple is (n,), and
                 each element represents the class label of the corresponding
@@ -664,6 +670,11 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         for cls_score, bbox_pred, anchors in zip(mlvl_cls_scores,
                                                  mlvl_bbox_preds,
                                                  mlvl_anchors):
+            if self.verbose:
+                print_tensor(f'[Pred2Bbox] anchors raw', anchors)
+                print_tensor(f'[Pred2Bbox] pred score raw', cls_score)
+                print_tensor(f'[Pred2Bbox] pred bbox raw', bbox_pred)
+
             assert cls_score.size()[-self.spatial_dim:] == bbox_pred.size()[-self.spatial_dim:]
             cls_score = cls_score.permute(*chn2last_order(self.spatial_dim)).reshape(
                                                     batch_size, -1, self.cls_out_channels)
@@ -686,7 +697,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                     # since mmdet v2.0
                     # BG cat_id: num_class
                     max_scores, _ = scores[..., :-1].max(-1)
-
+                if self.verbose: print_tensor(f'[Pred2Bbox] top {nms_pre} pre', max_scores)
                 _, topk_inds = max_scores.topk(nms_pre)
                 batch_inds = torch.arange(batch_size).view(
                     -1, 1).expand_as(topk_inds)
@@ -696,7 +707,12 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
 
             bboxes = self.bbox_coder.decode(
                 anchors, bbox_pred, max_shape=img_shapes)
-            mlvl_bboxes.append(bboxes)
+
+            if self.verbose:
+                print_tensor(f'[Pred2Bbox] top {nms_pre} bboxes ', bboxes)
+                print_tensor(f'[Pred2Bbox] top {nms_pre} scores', scores)
+
+            mlvl_bboxes.append(bboxes) 
             mlvl_scores.append(scores)
 
         batch_mlvl_bboxes = torch.cat(mlvl_bboxes, dim=1)
@@ -730,14 +746,23 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                                                   1)
             batch_mlvl_scores = torch.cat([batch_mlvl_scores, padding], dim=-1)
 
+        if self.verbose: 
+            print(f'[Pred2Bbox] nms cfg', cfg)
+            print_tensor('\n[Pred2Bbox] infer mlvl score', batch_mlvl_scores)
+            print_tensor('[Pred2Bbox] infer mlvl bboxes', batch_mlvl_bboxes)
+
         if with_nms:
             det_results = []
-            for (mlvl_bboxes, mlvl_scores) in zip(batch_mlvl_bboxes,
-                                                  batch_mlvl_scores):
-                #TODO: nms there                                  
+            for bi, (mlvl_bboxes, mlvl_scores) in enumerate(zip(batch_mlvl_bboxes, 
+                                                            batch_mlvl_scores)):
+                #TODO: nms                                  
                 det_bbox, det_label = multiclass_nms_3d(mlvl_bboxes, mlvl_scores,
                                                      cfg.score_thr, cfg.nms,
                                                      cfg.max_per_img)
+                if self.verbose and det_bbox.shape[0]> 0:
+                    print_tensor(f'\t[Pred2Bbox] NMS {bi} bbox ', det_bbox[:, :6])
+                    print_tensor(f'\t[Pred2Bbox] NMS {bi} score', det_bbox[:, 6])
+
                 det_results.append(tuple([det_bbox, det_label]))
         else:
             det_results = [
@@ -767,7 +792,8 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         """
         outs = self.forward(feats)
         results_list = self.get_bboxes(*outs, img_metas, rescale=rescale)
-        # TODO: put tile_origin into the img_metas for bbox offset
+        # put tile_origin into the img_metas for bbox offset
+        pdb.set_trace()
         results_list = reset_offset_bbox_batch(results_list, img_metas)
         return results_list
 

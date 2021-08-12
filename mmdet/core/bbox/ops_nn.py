@@ -253,7 +253,7 @@ def remove_small_boxes(boxes: Tensor, min_size: float, is_xyz = True) -> Tensor:
         ws, hs = boxes[:, 2] - boxes[:, 0], boxes[:, 3] - boxes[:, 1]
         keep = (ws >= min_size) & (hs >= min_size)
     else:
-        x1, y1, z1, x2, y2, z2 = 0,1,2,3,4,5 if is_xyz else 0,1,4,2,3,5
+        x1, y1, z1, x2, y2, z2 = (0,1,2,3,4,5) if is_xyz else (0,1,4,2,3,5)
         ws = boxes[:, x2] - boxes[:, x1]
         hs = boxes[:, y2] - boxes[:, y1]
         ds = boxes[:, z2] - boxes[:, z1]

@@ -5,7 +5,7 @@ _base_ = [
 ]
 
 find_unused_parameters=True
-load_from =  'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls/latest.pth' #
+load_from =  None #'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls/latest.pth' #
 resume_from = None #'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls/latest.pth'
 
 # optimizer
@@ -23,5 +23,6 @@ log_config = dict(interval=20, hooks=[dict(type='TextLoggerHook'),
                 # dict(type='TensorboardLoggerHook')
                 ])
 
+evaluation=dict(iou_thr=[0.2], proposal_nums=(10, 50, 100))
 # CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls.py --no-validate
 # CUDA_VISIBLE_DEVICES=1,2,4,5 PORT=29001 bash ./tools/dist_train.sh configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls.py 4 --no-validate

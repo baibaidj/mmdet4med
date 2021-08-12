@@ -65,7 +65,8 @@ class AnchorGenerator3D:
                  octave_base_scale=None,
                  scales_per_octave=None,
                  centers=None,
-                 center_offset=0.):
+                 center_offset=0., 
+                 verbose = False):
         # check center and center_offset
         if center_offset != 0:
             assert centers is None, 'center cannot be set when center_offset' \
@@ -77,7 +78,7 @@ class AnchorGenerator3D:
             assert len(centers) == len(strides), \
                 'The number of strides should be the same as centers, got ' \
                 f'{strides} and {centers}'
-
+        self.verbose = verbose
         # calculate base sizes of anchors
         self.strides = [_triple(stride) for stride in strides]
         self.base_sizes = [min(stride) for stride in self.strides
@@ -85,7 +86,8 @@ class AnchorGenerator3D:
         assert len(self.base_sizes) == len(self.strides), \
             'The number of strides should be the same as base sizes, got ' \
             f'{self.strides} and {self.base_sizes}'
-
+        if self.verbose: 
+            print('[AnchorGen] basesize', self.base_sizes)
         # calculate scales of anchors
         assert ((octave_base_scale is not None
                  and scales_per_octave is not None) ^ (scales is not None)), \
@@ -109,6 +111,8 @@ class AnchorGenerator3D:
         self.centers = centers
         self.center_offset = center_offset
         self.base_anchors = self.gen_base_anchors()
+        if self.verbose: 
+            print('[AnchorGen] base anchors', self.base_anchors)
 
     @property
     def num_base_anchors(self):
@@ -236,6 +240,8 @@ class AnchorGenerator3D:
         for i in range(self.num_levels):
             anchors = self.single_level_grid_priors(
                 featmap_sizes[i], level_idx=i, device=device)
+            if self.verbose:
+                print_tensor(f'[AnchorGen] level {i}', anchors)
             multi_level_anchors.append(anchors)
         return multi_level_anchors
 

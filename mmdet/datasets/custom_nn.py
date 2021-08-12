@@ -113,7 +113,7 @@ class CustomDatasetNN(Dataset):
         # self.seg_map_suffix = seg_map_suffix
         self.split = split
         self.data_root = data_root
-        self.test_mode = test_mode
+        self.test_mode = split != 'train'
         self.ignore_index = ignore_index
         self.sample_rate = sample_rate
         self.view_channel = view_channel
@@ -127,7 +127,8 @@ class CustomDatasetNN(Dataset):
         # load annotations
         self.img_infos = self._img_list2dataset(self.img_dir, mode = self.split, key2suffix = key2suffix)
         self.img_infos = self._sample_img_data(self.img_infos, self.sample_rate)
-        self.instance_cache = self.build_instance_list()
+        self.instance_cache = None if self.test_mode else self.build_instance_list()
+        print('[Dataset] contains %d cases, of which %d used for training' %(len(self.img_infos), len(self)) )
         self._set_group_flag()
         # print(self.img_infos)
 
@@ -141,8 +142,8 @@ class CustomDatasetNN(Dataset):
 
     def __len__(self):
         """Total number of samples of data."""
-        if self.split == 'train': return len(self.instance_cache)
-        else: return len(self.img_infos)
+        if self.test_mode: return len(self.img_infos)
+        else: return len(self.instance_cache)
 
     def _img_list2dataset(self, data_folder:str, mode = 'train ', 
                         key2suffix = {'img_fp': '.npy', 'seg_fp': '_seg.npy', 
@@ -311,16 +312,15 @@ class CustomDatasetNN(Dataset):
         if getattr(self, 'anno_by_pids', None) is not None:
             return getattr(self, 'anno_by_pids', None)
 
-        array_zyx2xyz = lambda arr: arr.transpose(0, 3, 2, 1)[..., ::-1]
+        array_zyx2xyz = lambda arr: arr.transpose(0, 3, 2, 1) #[..., ::-1]
         # num_slices = self.pipeline.transforms[0].num_slice
         anno_by_pids = OrderedDict()
         for i, img_info in enumerate(self.img_infos):
-            # 'img_fp', 'seg_fp', 'property_fp', 'bboxes_fp'
-            mask_fp, prop_fp, bbox_fp = Path(img_info['seg_fp']), img_info['property_fp'], img_info['bboxes']
+            mask_fp, prop_fp, bbox_fp = Path(img_info['seg_fp']), img_info['property_fp'], img_info['bboxes_fp']
             subdir = str(mask_fp.stem) #view2axis[self.view_channel]
             # 1. load seg mask 
             # img_full, af_mat = IO4Nii.read(fp, verbose=True, axis_order= None, dtype=np.uint8)
-            img_full = array_zyx2xyz(np.load(mask_fp, self.memmap_mode, allow_pickle=True))[0]
+            img_full = array_zyx2xyz(np.load(mask_fp, allow_pickle=True))[0]
             gt_seg_map  = np.array(img_full, dtype = np.uint8)
 
             # 2. load property, image meta dict
@@ -329,20 +329,23 @@ class CustomDatasetNN(Dataset):
 
             # 3. load bboxes
             bboxes_info = load_pickle(bbox_fp)
-            if i < 3: 
-                print_tensor(f'\n[GT] {subdir} ', img_full) #
-                print('[GT] af matrix\n', af_mat)
-                print('[GT] bboxes info', bboxes_info)
+            if np.array(bboxes_info['boxes']).size ==0 : bboxes_info['boxes'] = np.zeros((0, 6))
+            bboxes_info['boxes'] = np.array(bboxes_info['boxes'][:, [2, 1, 0, 5, 4, 3]])
+            bboxes_info['labels'] = np.array(bboxes_info['labels']) + 1
             # pdb.set_trace()
             anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})
             anno_by_pids[subdir]['gt_seg'] = gt_seg_map
-            anno_by_pids[subdir]['bboxes'] = np.array(bboxes_info.pop('boxes', np.zeros(0, 6)))
-            anno_by_pids[subdir]['labels'] = np.array(bboxes_info['labels'])
+            anno_by_pids[subdir]['bboxes'] = bboxes_info['boxes']
+            anno_by_pids[subdir]['labels'] = bboxes_info['labels']
+            if i < 2: 
+                print_tensor(f'\n[GT] {subdir} ', img_full) #
+                print('[GT] af matrix\n', af_mat)
+                print('[GT] bboxes info', bboxes_info)
 
         self.anno_by_pids = anno_by_pids
         return anno_by_pids
 
-    def evaluate(self, results, metric='mIoU', logger=None, 
+    def evaluate(self, results, metric='recall', logger=None, 
                  proposal_nums=(100, 300, 1000),
                  iou_thr=0.5,
                  scale_ranges=None, **kwargs):
@@ -361,14 +364,15 @@ class CustomDatasetNN(Dataset):
         if not isinstance(metric, str):
             assert len(metric) == 1
             metric = metric[0]
-        allowed_metrics = ['mIoU']
+        allowed_metrics = ['recall', 'mAP']
         if metric not in allowed_metrics:
             raise KeyError('metric {} is not supported'.format(metric))
         eval_results = {}
         anno_by_pids = self.get_anno_infos()
-        num_classes_seg = 2
+        num_classes_seg = 1
 
         pred_det_list = [a[0] for a in results]
+        # bbox_results from outer to inner: chunk, mini-batch, class
         annotations = [info for pid, info in anno_by_pids.items()]
 
         eval_results = OrderedDict()
@@ -391,8 +395,9 @@ class CustomDatasetNN(Dataset):
             eval_results['mAP'] = sum(mean_aps) / len(mean_aps)
         elif metric == 'recall':
             gt_bboxes = [ann['bboxes'] for ann in annotations]
-            recalls = eval_recalls_3d(
-                gt_bboxes, pred_det_list, proposal_nums, iou_thr, logger=logger)
+            # pdb.set_trace()
+            pred_det_list = [b[0][0] for b in pred_det_list]
+            recalls = eval_recalls_3d(gt_bboxes, pred_det_list, proposal_nums, iou_thr, logger=logger)
             for i, num in enumerate(proposal_nums):
                 for j, iou in enumerate(iou_thrs):
                     eval_results[f'recall@{num}@{iou}'] = recalls[i, j]
@@ -404,9 +409,10 @@ class CustomDatasetNN(Dataset):
         pred_seg_list = [a[1] for a in results]
         gt_seg_list = [info['gt_seg'] for pid, info in anno_by_pids.items()]
         seg_metric_detail, seg_metric_cls = segmentation_performance(pred_seg_list, gt_seg_list, num_classes_seg)
+        # pdb.set_trace()
         seg_mean_results = organize_seg_performance(seg_metric_cls, self.CLASSES[:num_classes_seg], 
                                                     logger=logger) # 
-        
+
         for k, seg_tb in seg_metric_detail.items():
             print(f'[SegMetric]{k}\n', seg_tb[:5])
         

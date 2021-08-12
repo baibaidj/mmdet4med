@@ -27,6 +27,12 @@ from .io4med import print_tensor, pdb
 
 @PIPELINES.register_module()
 class FindInstances(AbstractTransform):
+    """
+    
+    finding the label value of instances in each sample (batch dimension)
+
+    """
+
     def __init__(self, instance_key: str = 'gt_instance_seg', save_key: str = "present_instances", 
                  meta_key = 'img_meta_dict', verbose = False, **kwargs):
         super().__init__(grad=False)
@@ -56,7 +62,7 @@ class Instances2Boxes(AbstractTransform):
     def __init__(self, instance_key: str, map_key: str,
                  box_key: str, class_key: str, grad: bool = False,
                  present_instances: Optional[str] = None,
-                 meta_key = 'img_meta_dict',  verbose = True,
+                 meta_key = 'img_meta_dict',  verbose = False,
                  **kwargs):
         """
         Convert instance segmentation to bounding boxes
@@ -97,8 +103,8 @@ class Instances2Boxes(AbstractTransform):
             _boxes, instance_idx = instances_to_boxes(
                 instance_element, instance_element.ndim - 2, instances=_present_instances)
             inst2class_map = data[self.meta_key][batch_idx][self.map_key]
-            _classes = get_instance_class_from_properties(instance_idx, inst2class_map)
-            _classes = _classes.to(device=_boxes.device)
+            _classes = get_instance_class_from_properties(instance_idx, inst2class_map) 
+            _classes = _classes.to(device=_boxes.device) + 1 # class start from 0
 
             if self.verbose: print(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
                                     + f'ins {instance_idx}  cls {_classes}')
@@ -238,7 +244,7 @@ class Instances2SemanticSeg(AbstractTransform):
     def __init__(self, instance_key: str, map_key: str, seg_key: str = None,
                  add_background: bool = True, grad: bool = False,
                  present_instances: Optional[str] = None,
-                 meta_key = 'img_meta_dict',
+                 meta_key = 'img_meta_dict', verbose = False
                  ):
         """
         Convert instances to semantic segmentation
@@ -260,6 +266,7 @@ class Instances2SemanticSeg(AbstractTransform):
         self.instance_key = instance_key
         self.present_instances = present_instances
         self.meta_key = meta_key
+        self.verbose = verbose
 
     def forward(self, data) -> dict:
         """
@@ -275,13 +282,17 @@ class Instances2SemanticSeg(AbstractTransform):
         _present_instances = data[self.present_instances] if self.present_instances is not None else None
         for batch_idx in range(semantic.shape[0]):
             ins2cls = data[self.meta_key][batch_idx][self.map_key]
+            ins_mask = data[self.instance_key][batch_idx]
 
             # TODO: check classes 
-            instances_to_segmentation(data[self.instance_key][batch_idx],
+            instances_to_segmentation(ins_mask,
                                       data[self.meta_key][batch_idx][self.map_key],
                                       add_background=self.add_background,
                                       instance_idx=_present_instances[batch_idx],
                                       out=semantic[batch_idx])
+            if self.verbose: 
+                print_tensor(f'[Inst2Seg] bix {batch_idx} instance raw', ins_mask)
+                print_tensor(f'[Inst2Seg] bix {batch_idx} semantic raw', semantic[batch_idx])
         data[self.seg_key] = semantic
         return data
 

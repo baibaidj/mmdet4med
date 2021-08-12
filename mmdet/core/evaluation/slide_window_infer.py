@@ -6,67 +6,82 @@ from mmdet.core.bbox.clip_nn import clip_boxes_to_image
 from mmdet.core.bbox.ops_nn import remove_small_boxes
 from monai.utils import fall_back_tuple
 from monai.data.utils import compute_importance_map
-from ...utils.resize import resize_3d
-import copy
+from ...utils.resize import resize_3d, print_tensor
+import copy, pdb
 
 
-class BboxSegEnsembler1Case(nn.Module):
+class BboxSegEnsembler1Case(object):
 
     def __init__(self, image_size, patch_size, num_classes = 2, test_cfg = {}, device = 'cpu') -> None:
         self.image_size = image_size
         self.patch_size = patch_size
         self.num_classes = num_classes
+        self.device = device
+        self.test_cfg = test_cfg
         self.reset_seg_output()
         self.reset_seg_countmap()
-        self.initial_tile_weight_map()
-        self.det_storage = []
-        self.test_cfg = test_cfg
-        self.device = device
-
-
-        super().__init__()
+        self.reset_det_storage()
 
     def initial_tile_weight_map(self, *args, **kwargs):
-        self.tile_weight_map = compute_importance_map(*args, device = self.device, 
-                                                    **kwargs)
+        self.tile_weight_map_3d = compute_importance_map(*args, 
+                                                        device = self.device, 
+                                                        **kwargs) #.clip(1e-8) #.to(torch.half)
+
+    def reset_det_storage(self):
+        self.det_storage = []
 
     def reset_seg_output(self):
-        if hasattr(self, 'seg_output'):
-            self.seg_output = 0
+        if hasattr(self, 'seg_output_4d'):
+            self.seg_output_4d = 0
         else:
-            self.seg_output = torch.zeros((1, self.num_classes) + self.image_size, 
-                                            dtype=torch.half, device = self.device)
+            self.seg_output_4d = torch.zeros((self.num_classes, ) + self.image_size, 
+                                            dtype=torch.float, device = self.device)
 
     def reset_seg_countmap(self):
-        if hasattr(self, 'reset_seg_countmap'):
-            self.seg_countmap = 0
+        if hasattr(self, 'seg_countmap_4d'):
+            self.seg_countmap_4d = 0
         else:
-            self.seg_countmap = torch.zeros((1, self.num_classes) + self.image_size, 
-                                        dtype=torch.short, device = self.device)
+            self.seg_countmap_4d = torch.zeros((self.num_classes, ) + self.image_size, 
+                                        dtype=torch.float, device = self.device)
 
     def _update_seg_output_1tile(self, seg_logit_tile, slice_tile):
-        # self.seg_output = self.seg_output.to(seg_logit_tile.device)
+        """[summary]
 
-        self.seg_output[slice_tile] = seg_logit_tile * self.tile_weight_map
-        self.seg_countmap[slice_tile] += self.tile_weight_map
+        Args:
+            seg_logit_tile ([4d_tensor]): chwd, prediction of 1 tile/window 
+            slice_tile ([type]): [description]
+        """
+        # pdb.set_trace()
+        self.seg_output_4d[slice_tile] = seg_logit_tile * self.tile_weight_map_3d[None, ...]
+        self.seg_countmap_4d[slice_tile] += self.tile_weight_map_3d[None,  ...]
         
     def update_seg_output_batch(self, seg_logit_tiles, slice_tiles):
+        """
+        Args:
+            seg_logit_tiles (5d_tensor): bchwd, b for number of windows
+            slice_tiles ([type]): slice for the b windows in the original image space
+        """
         for seg, sli in zip(seg_logit_tiles, slice_tiles):
-            self._update_seg_output_1tile(seg, sli)
+            # print_tensor(f'[SegFill] seg tile slice {sli}', seg)
+            # print_tensor(f'[SegFill] weight map', self.tile_weight_map_3d)
+            self._update_seg_output_1tile(seg, sli[-4:])
 
     def finalize_segmap(self, final_slicing = None):
         # final_slicing : list[slice() ] len = 5
-        result = self.seg_output/self.seg_countmap
+        result = (self.seg_output_4d/self.seg_countmap_4d)[None, ...]
         if final_slicing is not None:
             return result[final_slicing]
         else: return result
 
-
     def store_det_output(self, det_result_tiles):
+        """
+        args:
+            det_result_tiles: list[(Tensor_nx7, Tensor_nx1)]
+        """
         # det_result_tiles: list[(nx7, n), (), ...]
         self.det_storage.extend(det_result_tiles)
     
-    def finalize_det_bbox(self, final_slicing_spatial = None):
+    def finalize_det_bbox(self, final_slicing_spatial = None, verbose = False):
         """
         # final_slicing_spatial : list[slice() ] len = 3
         return:
@@ -75,13 +90,21 @@ class BboxSegEnsembler1Case(nn.Module):
         bboxes_raw = torch.cat([a[0] for a in self.det_storage], axis = 0)
         labels_raw = torch.cat([a[1] for a in self.det_storage], axis = 0)
 
+        if verbose and bboxes_raw.shape[0]> 0: 
+            print_tensor('\n[SlideInfer] integrate det bbox raw', bboxes_raw)
+            print_tensor('[SlideInfer] integrate det label raw', labels_raw)
+        
         bboxes, labels = postprocess_detect_results((bboxes_raw, labels_raw), 
-                                                    self.image_size, self.test_cfg)
-
+                                                        self.image_size, 
+                                                        self.test_cfg)
+                                                    
         if final_slicing_spatial is not None:
             for dim, slice_dim in enumerate(final_slicing_spatial):
                 bboxes[:, [dim, dim + 3]] += - slice_dim[0]
                 bboxes[:, [dim, dim + 3]] = torch.max(bboxes[:, [dim, dim + 3]], slice_dim[1])
+        if verbose and bboxes.shape[0]> 0:  
+            print_tensor('[SlideInfer] integrate det bbox refine', bboxes)
+            print_tensor('[SlideInfer] integrate det label refine', labels)
         return (bboxes, labels)
 
 
@@ -91,7 +114,7 @@ class BboxSegEnsembler1Case(nn.Module):
         preprocess pipeline: resize, padding, flip
         """
 
-        this_bboxes = det_result[0] # (bboxes_nx7, labels_nx1)
+        this_bboxes, this_label = det_result # (bboxes_nx7, labels_nx1)
 
         img1info = img_meta['img_meta_dict']
         origin_shape = img1info['spatial_shape']
@@ -110,20 +133,15 @@ class BboxSegEnsembler1Case(nn.Module):
             for fdim in flip_dims:
                 this_bboxes[:, [fdim, fdim + 3]] = ready_img_shape[fdim] - this_bboxes[:, [fdim, fdim + 3]]
 
-        # 2, accounting for padding
-        # print_tensor(f'\t[SlideInfer] ShapePostResize:{shape_post_resize} OriginShape: {origin_shape} Preds:', preds)       
-        this_bboxes = clip_boxes_to_image(this_bboxes, shape_post_pad)
+        # 2, accounting for padding     
+        this_bboxes[:, :6] = clip_boxes_to_image(this_bboxes[:, :6], shape_post_pad, is_xyz=True)
 
         # 3. accounting for resizing
-        # print_tensor('count for pad', preds)
         if img1info.get('new_pixdim', False):
             if rescale and (ready_img_shape != origin_shape):
                 for i, (f, o) in  enumerate(zip(shape_post_resize, origin_shape)):
                     this_bboxes[:, [i, i+3]] = this_bboxes[:, [i, i+3]] * o/f
-                this_bboxes = clip_boxes_to_image(this_bboxes, origin_shape)
-
-        det_result[0] = this_bboxes
-        return det_result
+        return (this_bboxes, this_label)
 
     def offset_preprocess4seg(self, seg_result, img_meta, ready_img_shape, rescale):
         """
@@ -164,20 +182,27 @@ class BboxSegEnsembler1Case(nn.Module):
         return this_seg_5d
 
 
-def postprocess_detect_results(det_tuple, img_shape, test_cfg):
+def postprocess_detect_results(det_tuple, img_shape, test_cfg, verbose = False):
     """
     Args:
         det_tuples: list[tuple[nx7, n]], bboxes, labels
         cfg.score_thr, cfg.nms, cfg.max_per_img
     
     """
-    test_cfg = copy(test_cfg)
+    test_cfg = copy.copy(test_cfg)
     max_per_img = test_cfg.pop('max_per_img', 100)
     # 1. top 
-    from mmdet.core.export import get_k_for_topk
+    # from mmdet.core.export import get_k_for_topk
     bbox_nx7, label_n = det_tuple
+    if bbox_nx7.shape[0]== 0:
+        return det_tuple
+
+    if verbose: 
+        print_tensor('[WholeImage] all bbox', bbox_nx7[:, :6])
+        print_tensor('[WholeImage] all scores', bbox_nx7[:, 6])
+
     topk = test_cfg.pop('nms_pre_tiles', 1000)
-    topk = get_k_for_topk(topk, det_tuple.shape[0])
+    topk = min(topk, bbox_nx7.shape[0])
 
     _, topk_idx = bbox_nx7[:, -1].topk(topk)
     bbox_nx7, label_n = bbox_nx7[topk_idx, ...], label_n[topk_idx]
@@ -191,19 +216,24 @@ def postprocess_detect_results(det_tuple, img_shape, test_cfg):
     bbox_nx7[:, :6] = clip_boxes_to_image(bbox_nx7[:, :6], img_shape, is_xyz = True)
 
     # 4. remove small boxes
-    keep = remove_small_boxes(bbox_nx7[:, :6], min_size=test_cfg.pop('min_bbox_size', 0.01) )
+    keep = remove_small_boxes(bbox_nx7[:, :6],
+                              min_size=test_cfg.pop('min_bbox_size', 0.01),
+                              is_xyz=True)
     bbox_nx7, label_n = bbox_nx7[keep], label_n[keep]
 
     # 5. nms
     dets_clean, keep_idx = batched_nms_3d(bbox_nx7[:, :6], bbox_nx7[:, 6], 
                                          label_n, test_cfg['nms'])
-    dets_clean = torch.cat([dets_clean, bbox_nx7[keep_idx, -1]], axis = 1)
+
     label_n = label_n[keep_idx]
 
     if max_per_img > 0:
         dets_clean = dets_clean[:max_per_img]
         label_n = label_n[:max_per_img]
-
+    
+    if verbose: 
+        print_tensor('[WholeImage] remain bbox', dets_clean[:, :6])
+        print_tensor('[WholeImage] remain score', dets_clean[:, 6])
     return dets_clean, label_n
 
 class ShapeHolder:
@@ -235,6 +265,6 @@ class ShapeHolder:
                               self.ready_img_shape[self.spatial_dim - sp - 1] + self.pad_shape[sp * 2])
             self.final_slicing.insert(0, slice_dim)
         self.final_slicing_spatial = self.final_slicing
-        while len(self.final_slicing) < len(self.ready_shape_safe.shape):
+        while len(self.final_slicing) < len(self.ready_shape_safe):
             self.final_slicing.insert(0, slice(None))
         

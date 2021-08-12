@@ -5,12 +5,12 @@ import tempfile
 import time
 
 import mmcv
-import torch
+import torch, pdb
 import torch.distributed as dist
 from mmcv.image import tensor2imgs
 from mmcv.runner import get_dist_info
 
-from mmdet.core import encode_mask_results
+# from mmdet.core import encode_mask_results
 
 
 def single_gpu_test4med(model,
@@ -25,11 +25,14 @@ def single_gpu_test4med(model,
     for i, data in enumerate(data_loader):
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
-
+        # bbox_results, seg_pred
         if isinstance(result, tuple):
             batch_size = len(result[0])
+            results.append(result)
         else:
             batch_size = len(result)
+            results.extend(result)
+        # bbox_results from outer to inner: chunk, mini-batch, class
         if show or out_dir:
             if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
                 img_tensor = data['img'][0]
@@ -62,7 +65,6 @@ def single_gpu_test4med(model,
         # if isinstance(result[0], tuple):
         #     result = [(bbox_results, encode_mask_results(mask_results))
         #               for bbox_results, mask_results in result]
-        results.extend(result)
 
         for _ in range(batch_size):
             prog_bar.update()
@@ -102,10 +104,15 @@ def multi_gpu_test4med(model, data_loader, tmpdir=None, gpu_collect=False):
             # if isinstance(result[0], tuple):
             #     result = [(bbox_results, encode_mask_results(mask_results))
             #               for bbox_results, mask_results in result]
-        results.extend(result)
+        # bbox_results, seg_pred
+        if isinstance(result, tuple):
+            results.append(result)
+        else:
+            results.extend(result)
 
         if rank == 0:
-            batch_size = len(result)
+            # batch_size = len(result)
+            batch_size = len(result[0]) if isinstance(result, tuple) else len(result)
             for _ in range(batch_size * world_size):
                 prog_bar.update()
 

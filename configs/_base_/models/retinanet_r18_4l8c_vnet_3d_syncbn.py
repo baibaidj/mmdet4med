@@ -19,10 +19,10 @@ model = dict(
         stem_stride_2 = 1, 
         stem_channels= stem_channels,
         base_channels= stem_channels * 2,
-        num_stages=5,
-        strides=(2, 2, 2, 2, 2),
-        dilations=(1, 1, 1, 1, 1),
-        out_indices=(1, 2, 3, 4, 5, 6), # 0 is input image 
+        num_stages=4,
+        strides=(2, 2, 2, 2),
+        dilations=(1, 1, 1, 1),
+        out_indices=(1, 2, 3, 4, 5), # 0 is input image 
         conv_cfg=conv_cfg,
         norm_cfg=norm_cfg,
         style='pytorch',
@@ -36,13 +36,13 @@ model = dict(
         ),
     neck=dict(
         type='FPN3D',
-        in_channels=[stem_channels * (2**c) for c in range(6)],
+        in_channels=[stem_channels * (2**c) for c in range(5)],
         fixed_out_channels = fpn_channel,
         start_level=2,
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
-        num_outs=6),
+        num_outs=5),
     bbox_head=dict(
         type='RetinaHead3D', 
         num_classes=num_classes,
@@ -56,18 +56,19 @@ model = dict(
             octave_base_scale=4,
             scales_per_octave=3,
             ratios=[0.5, 1.0, 2.0],
-            strides=[4, 8, 16, 32]),
+            strides=[4, 8, 16]), #NOTE: the len of stride should be identical to fpn levels
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder3D',
             target_means=[.0, .0, .0, .0, 0., 0.],
-            target_stds=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0]),
+            target_stds=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0], 
+            clip_border=False),
         loss_cls=dict(
             type='FocalLoss',
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=1.0),
-        loss_bbox=dict(type='L1Loss', loss_weight=1.0)),
+            loss_weight=100.0),
+        loss_bbox=dict(type='SmoothL1Loss', loss_weight=4.0)),
 
     seg_head = dict(
         type='FCNHead3D',
@@ -93,11 +94,10 @@ model = dict(
         # OHEM
         # sampler=dict(type='OHEMPixelSampler', min_kept=600000),
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0, 0.66), 
+                    type='ComboLossMed', loss_weight=(1.0 * 0.5, 0.66 * 0.5), 
                     num_classes = num_classes, 
                     class_weight = (1.0, ),  verbose = False,  
-                    dice_cfg = dict(ignore_0 = False, act = 'sigmoid' ), 
-                    # focal_loss_gamma = 1.0
+                    dice_cfg = dict(ignore_0 = False, act = 'sigmoid')
                     ),
             ),
     # convert instance mask to bbox 
@@ -114,8 +114,11 @@ model = dict(
                         instance_key = 'seg',
                         map_key="instances",
                         seg_key = 'seg',
-                        present_instances="present_instances",
-                        )],
+                        present_instances="present_instances"), 
+                    # dict(type = 'SaveImaged', keys = ('img', 'seg'), 
+                        # output_dir = f'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_1cls/debug', 
+                        # resample = False, save_batch = True, on_gpu = True),  
+                    ],
     gpu_aug_pipelines = {{ _base_.gpu_aug_pipelines }},
     # model training and testing settings
     train_cfg=dict(
@@ -134,12 +137,14 @@ model = dict(
         nms_pre=10000,
         # nms_pre_tiles = 1000, 
         min_bbox_size=0.01,
-        score_thr=0.05,
-        nms=dict(type='nms', iou_threshold=0.6), # TODO: nms 3D
+        score_thr=0.01,
+        nms=dict(type='nms', iou_threshold=0.6), # 
+        # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=100, 
-
-        )
-    )
+        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 2,
+        blend_mode = 'gaussian' , overlap=0.5, sigma_scale = 0.125, # 'gaussian or constant
+        padding_mode='constant' )
+)
 
     # detections_per_img = plan_arch.get("detections_per_img", 100)
     # score_thresh = plan_arch.get("score_thresh", 0)

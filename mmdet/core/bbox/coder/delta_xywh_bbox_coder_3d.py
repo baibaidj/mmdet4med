@@ -1,6 +1,6 @@
 import mmcv
 import numpy as np
-import torch
+import torch, pdb
 
 from ..builder import BBOX_CODERS
 from .base_bbox_coder import BaseBBoxCoder
@@ -79,15 +79,14 @@ class DeltaXYWHBBoxCoder3D(BaseBBoxCoder):
                the max_shape should be a Sequence[Sequence[int]]
                and the length of max_shape should also be B.
             wh_ratio_clip (float, optional): The allowed ratio between
-                width and height.
+                width and height. #NOTE??
 
         Returns:
             torch.Tensor: Decoded boxes.
         """
-
         assert pred_bboxes.size(0) == bboxes.size(0)
         if pred_bboxes.ndim == 3:
-            assert pred_bboxes.size(1) == bboxes.size(1)
+            assert pred_bboxes.size(1) == bboxes.size(1) 
         decoded_bboxes = delta2bbox3d(bboxes, pred_bboxes, self.means, self.stds,
                                     max_shape, wh_ratio_clip, self.clip_border,
                                     self.add_ctr_clamp, self.ctr_clamp)
@@ -161,7 +160,7 @@ def delta2bbox3d(rois,
                add_ctr_clamp=False,
                ctr_clamp=32):
     """Apply deltas to shift/scale base boxes.
-
+    #NOTE: in sliding window inference, clip border may not be necessary for all windows
     Typically the rois are anchor or proposed bounding boxes and the deltas are
     network outputs used to shift/scale those boxes.
     This is the inverse function of :func:`bbox2delta`.
@@ -177,7 +176,7 @@ def delta2bbox3d(rois,
             coordinates
         max_shape (Sequence[int] or torch.Tensor or Sequence[
             Sequence[int]],optional): Maximum bounds for boxes, specifies
-            (H, W, D, C) or (H, W, D). If rois shape is (B, N, 4), then
+            (H, W, D, C) or (H, W, D). If rois shape is (B, N, 6), then
             the max_shape should be a Sequence[Sequence[int]]
             and the length of max_shape should also be B.
         wh_ratio_clip (float): Maximum aspect ratio for boxes.
@@ -212,10 +211,11 @@ def delta2bbox3d(rois,
                 [0.0000, 0.3161, 4.1945, 0.6839],
                 [5.0000, 5.0000, 5.0000, 5.0000]])
     """
-    means = deltas.new_tensor(means).view(1, -1).repeat(1,deltas.size(-1) // 6)
+    # account for multi class, last dim: num_classes * 6
+    means = deltas.new_tensor(means).view(1, -1).repeat(1,deltas.size(-1) // 6) 
     stds = deltas.new_tensor(stds).view(1, -1).repeat(1, deltas.size(-1) // 6)
     denorm_deltas = deltas * stds + means
-    dx = denorm_deltas[..., 0::6]
+    dx = denorm_deltas[..., 0::6] # every 6 element
     dy = denorm_deltas[..., 1::6]
     dz = denorm_deltas[..., 2::6]
     dw = denorm_deltas[..., 3::6]
@@ -225,7 +225,7 @@ def delta2bbox3d(rois,
     x1, y1, z1 = rois[..., 0], rois[..., 1], rois[..., 2]
     x2, y2, z2 = rois[..., 3], rois[..., 4], rois[..., 5]
     # Compute center of each roi
-    px = ((x1 + x2) * 0.5).unsqueeze(-1).expand_as(dx)
+    px = ((x1 + x2) * 0.5).unsqueeze(-1).expand_as(dx) # 
     py = ((y1 + y2) * 0.5).unsqueeze(-1).expand_as(dy)
     pz = ((z1 + z2) * 0.5).unsqueeze(-1).expand_as(dz)
     # Compute width/height/depth of each roi
@@ -280,10 +280,9 @@ def delta2bbox3d(rois,
         if max_shape.ndim == 2:
             assert bboxes.ndim == 3
             assert max_shape.size(0) == bboxes.size(0)
-
-        min_xy = x1.new_tensor(0)
-        max_xy = torch.cat([max_shape] * (deltas.size(-1) // 2), dim=-1).flip(-1).unsqueeze(-2)
-        bboxes = torch.where(bboxes < min_xy, min_xy, bboxes)
-        bboxes = torch.where(bboxes > max_xy, max_xy, bboxes)
+        min_xyz = x1.new_tensor(0)
+        max_xyz = torch.cat([max_shape] * (deltas.size(-1) // 3), dim=-1).unsqueeze(-2)
+        bboxes = torch.where(bboxes < min_xyz, min_xyz, bboxes)
+        bboxes = torch.where(bboxes > max_xyz, max_xyz, bboxes)
 
     return bboxes

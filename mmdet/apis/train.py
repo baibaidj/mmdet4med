@@ -1,3 +1,4 @@
+from mmdet.core.evaluation.eval_hooks import DistEvalHookMed, EvalHookMed
 import random
 import warnings
 
@@ -146,7 +147,7 @@ def train_detector(model,
             shuffle=False)
         eval_cfg = cfg.get('evaluation', {})
         eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
-        eval_hook = DistEvalHook if distributed else EvalHook
+        eval_hook = DistEvalHookMed if distributed else EvalHookMed
         runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
 
     # user-defined hooks

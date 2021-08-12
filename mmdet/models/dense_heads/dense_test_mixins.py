@@ -1,7 +1,7 @@
 import sys
 from inspect import signature
 
-import torch
+import torch, pdb
 
 from mmdet.core import (bbox, bbox_mapping_back, merge_aug_proposals, multiclass_nms, 
                         bbox_mapping_back_3d, multiclass_nms_3d)
@@ -425,17 +425,16 @@ def reset_offset_bbox_batch(results, img_metas):
             `crop`: Sequence[slice] original crop from data
     """
     assert len(results) == len(img_metas)
-    # tile_size = img_metas[0]['img_shape'] 
-    # centers = [box_center(img_boxes) if img_boxes.numel() > 0 else torch.tensor([]).to(img_boxes)
-    #             for img_boxes in boxes]
-    # weights = [_get_box_in_tile_weight(c, tile_size) for c in centers]
+
     for i, (img_result, img_meta) in enumerate(zip(results, img_metas)):
+        det_preds, seg_preds = img_result
         tile_origin  = img_meta.get('tile_origin', None)
         if tile_origin is None: continue
-        img_boxes_new = _apply_offsets_to_boxes(img_result[0], tile_origin)
-        results[i][0] = img_boxes_new
-    return results
+        pdb.set_trace()
+        det_preds_new = _apply_offsets_to_boxes(det_preds, tile_origin)
+        results[i] = tuple([det_preds_new, seg_preds])
 
+    return results
 
 def _apply_offsets_to_boxes(img_boxes: Tensor, offset: Sequence[int],
                                 ) -> Tensor:
@@ -453,7 +452,7 @@ def _apply_offsets_to_boxes(img_boxes: Tensor, offset: Sequence[int],
     """
     if img_boxes.nelement() == 0:
         return img_boxes
-    offset = torch.tensor(offset).to(img_boxes)
+    offset = img_boxes.new_tensor(offset)
     img_boxes[:, [0, 3]] += offset[0]
     img_boxes[:, [1, 4]] += offset[1]
     img_boxes[:, [2, 5]] += offset[2]

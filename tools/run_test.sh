@@ -15,10 +15,11 @@
 #     [--eval ${EVAL_METRICS}]
 
 task=ribfrac
-model=retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls
+# model=retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls
+# model=retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls
+model=retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn
 
 
-CUDA_VISIBLE_DEVICES=0 python tools/test.py configs/$task/$model.py \
+CUDA_VISIBLE_DEVICES=1 python tools/test_med.py configs/$task/$model.py \
     work_dirs/$model/latest.pth \
-    --out work_dirs/$model/test_results.pkl
-    --eval bbox recall
+    --eval recall
