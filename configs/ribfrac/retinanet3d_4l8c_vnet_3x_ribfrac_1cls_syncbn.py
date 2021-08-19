@@ -5,21 +5,21 @@ _base_ = [
 ]
 
 find_unused_parameters=True
-load_from = None # 'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn/latest.pth'
-resume_from = 'work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth' 
+load_from = 'work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth'
+resume_from = None #'work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth' 
 
 # optimizer
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.008, momentum=0.9, weight_decay=0.0001) 
 optimizer_config = dict(_delete_=True, type='Fp16OptimizerHook', loss_scale=512.,
-                        grad_clip = dict(max_norm = 32, norm_type = 2)
+                        grad_clip = dict(max_norm = 64, norm_type = 2)
                         ) #only reduce from 10G->7G
 
 # learning policy
-lr_config = dict(_delete_=True, policy='poly', power=0.99, min_lr=1e-4, by_epoch=False,
+lr_config = dict(_delete_=True, policy='poly', power=0.99, min_lr=1e-5, by_epoch=False,
                  warmup='linear', warmup_iters=400
                  )
 
-runner = dict(type='EpochBasedRunner', max_epochs=36)
+runner = dict(type='EpochBasedRunner', max_epochs=24)
 checkpoint_config = dict(interval=1, max_keep_ckpts = 4)
 # yapf:disable
 log_config = dict(interval=20, hooks=[

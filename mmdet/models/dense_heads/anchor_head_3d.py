@@ -5,7 +5,7 @@ from mmcv.runner import force_fp32
 from mmdet.core import (anchor, anchor_inside_flags_3d, build_prior_generator,
                         build_assigner, build_bbox_coder, build_sampler,
                         images_to_levels, multi_apply, unmap, 
-                        AnchorGenerator3D)
+                        AnchorGenerator3D, MaxIoUAssigner, PseudoSampler)
 from ..builder import HEADS, build_loss
 from .base_dense_head import BaseDenseHead
 from .dense_test_mixins import BBoxTestMixin3D, reset_offset_bbox_batch
@@ -92,13 +92,13 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         if self.train_cfg:
-            self.assigner = build_assigner(self.train_cfg.assigner)
+            self.assigner: MaxIoUAssigner = build_assigner(self.train_cfg.assigner)
             # use PseudoSampler when sampling is False
             if self.sampling and hasattr(self.train_cfg, 'sampler'):
                 sampler_cfg = self.train_cfg.sampler
             else:
                 sampler_cfg = dict(type='PseudoSampler')
-            self.sampler = build_sampler(sampler_cfg, context=self) #TODO: unsure usage
+            self.sampler : PseudoSampler = build_sampler(sampler_cfg, context=self) #TODO: unsure usage
         self.fp16_enabled = False
 
         self.anchor_generator : AnchorGenerator3D = build_prior_generator(anchor_generator)
@@ -236,21 +236,26 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         # NOTE: debug
         if self.verbose: 
             print_tensor('[AssignSingle] anchor', anchors)
-            print_tensor('[AssignSingle] gtbboxes', gt_bboxes)
+            if gt_bboxes.shape[0] > 0: 
+                print_tensor('[AssignSingle] gtbboxes', gt_bboxes)
+                print_tensor('[AssignSingle] gtlabels', gt_labels)
+        # [core.bbox.assigners.max_iou_assigner
         assign_result = self.assigner.assign(anchors, gt_bboxes, gt_bboxes_ignore, None if self.sampling else gt_labels)
-        # @[bbox.samplers.pseudo_sampler]                                   
-        sampling_result = self.sampler.sample(assign_result, anchors, gt_bboxes)
+        # @[core.bbox.samplers.pseudo_sampler]                                    
+        sampling_result = self.sampler.sample(assign_result, anchors, gt_bboxes)  
 
         num_valid_anchors = anchors.shape[0]
         bbox_targets = torch.zeros_like(anchors)
         bbox_weights = torch.zeros_like(anchors)
         labels = anchors.new_full((num_valid_anchors, ),
-                                  self.num_classes,
+                                    0 if self.use_sigmoid_cls else self.num_classes ,
                                   dtype=torch.long)
+        # NOTE Caution on how to set the default value of proposal class label background in the last channel
         label_weights = anchors.new_zeros(num_valid_anchors, dtype=torch.float)
 
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
+        
         if len(pos_inds) > 0:
             if not self.reg_decoded_bbox:
                 pos_bbox_targets = self.bbox_coder.encode(
@@ -352,6 +357,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             gt_bboxes_ignore_list = [None for _ in range(num_imgs)]
         if gt_labels_list is None:
             gt_labels_list = [None for _ in range(num_imgs)]
+        
         results = multi_apply(
             self._get_targets_single,
             concat_anchor_list,
@@ -426,14 +432,19 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         label_weights = label_weights.reshape(-1)
         # b, c, *spatial_shape = label_weights.shape
         cls_score = cls_score.permute(*chn2last_order(self.spatial_dim)).reshape(-1, self.cls_out_channels)
+
         loss_cls = self.loss_cls(
             cls_score, labels, label_weights, avg_factor=num_total_samples)
+
+        # pdb.set_trace()
+        if self.verbose: 
+            print_tensor(f'[AnchorLoss] cls score', cls_score)
+            print_tensor(f'[AnchorLoss] cls gt', labels)
+            print_tensor(f'[AnchorLoss] cls loss', loss_cls )
         # regression loss
-        
         bbox_targets = bbox_targets.reshape(-1, self.spatial_dim * 2)
         bbox_weights = bbox_weights.reshape(-1, self.spatial_dim * 2)
         bbox_pred = bbox_pred.permute(*chn2last_order(self.spatial_dim)).reshape(-1, self.spatial_dim * 2)
-
         # print_tensor('bbox pred', bbox_pred)
         # print_tensor('bbox target', bbox_targets)
         if self.reg_decoded_bbox:
@@ -447,6 +458,12 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             bbox_targets,
             bbox_weights,
             avg_factor=num_total_samples)
+
+        if self.verbose: 
+            print_tensor(f'[AnchorLoss] bbox pred', bbox_pred)
+            print_tensor(f'[AnchorLoss] bbox gt', bbox_targets)
+            print_tensor(f'[AnchorLoss] bbox loss', loss_bbox)
+
         return loss_cls, loss_bbox
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
@@ -482,15 +499,15 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
 
         anchor_list, valid_flag_list = self.get_anchors( # by image 
             featmap_sizes, img_metas, device=device) # outer list by image; inner list by level
-        label_channels = self.cls_out_channels if self.use_sigmoid_cls else 1
+        # label_channels = self.cls_out_channels if self.use_sigmoid_cls else 1 # useless
+
         cls_reg_targets = self.get_targets( # by image 
             anchor_list,
             valid_flag_list,
             gt_bboxes,
             img_metas,
             gt_bboxes_ignore_list=gt_bboxes_ignore,
-            gt_labels_list=gt_labels,
-            label_channels=label_channels)
+            gt_labels_list=gt_labels)
         if cls_reg_targets is None:
             return None
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
@@ -793,7 +810,6 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         outs = self.forward(feats)
         results_list = self.get_bboxes(*outs, img_metas, rescale=rescale)
         # put tile_origin into the img_metas for bbox offset
-        pdb.set_trace()
         results_list = reset_offset_bbox_batch(results_list, img_metas)
         return results_list
 

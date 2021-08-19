@@ -1,4 +1,4 @@
-import torch
+import torch, pdb
 
 from ..builder import BBOX_ASSIGNERS
 from ..iou_calculators import build_iou_calculator
@@ -117,6 +117,7 @@ class MaxIoUAssigner(BaseAssigner):
             overlaps[:, ignore_max_overlaps > self.ignore_iof_thr] = -1
 
         assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
+        # pdb.set_trace()
         if assign_on_cpu:
             assign_result.gt_inds = assign_result.gt_inds.to(device)
             assign_result.max_overlaps = assign_result.max_overlaps.to(device)
@@ -160,6 +161,7 @@ class MaxIoUAssigner(BaseAssigner):
                 max_overlaps,
                 labels=assigned_labels)
 
+        # kxn, k-num-gt, k-num-bbox
         # for each anchor, which gt best overlaps with it
         # for each anchor, the max iou of all gts
         max_overlaps, argmax_overlaps = overlaps.max(dim=0)
@@ -197,14 +199,12 @@ class MaxIoUAssigner(BaseAssigner):
                         assigned_gt_inds[max_iou_inds] = i + 1
                     else:
                         assigned_gt_inds[gt_argmax_overlaps[i]] = i + 1
-
+        # pdb.set_trace()
         if gt_labels is not None:
             assigned_labels = assigned_gt_inds.new_full((num_bboxes, ), -1)
-            pos_inds = torch.nonzero(
-                assigned_gt_inds > 0, as_tuple=False).squeeze()
+            pos_inds = torch.nonzero(assigned_gt_inds > 0, as_tuple=False).squeeze()
             if pos_inds.numel() > 0:
-                assigned_labels[pos_inds] = gt_labels[
-                    assigned_gt_inds[pos_inds] - 1]
+                assigned_labels[pos_inds] = gt_labels[assigned_gt_inds[pos_inds] - 1]
         else:
             assigned_labels = None
 

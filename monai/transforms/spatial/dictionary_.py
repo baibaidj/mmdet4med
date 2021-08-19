@@ -351,6 +351,7 @@ class SpacingTTAd(MapTransform):
         align_corners: Union[Sequence[bool], bool] = False,
         dtype: Optional[Union[Sequence[DtypeLike], DtypeLike]] = np.float64,
         meta_key_postfix: str = "meta_dict",
+        verbose = False,
 
     ) -> None:
         """
@@ -402,6 +403,7 @@ class SpacingTTAd(MapTransform):
         if not isinstance(meta_key_postfix, str):
             raise TypeError(f"meta_key_postfix must be a str but is {type(meta_key_postfix).__name__}.")
         self.meta_key_postfix = meta_key_postfix
+        self.verbose = verbose
 
     def __call__(
         self, data: Mapping[Union[Hashable, str], Dict[str, np.ndarray]]
@@ -426,7 +428,7 @@ class SpacingTTAd(MapTransform):
                 dtype=self.dtype[idx],
             )
             new_shape = d[key].shape[-3:]
-            print(f'\tRespacing: from {old_shape} {old_spacing} to {new_shape} {new_pixdim}')
+            if self.verbose: print(f'\tRespacing: from {old_shape} {old_spacing} to {new_shape} {new_pixdim}')
             # set the 'affine' key
             meta_data["affine"] = new_affine
             meta_data['shape_post_resize'] = new_shape

@@ -20,6 +20,6 @@ task=ribfrac
 model=retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn
 
 
-CUDA_VISIBLE_DEVICES=1 python tools/test_med.py configs/$task/$model.py \
+CUDA_VISIBLE_DEVICES=3 python tools/test_med.py configs/$task/$model.py \
     work_dirs/$model/latest.pth \
     --eval recall

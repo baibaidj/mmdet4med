@@ -50,7 +50,8 @@ class SingleStageDetector3D(BaseDetector3D):
                         map_key="instances",
                         seg_key = 'seg',
                         present_instances="present_instances"), 
-                    ]
+                    ],
+                verbose = False,
                  ):
         super(SingleStageDetector3D, self).__init__(init_cfg)
         if pretrained:
@@ -69,6 +70,7 @@ class SingleStageDetector3D(BaseDetector3D):
         self.seg_num_classes = getattr(self.seg_head, 'num_classes', 2)
         self.gpu_pipelines = Compose(gpu_aug_pipelines + mask2bbox_cfg) \
                                     if mask2bbox_cfg is not None else None
+        self.verbose = verbose
 
         self.roi_size = self.test_cfg.pop('roi_size', None)
         self.sw_batch_size = self.test_cfg.pop('sw_batch_size', 2)
@@ -262,13 +264,19 @@ class SingleStageDetector3D(BaseDetector3D):
                     m['scale_factor'] = [1 for _ in range(Shaper.spatial_dim * 2)]
                 window_data = torch.cat([inputs[win_slice] for win_slice in tiles_slicer]).to(device)
                 det_results, seg_results = self.simple_test_tile(window_data, img_meta_tiles)  # batched patch segmentation
-                # if six % 30 ==0 : 
-                #     print_tensor(f'\n[SliceInfer] seg results batch{bix} win{six}', seg_results)
+                if self.verbose and six % 30 ==0 : 
+
+                    print_tensor(f'\n[SliceInfer] seg results batch{bix} win{six}', seg_results)
+                    # list[tuple(), tuple] # sample 
+                    for det in det_results:
+                        print_tensor(f'\n[SliceInfer] det result bbox', det[0])
+                        print_tensor(f'\n[SliceInfer] det result score', det[1])
+
                 ensembler.store_det_output(det_results)
                 ensembler.update_seg_output_batch(seg_results, tiles_slicer)
             
             # pdb.set_trace()
-            det_result_img = ensembler.finalize_det_bbox(verbose=True) # (bboxes_nx7, labels_nx1)
+            det_result_img = ensembler.finalize_det_bbox(verbose=self.verbose) # (bboxes_nx7, labels_nx1)
             seg_result_img = ensembler.finalize_segmap() # 1CHWD
             # print_tensor(f'[SliceInfer] seg results ensemble {bix}', seg_result_img)
             det_result_img = ensembler.offset_preprocess4detect(det_result_img, img_meta, 
@@ -312,21 +320,6 @@ class SingleStageDetector3D(BaseDetector3D):
             # NOTE: whole inference should be implemented
             det_results, seg_results= self.whole_inference(imgs, img_metas, rescale)
 
-        # img_meta_dict = get_meta_dict(img_metas)
-        # origin_shape = tuple(img_meta_dict['spatial_shape']) # array does not support comparison directly
-        # resize_shape = (resh, resw, resd) = img_meta_dict.get('shape_post_resize', origin_shape)
-
-        # # 3. address resize or respacing
-        # if img_meta_dict.get('new_pixdim', False):
-        #     if rescale and (resize_shape != origin_shape):    
-        #         seg_results = [resize_3d(seg, size=origin_shape,
-        #                         mode='trilinear', #'bilinear'
-        #                         align_corners=None,
-        #                         warning=False) for seg in seg_results]
-        #         scale_factors = [ors/res for ors, res in zip(origin_shape, resize_shape)]
-        #         scale_factors += scale_factors + [1] # 7 
-        #         scale_factors = imgs.new_tensor(scale_factors) 
-        #         det_results = [det.mul(scale_factors[None, :]) for det in det_results] # nx7
         seg_results = torch.cat([torch.softmax(seg, dim=1) if seg.shape[1] > 1 else torch.sigmoid(seg)
                                 for seg in seg_results], axis = 0)
         return det_results, seg_results 

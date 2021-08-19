@@ -103,13 +103,12 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-data/
-data
 .vscode
 .idea
 .DS_Store
 
 # custom
+data/Task*
 *.pkl
 *.pkl.json
 *.log.json

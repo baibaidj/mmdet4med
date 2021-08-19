@@ -5,7 +5,7 @@ from monai.transforms import (
     AddChanneld,
     CastToTyped_,
     SqueezeDimd,
-    SpatialPadd,
+    SpatialPadd_,
     RandGaussianNoised,
     RandRotate90d,
     ToTensord,
@@ -23,7 +23,7 @@ from monai.transforms import (
     ConvertLabeld,
     RideOnLabel,
     DataStatsd,
-    CenterSpatialCropd_,
+    CenterSpatialCropDJ,
     SaveImaged, 
     Rand3DElasticGPUd, 
     ConvertLabelRadiald, 
@@ -39,14 +39,14 @@ Spacingd = preg(Spacingd)
 AddChanneld = preg(AddChanneld)
 SqueezeDimd = preg(SqueezeDimd)
 CastToTyped_ = preg(CastToTyped_)
-SpatialPadd = preg(SpatialPadd)
+SpatialPadd_ = preg(SpatialPadd_)
 RandGaussianNoised = preg(RandGaussianNoised) 
 ToTensord = preg(ToTensord)
 Rand3DElasticd = preg(Rand3DElasticd)
 
 NormalizeIntensityGPUd = preg(NormalizeIntensityGPUd)
 RandCropByLabelBBoxRegiond = preg(RandCropByLabelBBoxRegiond)
-CenterSpatialCropd_ = preg(CenterSpatialCropd_)
+CenterSpatialCropDJ = preg(CenterSpatialCropDJ)
 Rand3DElasticGPUd = preg(Rand3DElasticGPUd)
 
 RandGaussianNoised_ = preg(RandGaussianNoised_)

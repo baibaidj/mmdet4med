@@ -99,15 +99,20 @@ class Instances2Boxes(AbstractTransform):
         data[self.box_key] = [] 
         data[self.class_key] = []
         for batch_idx, instance_element in enumerate(data[self.instance_key].split(1)):
+
             _present_instances = data[self.present_instances][batch_idx] if self.present_instances is not None else None
             _boxes, instance_idx = instances_to_boxes(
                 instance_element, instance_element.ndim - 2, instances=_present_instances)
             inst2class_map = data[self.meta_key][batch_idx][self.map_key]
+            if self.verbose: 
+                print_tensor(f'\n[PatchBox] bix {batch_idx} instix {instance_idx} map {inst2class_map}', instance_element)
+            # inst_in_map = [(str(int(a.detach().item())) not in inst2class_map) for a in instance_idx]
+            # if any(inst_in_map): 
+            #     print(data[self.meta_key][batch_idx]['filename_or_obj'])
             _classes = get_instance_class_from_properties(instance_idx, inst2class_map) 
             _classes = _classes.to(device=_boxes.device) + 1 # class start from 0
-
-            if self.verbose: print(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
-                                    + f'ins {instance_idx}  cls {_classes}')
+            # if self.verbose: print_tensor(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
+            #                         + f'ins {instance_idx}  cls {_classes}, instmask', instance_element)
             data[self.box_key].append(_boxes)
             data[self.class_key].append(_classes)
         return data

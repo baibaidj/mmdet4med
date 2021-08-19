@@ -10,7 +10,7 @@ fpn_channel = stem_channels * (2**3)
 model = dict(
     type='RetinaNet3D',
     backbone=dict(
-        type='ResNet3dIso', # 
+        type='ResNet3dIso', # verbose = False, 
         deep_stem = True,
         avg_down=True,
         depth='183d',
@@ -26,7 +26,6 @@ model = dict(
         conv_cfg=conv_cfg,
         norm_cfg=norm_cfg,
         style='pytorch',
-        verbose = False, 
         # non_local=((0, 0), (0, 0), (0, 0), (0, 0)),
         # non_local_cfg=dict(
         #     conv_cfg = conv_cfg,
@@ -36,7 +35,7 @@ model = dict(
         ),
     neck=dict(
         type='FPN3D',
-        in_channels=[stem_channels * (2**c) for c in range(5)],
+        in_channels=[stem_channels * (2**c) for c in range(5)], 
         fixed_out_channels = fpn_channel,
         start_level=2,
         conv_cfg = conv_cfg, 
@@ -44,7 +43,7 @@ model = dict(
         add_extra_convs=False,
         num_outs=5),
     bbox_head=dict(
-        type='RetinaHead3D', 
+        type='RetinaHead3D', verbose = True, 
         num_classes=num_classes,
         in_channels=fpn_channel,
         stacked_convs=4,
@@ -52,10 +51,10 @@ model = dict(
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         anchor_generator=dict( 
-            type='AnchorGenerator3D', 
+            type='AnchorGenerator3D', #verbose = True, 
             octave_base_scale=4,
-            scales_per_octave=3, verbose = True, 
-            ratios=[0.5, 1.0, 2.0],
+            scales_per_octave=1, 
+            ratios=[1.0,],
             strides=[4, 8, 16]), #NOTE: the len of stride should be identical to fpn levels
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder3D',
@@ -67,11 +66,11 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=100.0),
-        loss_bbox=dict(type='SmoothL1Loss', loss_weight=10.0)),
+            loss_weight=1e-4),
+        loss_bbox=dict(type='SmoothL1Loss', loss_weight=1.0)),
 
     seg_head = dict(
-        type='FCNHead3D',
+        type='FCNHead3D',  verbose = False, 
         in_channels= stem_channels * 2,
         in_index=0,
         channels= stem_channels * 2,
@@ -85,7 +84,6 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         gt_index = 0, 
-        verbose = False, 
         # parameters for implicit semantic data augmentation
         # is_use_isda = True, 
         # isda_lambda = 2.5,
@@ -101,14 +99,14 @@ model = dict(
                     ),
             ),
     # convert instance mask to bbox 
-    mask2bbox_cfg = [dict(type = 'FindInstances', 
+    mask2bbox_cfg = [dict(type = 'FindInstances', # verbose = True, 
                         instance_key="seg",
                         save_key="present_instances"), 
-                    dict(type = 'Instances2Boxes', 
+                    dict(type = 'Instances2Boxes',
                         instance_key="seg",
                         map_key="instances", 
                         box_key="gt_bboxes",
-                        class_key="gt_labels",
+                        class_key="gt_labels", # verbose = True, 
                         present_instances="present_instances"),
                     dict(type = 'Instances2SemanticSeg', 
                         instance_key = 'seg',
@@ -131,7 +129,7 @@ model = dict(
             iou_calculator=dict(type='BboxOverlaps3D')
             ),
         allowed_border=-1,
-        pos_weight=-1,
+        pos_weight=1.0,
         debug=False),
     test_cfg=dict(
         nms_pre=10000,

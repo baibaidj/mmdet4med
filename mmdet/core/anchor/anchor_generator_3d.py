@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 import torch
 from torch.nn.modules.utils import _pair, _triple
@@ -112,7 +110,8 @@ class AnchorGenerator3D:
         self.center_offset = center_offset
         self.base_anchors = self.gen_base_anchors()
         if self.verbose: 
-            print('[AnchorGen] base anchors', self.base_anchors)
+            for i, an in enumerate(self.base_anchors):
+                print(f'[AnchorGen] base anchor level {i} \n', an) 
 
     @property
     def num_base_anchors(self):
@@ -240,8 +239,7 @@ class AnchorGenerator3D:
         for i in range(self.num_levels):
             anchors = self.single_level_grid_priors(
                 featmap_sizes[i], level_idx=i, device=device)
-            if self.verbose:
-                print_tensor(f'[AnchorGen] level {i}', anchors)
+            if self.verbose: print_tensor(f'[AnchorGen] level {i}', anchors)
             multi_level_anchors.append(anchors)
         return multi_level_anchors
 

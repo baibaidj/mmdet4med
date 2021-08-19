@@ -67,7 +67,7 @@ def train_detector(model,
             cfg.data.workers_per_gpu,
             # cfg.gpus will be ignored if distributed
             len(cfg.gpu_ids),
-            dist=distributed,
+            dist=distributed, persistent_workers = True,
             seed=cfg.seed) for ds in dataset
     ]
 

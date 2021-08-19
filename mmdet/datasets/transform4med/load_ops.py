@@ -29,7 +29,7 @@ class Load1CaseNN:
 
 
     bboxes: # zyx
-    # boxes : [[ 23 314  33 341  76  91] 
+    # boxes: [[ 23 314  33 341  76  91] 
     #         [166 164 185 211 377 414]
     #         [141 159 162 225 388 442]
     #         [117 175 138 234 427 462]
@@ -38,7 +38,7 @@ class Load1CaseNN:
     # labels :	 [0, 0, 0, 0, 0]
     
     """
-    def __init__(self, np_load_mode = 'r+', 
+    def __init__(self, np_load_mode = 'r', 
                  keys = ('img', 'seg', 'property', 'bboxes'), 
                  meta_key = 'img_meta_dict', verbose = False,
                  axis_reorder = True
@@ -59,18 +59,16 @@ class Load1CaseNN:
                 data[k] = None
             else:
                 if fp.endswith('npy') or fp.endswith('npz'):
-                    data[k] = np.load(fp, self.memmap_mode, allow_pickle=True)
+                    data[k] = np.load(fp, allow_pickle=True) #self.memmap_mode,
                     if self.axis_reorder: data[k] = array_zyx2xyz(data[k])
                     data['img_meta_dict']['spatial_shape'] = data[k].shape
                     if self.verbose: print_tensor(f'[load] {k}', data[k])
                 elif fp.endswith('pkl'):
                     data[k] = load_pickle(fp)
-                    if self.axis_reorder and k == 'bboxes': # zyx > xyz
-                        data[k]['boxes'] = np.array(data[k]['boxes'][:, [2, 1, 0, 5, 4, 3]])
                     if self.verbose: print(f'[load] {k}', data[k])
                 else:
                     raise ValueError(f'load only npy or pkl but got {fp}')
-
+        
         if data.get('property', None) is not None:
             data[self.meta_key] = data.pop('property')
             # data['instance_mapping'] = data['property'].pop('instances')    
@@ -78,11 +76,24 @@ class Load1CaseNN:
             data[self.meta_key]['filename_or_obj'] = data[self.meta_key]['seg_file']
         return data
 
+get_valid_mask = lambda data, max_label : np.where((data > max_label) | (data < 0), 0, data)
 array_zyx2xyz = lambda arr: arr.transpose(0, 3, 2, 1)
+def convert_coord_nn(bbox_c6, is_nn_order = True, zyx2xyz = True):
+    assert len(bbox_c6) == 6
+    # bboxes: [x1, y1, x2, y2, z1, z2]
+    if is_nn_order:
+        x1, y1, x2, y2, z1, z2 = bbox_c6
+    else:
+        x1, y1, z1, x2, y2, z2 = bbox_c6
+
+    if zyx2xyz: 
+        x1, y1, z1, x2, y2, z2 = z1, y1, x1, z2, y2, x2
+    return (x1, y1, z1, x2, y2, z2)
 
 def property2affine(property_dict, show_result = False):
     # keys='spacing_after_resampling' , 'itk_direction', 'itk_origin'
-    spacing = np.array(property_dict['spacing_after_resampling'])[::-1] * -1
+    spacing = np.array(property_dict['spacing_after_resampling'])[::-1]
+    spacing[:2] *= -1
     direction = np.array(property_dict['itk_direction'])
     origin = np.array(property_dict['itk_origin'])
     affine_3x3 = direction.reshape(3, 3) * spacing
@@ -127,7 +138,7 @@ class InstanceBasedCrop:
         instance_ix = data.get(self.instance_ix, -1)
         # get instance bbox
         bbox = None if instance_ix < 0 else data['bboxes']['boxes'][instance_ix - 1]
-        if self.verbose: print(f'[InsCrop] {self.instance_ix} bbox {bbox} imgshape {image_shape}')
+        if self.verbose: print(f'\n[InsCrop] {self.instance_ix} bbox {bbox} imgshape {image_shape}')
         # bbox to center
         if bbox is None:
             center_c3 = self.random_background_center(image_shape, self.patch_size)
@@ -138,21 +149,20 @@ class InstanceBasedCrop:
         # 
         if self.verbose: print(f'[FindCenter] instance {instance_ix} bbox{bbox} center {center_c3}')
         # create cropper    
-        cropper = SpatialMultiPyramidCrop_(roi_center=tuple(center_c3), 
-                                            roi_size=self.patch_size, 
-                                            pyramid_scale=self.pyramid_scale) if self.pyramid_scale else \
-                        SpatialCrop_(roi_center=tuple(center_c3), roi_size=self.patch_size)
+        cropper =  SpatialCrop_(roi_center=tuple(center_c3), roi_size=self.patch_size)
         # crop key by key
         for k in self.keys:
-            # prior_shape = data[k].shape
-            if (bbox is not None) and k == 'img':
-                print(f'@@@@@@### +32 {k}  @@@@@@@####')
-                bbox_slicer = tuple([slice(None)] + [slice(bbox[i], bbox[i+3]) for i in range(3)])
-                data[k][bbox_slicer] += 32
+            prior_shape = data[k].shape
             data[k] = cropper(data[k])
             data['img_meta_dict'][f'cropshape'] = tuple(data[k].shape[1:])
-            if k == 'seg': data[k] = data[k].clip(min = 0)
-            # if self.verbose: print_tensor(f'[Crop] {k} pre {prior_shape} after', data[k])
+            if self.verbose: print_tensor(f'[Crop] {k} pre {prior_shape} after', data[k])
+
+        # validate mask
+        inst2cls = data['img_meta_dict']['instances']
+        if len(inst2cls) > 0:
+            max_label = max([int(a) for a in  data['img_meta_dict']['instances']])
+        else: max_label = 0
+        data['seg'] = get_valid_mask(data['seg'], max_label)
         return data
 
     def random_background_center(self, image_shape, patch_shape, verbose = False):
@@ -169,9 +179,8 @@ class InstanceBasedCrop:
             center_bg.append(rand_center)
         return center_bg
 
-
     def random_foreground_center(self, bbox_c6, is_nn_order = True, 
-                                verbose = False): # zyx2xyz = True,  
+                                zyx2xyz = True,  verbose = False): # 
         """
         nnDet: dim order zyx, image permute to xyz, here bbox also should be permuted 
                z reordered
@@ -186,13 +195,8 @@ class InstanceBasedCrop:
         """
         assert len(bbox_c6) == 6
         # bboxes: [x1, y1, x2, y2, z1, z2]
-        if is_nn_order:
-            x1, y1, x2, y2, z1, z2 = bbox_c6
-        else:
-            x1, y1, z1, x2, y2, z2 = bbox_c6
 
-        # if zyx2xyz: 
-        #     x1, y1, z1, x2, y2, z2 = z1, y1, x1, z2, y2, x2
+        x1, y1, z1, x2, y2, z2 = convert_coord_nn(bbox_c6, is_nn_order,  zyx2xyz)
 
         # if isinstance(z_size, int): 
         #     z1, z2 = max(z_size - z2, 0), max(z_size - z1, 0)

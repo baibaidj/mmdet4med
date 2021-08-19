@@ -430,7 +430,6 @@ def reset_offset_bbox_batch(results, img_metas):
         det_preds, seg_preds = img_result
         tile_origin  = img_meta.get('tile_origin', None)
         if tile_origin is None: continue
-        pdb.set_trace()
         det_preds_new = _apply_offsets_to_boxes(det_preds, tile_origin)
         results[i] = tuple([det_preds_new, seg_preds])
 

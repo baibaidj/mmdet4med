@@ -17,6 +17,8 @@ from mmdet.apis import set_random_seed, train_detector
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
 from mmdet.utils import collect_env, get_root_logger
+mmseg_rt = '/home/dejuns/git/mmseg4med'
+if mmseg_rt in sys.path: sys.path.remove(mmseg_rt)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -96,7 +98,7 @@ def main():
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
-
+    # torch.autograd.set_detect_anomaly(True)
     # work_dir is determined in this priority: CLI > segment in file > filename
     if args.work_dir is not None:
         # update configs according to CLI args if args.work_dir is not None

@@ -14,7 +14,7 @@ from monai.config import KeysCollection
 from monai.transforms.compose import MapTransform, Randomizable
 from monai.transforms.croppad.array_ import (
     SpatialCrop_,
-    CenterSpatialCrop_,
+    CenterSpatialCrop_j,
     SpatialMultiPyramidCrop_,
 )
 from monai.transforms.utils_ import (
@@ -68,7 +68,8 @@ class SpatialCropd_(MapTransform):
         return d
 
 
-class CenterSpatialCropd_(MapTransform):
+randint = lambda x: random.randrange(-x, x)
+class CenterSpatialCropDJ(MapTransform):
     """
     Dictionary-based wrapper of :py:class:`monai.transforms.CenterSpatialCrop_`.
 
@@ -84,15 +85,17 @@ class CenterSpatialCropd_(MapTransform):
         super().__init__(keys)
         self.jitter = jitter
         # self.fixed_offset = fixed_offset
-        self.cropper = CenterSpatialCrop_(roi_size, fixed_offset= fixed_offset)
+        self.cropper = CenterSpatialCrop_j(roi_size, fixed_offset= fixed_offset)
 
     def __call__(self, data: Mapping[Hashable, Union[np.ndarray, torch.Tensor]]) -> Dict[Hashable, Union[np.ndarray, torch.Tensor]]:
         d = dict(data)
-        # rand_jitter = np.random.randint(-self.jitter, self.jitter) if self.jitter else 0
+        j4c = d['img_meta_dict'].get('jitter4center', None)
+        jitter_xyz = [randint(j4c) if j4c else 0 for _ in range(3)]
         for key in self.keys:
-            j4c = d['img_meta_dict'].get('jitter4center', None)
-            d[key], jitter_xyz = self.cropper(d[key], jitter = self.jitter if j4c is None else j4c)
-            d['img_meta_dict']['jitter4center'] = jitter_xyz
+            d[key], slice4img, slice4patch = self.cropper(d[key], jitter_xyz = jitter_xyz)
+            d['img_meta_dict']['slice4img'] = slice4img
+            d['img_meta_dict']['slice4patch'] = slice4patch
+            
         return d
 
 

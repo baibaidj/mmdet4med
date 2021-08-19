@@ -11,7 +11,8 @@ resume_from = None #'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft/latest
 # optimizer
 optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(_delete_=True, type='Fp16OptimizerHook', loss_scale=512.,
-                        grad_clip = dict(max_norm = 32, norm_type = 2)
+                        grad_clip = dict(max_norm = 32, norm_type = 2),
+                        distributed= False, 
                         ) #only reduce from 10G->7G
 
 # learning policy

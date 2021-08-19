@@ -16,7 +16,7 @@ import torch, pdb
 from .transform4med.io4med import print_tensor, random, convert_label
 from .transform4med.paths import load_dataset_id
 from .transform4med.load_nn import load_pickle
-from .transform4med.load_ops import property2affine
+from .transform4med.load_ops import property2affine, array_zyx2xyz, convert_coord_nn
 from mmdet.core.evaluation.metric_custom import *
 from mmdet.core import eval_map_3d, eval_recalls_3d
 
@@ -170,13 +170,16 @@ class CustomDatasetNN(Dataset):
             spacing_after_resampling :	 [1.25       0.73828101 0.73828101]
             use_nonzero_mask_for_norm :	 OrderedDict([(0, False)])
         bboxes_fp = f"{c}_boxes.pkl"
-            boxes :	 [[ 23 314  33 341  76  91]
-                    [166 164 185 211 377 414]
-                    [141 159 162 225 388 442]
-                    [117 175 138 234 427 462]
-                    [101 201 121 266 451 478]]
-            instances :	 [1, 2, 3, 4, 5]
-            labels :	 [0, 0, 0, 0, 0]
+
+
+                # x1, y1, x2, y2, z1, z2
+        boxes :	 [[ 23 314  33 341  76  91]
+                [166 164 185 211 377 414]
+                [141 159 162 225 388 442]
+                [117 175 138 234 427 462]
+                [101 201 121 266 451 478]]
+        instances :	 [1, 2, 3, 4, 5]
+        labels :	 [0, 0, 0, 0, 0]
 
         return 
             file_list : [{'image' : img_path, 'label' : label_path}, ...]
@@ -192,7 +195,7 @@ class CustomDatasetNN(Dataset):
         pid2pathpairs = []
         for ix, part_fn in enumerate(case_fns):
             cid = part_fn.split(os.sep)[-1]
-            if ix < 3: print('Check cid', cid)
+            if ix < 2: print('Check cid', cid)
             if self.exclude_pids and (cid in self.exclude_pids): 
                 print('Exclude ', cid)
                 continue
@@ -321,7 +324,7 @@ class CustomDatasetNN(Dataset):
             # 1. load seg mask 
             # img_full, af_mat = IO4Nii.read(fp, verbose=True, axis_order= None, dtype=np.uint8)
             img_full = array_zyx2xyz(np.load(mask_fp, allow_pickle=True))[0]
-            gt_seg_map  = np.array(img_full, dtype = np.uint8)
+            gt_seg_map  = np.array(img_full > 0, dtype = np.uint8)
 
             # 2. load property, image meta dict
             meta_data = load_pickle(prop_fp)
@@ -329,8 +332,10 @@ class CustomDatasetNN(Dataset):
 
             # 3. load bboxes
             bboxes_info = load_pickle(bbox_fp)
-            if np.array(bboxes_info['boxes']).size ==0 : bboxes_info['boxes'] = np.zeros((0, 6))
-            bboxes_info['boxes'] = np.array(bboxes_info['boxes'][:, [2, 1, 0, 5, 4, 3]])
+            if np.array(bboxes_info['boxes']).size ==0 : 
+                bboxes_info['boxes'] = np.zeros((0, 6))
+            else:
+                bboxes_info['boxes'] = np.array([convert_coord_nn(a) for a in bboxes_info['boxes']])
             bboxes_info['labels'] = np.array(bboxes_info['labels']) + 1
             # pdb.set_trace()
             anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})

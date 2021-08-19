@@ -5,6 +5,8 @@ from mmcv.ops import sigmoid_focal_loss as _sigmoid_focal_loss
 
 from ..builder import LOSSES
 from .utils import weight_reduce_loss
+import pdb
+from .utils import print_tensor
 
 
 # This method is only for debugging
@@ -166,7 +168,11 @@ class FocalLoss(nn.Module):
                 target = F.one_hot(target, num_classes=num_classes + 1)
                 target = target[:, :num_classes]
                 calculate_loss_func = py_sigmoid_focal_loss
-
+            
+            print_tensor(f'[FocalLoss] pred', pred )
+            print_tensor(f'[Focalloss] gt', target)
+            if weight is not None:
+                print_tensor(f'[Focalloss] weight', weight)
             loss_cls = self.loss_weight * calculate_loss_func(
                 pred,
                 target,
@@ -175,7 +181,8 @@ class FocalLoss(nn.Module):
                 alpha=self.alpha,
                 reduction=reduction,
                 avg_factor=avg_factor)
-
+            print_tensor(f'[Focalloss] loss', loss_cls)
+            pdb.set_trace()
         else:
             raise NotImplementedError
         return loss_cls

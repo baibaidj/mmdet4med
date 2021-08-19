@@ -22,7 +22,7 @@ train_pipeline = [
     # dict(type = 'AddChanneld', keys= keys), 
     # dict(type = 'ConvertLabeld', keys = 'seg', label_mapping = label_mapping, value4outlier = 1), 
     dict(type = 'InstanceBasedCrop', keys=keys, patch_size= ext_patch_size, verbose = False), # cropshape
-    dict(type = 'SpatialPadd', keys=keys, spatial_size= ext_patch_size, # padshape
+    dict(type = 'SpatialPadd_', keys=keys, spatial_size= ext_patch_size, # padshape
                                 mode='reflect', verbose = False),  
     dict(type = 'CastToTyped_', keys = keys,  dtype=dtypes), 
     dict(type = 'ToTensord', keys = keys),
@@ -30,7 +30,7 @@ train_pipeline = [
     dict(type = 'RandFlipd_', keys = keys, spatial_axis=(2, ), prob=0.4),
     # dict(type = 'RideOnLabel', keys = {'seg': ('seg', 'skeleton') }, cat_dim = 0),
     # dict(type = 'DataStatsd', keys = keys, prefix = 'Final'), 
-    #  dict(type = 'SaveImaged', keys = keys, 
+    # dict(type = 'SaveImaged', keys = keys, 
     #                 output_dir = '/home/dejuns/git/mmseg4med/work_dirs/AbdoVeinDataset/vnet3d_res18_4l8c_160x256x256_200eps_sw173_fp16_sgd_mimic_sup_top/debug', 
     #                 resample = False),
     dict(type='FormatShapeMonai', verbose = False, keys = keys[:core_key_num],  channels = in_channel),
@@ -38,7 +38,7 @@ train_pipeline = [
 ]
 test_keys = ('img', )
 test_pipeline = [
-        dict(type = 'Load1CaseNN', keys = test_keys), 
+        dict(type = 'Load1CaseNN', keys = ('img', 'property')), 
         dict(type='MultiScaleFlipAug3D',
             # label_mapping = label_mapping,
             # value4outlier = 1,
@@ -47,7 +47,7 @@ test_pipeline = [
             flip_direction= ['diagonal'],
             transforms=[ #target spacing [1.25       0.73828101 0.73828101]
                 dict(type = 'SpacingTTAd', keys = test_keys, pixdim = None),
-                dict(type = 'SpatialPadd', keys= test_keys, spatial_size= patch_size, mode='reflect', method = 'end'), 
+                dict(type = 'SpatialPadd_', keys= test_keys, spatial_size= patch_size, mode='reflect', method = 'end'), 
                 dict(type = 'FlipTTAd_', keys = test_keys),  
                 dict(type = 'CastToTyped_', keys = 'img',  dtype= ('float', )),
                 dict(type = 'ToTensord', keys = 'img'), 
@@ -66,8 +66,8 @@ test_pipeline = [
 # draw_step = 8
 total_samples = 160 #// draw_step #9842
 sample_per_gpu = 3# bs2 >> 24.5 G  # 
-train_sample_rate = 0.1
-val_sample_rate = 0.1
+train_sample_rate = 0.2
+val_sample_rate = 0.2
 
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
@@ -88,7 +88,7 @@ data = dict(
         ),
     test=dict(
         type=dataset_type, img_dir=img_dir, 
-        sample_rate = 0.05, split='test', 
+        sample_rate = 0.1, split='test', 
         pipeline=test_pipeline,
         test_mode = True,
         # fn_spliter = ['-', 0]
@@ -113,7 +113,7 @@ gpu_aug_pipelines = [
         #             percentile_00_5=norm_param['percentile_00_5']
         #             ),
         dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.1), 
-        dict(type = 'SaveImaged', keys = keys[:core_key_num], 
-            output_dir = f'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_1cls/debug', 
-            resample = False, save_batch = True, on_gpu = True),    
+        # dict(type = 'SaveImaged', keys = keys[:core_key_num], 
+        #     output_dir = f'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_1cls/debug', 
+        #     resample = False, save_batch = True, on_gpu = True),    
         ]
