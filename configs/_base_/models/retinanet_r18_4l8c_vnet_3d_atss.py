@@ -43,10 +43,11 @@ model = dict(
         add_extra_convs=False,
         num_outs=5),
     bbox_head=dict(
-        type='RetinaHead3D', #verbose = True, 
+        type='ATSSHead3D', verbose = True, 
         num_classes=num_classes,
         in_channels=fpn_channel,
         stacked_convs=4,
+        start_level = 2, 
         feat_channels=fpn_channel,
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
@@ -59,19 +60,21 @@ model = dict(
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder3D',
             target_means=[.0, .0, .0, .0, 0., 0.],
-            target_stds=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0], 
+            target_stds=[0.1, 0.1, 0.1, 0.2, 0.2, 0.2], 
             clip_border=False),
         loss_cls=dict(
             type='CrossEntropyLoss', 
             use_sigmoid=False, 
-            loss_weight=3.0, class_weight = (1.0, 0.5), 
+            loss_weight=2.0, class_weight = (1.0, 0.5), 
             verbose = False),
             # type='FocalLoss',
             # use_sigmoid=True,
             # gamma=2.0,
             # alpha=0.25, verbose = True, 
             # loss_weight=1.0),
-        loss_bbox=dict(type='SmoothL1Loss', loss_weight=3.0)),
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=3.0), 
+        loss_centerness=dict(
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0)), 
 
     seg_head = dict(
         type='FCNHead3D',  verbose = False, 
@@ -125,10 +128,8 @@ model = dict(
     # model training and testing settings
     train_cfg=dict(
         assigner=dict(
-            type='MaxIoUAssigner', # could be replaced by ATSSAssigner
-            pos_iou_thr=0.5,
-            neg_iou_thr=0.2,
-            min_pos_iou=0.3, #min_pos_iou=0.3,
+            type='ATSSAssigner3D', # could be replaced by ATSSAssigner
+            topk = 9, 
             ignore_iof_thr=-1, verbose = False,
             iou_calculator=dict(type='BboxOverlaps3D')
             ),
@@ -142,7 +143,7 @@ model = dict(
         pos_weight=1.0,
         debug=False),
     test_cfg=dict(
-        nms_pre=10000,
+        nms_pre=1000,
         # nms_pre_tiles = 1000, 
         min_bbox_size=0.01,
         score_thr=0.01,

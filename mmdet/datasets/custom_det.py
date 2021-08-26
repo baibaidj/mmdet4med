@@ -1,7 +1,5 @@
 import os.path as osp
 import numpy as np
-import mmcv, sys, warnings, os
-from functools import reduce
 from mmcv.utils import print_log
 from torch.utils.data import Dataset
 
@@ -10,15 +8,14 @@ from .pipelines import Compose
 import torch, json
 from pathlib import Path
 
-import torch, pdb
+import torch, pdb, os
+from mmdet.datasets.transform4med.io4med import IO4Nii
 
 # from monai.data.image_reader import NibabelReader
 from .transform4med.io4med import print_tensor, random, convert_label
-from .transform4med.paths import load_dataset_id
-from .transform4med.load_nn import load_pickle
-from .transform4med.load_det import property2affine, array_zyx2xyz, convert_coord_nn
+from .transform4med.load_nn import load_json, load_pickle
 from mmdet.core.evaluation.metric_custom import *
-from mmdet.core import eval_map_3d, eval_recalls_3d
+from mmdet.core.evaluation import eval_map_3d, eval_recalls_3d
 
 def decide_cid_in_fn(fn):
     fn_stem = fn.split('.')[0]
@@ -34,7 +31,7 @@ def add_series_chunk_safe(fn):
 
 
 @DATASETS.register_module()
-class CustomDatasetNN(Dataset):
+class CustomDatasetDet(Dataset):
     """Custom dataset for instance segmentation.
 
     An example of file structure is as followed.
@@ -96,13 +93,16 @@ class CustomDatasetNN(Dataset):
                  sample_rate = 1.0,
                  view_channel = None,
                  verbose = False,
-                 key2suffix = {'img_fp': '.npy', 'seg_fp': '_seg.npy', 
-                            'property_fp':'.pkl', 'bboxes_fp': '_boxes.pkl'},
-                 keys = ('img', 'gt_instance_seg'),
+                 key2suffix ={'img_fp': '_image.nii', 
+                                'seg_fp': '_instance.nii', 
+                                'roi_fp':'_ins2cls.json'},
+                 keys = ('img', 'seg'),
                  exclude_pids = None,
                  json_filename = 'dataset.json',
                  fn_spliter = ['_', 1],
-                 pos_neg_ratio = 0.5, 
+                 roi_cls_binary = True,
+                 exclude_classes = None, 
+                
                  ):
 
         self.key2suffix = key2suffix
@@ -122,7 +122,8 @@ class CustomDatasetNN(Dataset):
         self.exclude_pids = exclude_pids
         self.json_filename  = json_filename
         self.fn_spliter = fn_spliter
-        self.pos_neg_ratio = pos_neg_ratio
+        self.roi_cls_binary = roi_cls_binary
+        self.exclude_classes = exclude_classes
 
         # load annotations
         self.img_infos = self._img_list2dataset(self.img_dir, mode = self.split, key2suffix = key2suffix)
@@ -146,41 +147,24 @@ class CustomDatasetNN(Dataset):
         else: return len(self.instance_cache)
 
     def _img_list2dataset(self, data_folder:str, mode = 'train ', 
-                        key2suffix = {'img_fp': '.npy', 'seg_fp': '_seg.npy', 
-                            'property_fp':'.pkl', 'bboxes_fp': '_boxes.pkl'},):
+                        key2suffix = {'img_fp': '_image.nii', 
+                                      'seg_fp': '_instance.nii', 
+                                       'roi_fp':'_ins2cls.json'}):
         """
 
-        img_fp = f"{c}.npy"
+        img_fp = f"{c}_image.nii"
             np.ndarray
-        seg_fp = f"{c}_seg.npy"
+        seg_fp = f"{c}_instance.npy"
             np.ndarray
-        property_fp = "{c}.pkl"
-            original_size_of_raw_data :	 [380 512 512]
-            original_spacing :	 [1.         0.79296875 0.79296875]
-            list_of_data_files :	 [PosixPath('/data/lung_algorithm/data/nnDet_data/Task020FG_RibFrac/raw_splitted/imagesTr/RibFrac343_0000.nii.gz')]
-            seg_file :	 /data/lung_algorithm/data/nnDet_data/Task020FG_RibFrac/raw_splitted/labelsTr/RibFrac343.nii.gz
-            itk_origin :	 (-226.603515625, -389.103515625, -822.7999877929688)
-            itk_spacing :	 (0.79296875, 0.79296875, 1.0)
-            itk_direction :	 (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
-            instances :	 {'1': 0, '2': 0, '3': 0, '4': 0, '5': 0}
-            crop_bbox :	 [(0, 380), (0, 512), (0, 512)]
-            classes :	 [-1.  0.  1.  2.  3.  4.  5.]
-            size_after_cropping :	 (380, 512, 512)
-            size_after_resampling :	 (304, 550, 550)
-            spacing_after_resampling :	 [1.25       0.73828101 0.73828101]
-            use_nonzero_mask_for_norm :	 OrderedDict([(0, False)])
-        bboxes_fp = f"{c}_boxes.pkl"
+        roi_fp = "{c}_ins2cls.json"
 
-
-                # x1, y1, x2, y2, z1, z2
-        boxes :	 [[ 23 314  33 341  76  91]
-                [166 164 185 211 377 414]
-                [141 159 162 225 388 442]
-                [117 175 138 234 427 462]
-                [101 201 121 266 451 478]]
-        instances :	 [1, 2, 3, 4, 5]
-        labels :	 [0, 0, 0, 0, 0]
-
+        rois: list[dict(), dict(), ...]
+        one_dict: {'instance' : int, start from 1
+                    'bbox': list(int), e.g. (x1, y1, z1, x2, y2, z2)
+                    'class': int, start from 1 
+                    'center' : list(int), (x, y, z)
+                    'spine_boudnary': list(int), (x, y)
+                    }
         return 
             file_list : [{'image' : img_path, 'label' : label_path}, ...]
         """
@@ -238,6 +222,7 @@ class CustomDatasetNN(Dataset):
         """
         Build up cache for sampling, only cases with lesions
 
+        rois: list[dict(), dict(), ...]
         Returns:
             Dict[str, List]: cache for sampling
                 `case`: list with all case identifiers
@@ -245,13 +230,17 @@ class CustomDatasetNN(Dataset):
         """
         instance_cache = []
         print("Building Sampling Cache for Dataset")
+        is_exclude = isinstance(self.exclude_classes, (tuple, list))
         for cix, item in enumerate(self.img_infos):
-            instances = load_pickle(item['bboxes_fp'])["instances"] 
-            if cix < 2: 
-                print(f'{item} \n[BuildCache] {cix} {instances} ')
-            if instances:
-                for instance_id in instances:
-                    instance_cache.append((cix, instance_id))
+            rois = load_json(item['roi_fp'])
+            if cix < 1: 
+                print(f'{item} \n[BuildCache] {cix}th')
+                _ = [print('\t', k, v)  for roi in rois for k, v in roi.items()]
+            if rois:
+                for roi in rois:
+                    if is_exclude and roi['class'] in self.exclude_classes:
+                        continue 
+                    instance_cache.append((cix, roi['instance']))
         return instance_cache
 
     # def pre_pipeline(self, results):
@@ -281,10 +270,12 @@ class CustomDatasetNN(Dataset):
         pos_sample_info = self.img_infos[cix]
         pos_sample_info['instance_ix'] = c_ins_ix #instance_ix
         
-        cix4neg = random.randrange(0, len(self.img_infos))
-        neg_sample_info = self.img_infos[cix4neg]
-        neg_sample_info['instance_ix'] = -1
-        results = [pos_sample_info, neg_sample_info]
+        results = pos_sample_info
+        # for neg_ix in range(1):
+        #     cix4neg = random.randrange(0, len(self.img_infos))
+        #     neg_sample_info = self.img_infos[cix4neg]
+        #     neg_sample_info['instance_ix'] = - (1 + neg_ix)
+        #     results.append(neg_sample_info)
         # self.pre_pipeline(results)
         return self.pipeline(results)
 
@@ -309,43 +300,49 @@ class CustomDatasetNN(Dataset):
         pass
 
     def get_anno_infos(self):
-        """Get ground truth segmentation maps for evaluation."""
+        """Get ground truth segmentation maps for evaluation.
+
+            roi_fp: contains
+            # rois: list[dict(), dict(), ...]
+            # one_dict: {'instance' : int, start from 1
+            #             'bbox': list(int), e.g. (x1, y1, z1, x2, y2, z2)
+            #             'class': int, start from 1 
+            #             'center' : list(int), (x, y, z)
+            #             'spine_boudnary': list(int), (x, y) NOTE: x0x1y0y1, not x0y0x1y1
+            #             }
+        
+        """
         # if self.gt_seg_maps is not None:
         #     return self.gt_seg_maps
         if getattr(self, 'anno_by_pids', None) is not None:
             return getattr(self, 'anno_by_pids', None)
 
-        array_zyx2xyz = lambda arr: arr.transpose(0, 3, 2, 1) #[..., ::-1]
         # num_slices = self.pipeline.transforms[0].num_slice
         anno_by_pids = OrderedDict()
         for i, img_info in enumerate(self.img_infos):
-            mask_fp, prop_fp, bbox_fp = Path(img_info['seg_fp']), img_info['property_fp'], img_info['bboxes_fp']
+            mask_fp, roi_fp = Path(img_info['seg_fp']), img_info['roi_fp']
             subdir = str(mask_fp.stem) #view2axis[self.view_channel]
             # 1. load seg mask 
-            # img_full, af_mat = IO4Nii.read(fp, verbose=True, axis_order= None, dtype=np.uint8)
-            img_3d = array_zyx2xyz(np.load(mask_fp, allow_pickle=True))[0]
-            gt_seg_map  = np.array(img_3d > 0, dtype = np.uint8)
+            img_full, af_mat = IO4Nii.read(mask_fp, verbose=False, axis_order= None, dtype=np.uint8)
+            gt_seg_map  = np.array(img_full > 0, dtype = np.uint8)
 
             # 2. load property, image meta dict
-            meta_data = load_pickle(prop_fp)
-            af_mat = property2affine(meta_data)
-
-            # 3. load bboxes
-            bboxes_info = load_pickle(bbox_fp)
-            if np.array(bboxes_info['boxes']).size ==0 : 
-                bboxes_info['boxes'] = np.zeros((0, 6))
+            roi_info_list = load_json(roi_fp)
+            if len(roi_info_list) ==0 : 
+                bbox_nx6 = np.zeros((0, 6))
+                label_nx1 = np.zeros((0, 1))
             else:
-                bboxes_info['boxes'] = np.array([convert_coord_nn(a) for a in bboxes_info['boxes']])
-            bboxes_info['labels'] = np.array(bboxes_info['labels']) #+ 1 #NOTE: det_results are organized in list by class 
+                bbox_nx6 = np.array([roi['bbox'] for roi in roi_info_list])
+                label_nx1 = np.array([0 if self.roi_cls_binary else roi['class'] for roi in roi_info_list])
             # pdb.set_trace()
             anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})
             anno_by_pids[subdir]['gt_seg'] = gt_seg_map
-            anno_by_pids[subdir]['bboxes'] = bboxes_info['boxes']
-            anno_by_pids[subdir]['labels'] = bboxes_info['labels']
+            anno_by_pids[subdir]['bboxes'] = bbox_nx6
+            anno_by_pids[subdir]['labels'] = label_nx1
             if i < 2: 
                 print_tensor(f'\n[GT] {subdir} ', gt_seg_map) #
                 print('[GT] af matrix\n', af_mat)
-                print('[GT] bboxes info', bboxes_info)
+                print('[GT] bboxes info', roi_info_list)
 
         self.anno_by_pids = anno_by_pids
         return anno_by_pids
@@ -357,7 +354,7 @@ class CustomDatasetNN(Dataset):
         """Evaluate the dataset. will be called by core/evalutation/eval_hooks.py
 
         Args:
-            results (list): Testing results of the dataset.
+            results (list[tuple(seg_prob, aux_prob, cls_prob)]): Testing results of the dataset.
             metric (str | list[str]): Metrics to be evaluated.
             logger (logging.Logger | None | str): Logger used for printing
                 related information during evaluation. Default: None.
@@ -369,12 +366,11 @@ class CustomDatasetNN(Dataset):
         if not isinstance(metric, str):
             assert len(metric) == 1
             metric = metric[0]
-        allowed_metrics = ['recall', 'mAP']
+        allowed_metrics = ['recall', 'mAP'] #'mIoU'
         if metric not in allowed_metrics:
             raise KeyError('metric {} is not supported'.format(metric))
         eval_results = {}
         anno_by_pids = self.get_anno_infos()
-        num_classes_seg = 1
 
         pred_det_list = [a[0] for a in results]
         # bbox_results from outer to inner: chunk, mini-batch, class
@@ -400,7 +396,6 @@ class CustomDatasetNN(Dataset):
             eval_results['mAP'] = sum(mean_aps) / len(mean_aps)
         elif metric == 'recall':
             gt_bboxes = [ann['bboxes'] for ann in annotations]
-            pdb.set_trace()
             pred_det_list = [b[0][0] for b in pred_det_list]
             recalls = eval_recalls_3d(gt_bboxes, pred_det_list, proposal_nums, iou_thr, logger=logger)
             for i, num in enumerate(proposal_nums):
@@ -411,17 +406,19 @@ class CustomDatasetNN(Dataset):
                 for i, num in enumerate(proposal_nums):
                     eval_results[f'AR@{num}'] = ar[i]
 
-        pred_seg_list = [a[1] for a in results]
+        num_classes_seg = max(len(self.CLASSES), 2)
+        pred_seg_list = [a[1] for a in results] # model return tuple(seg_mask_4d, aux_mask_4d, cls_out)
         gt_seg_list = [info['gt_seg'] for pid, info in anno_by_pids.items()]
+        # pdb.set_trace()
         seg_metric_detail, seg_metric_cls = segmentation_performance(pred_seg_list, gt_seg_list, num_classes_seg)
         # pdb.set_trace()
         seg_mean_results = organize_seg_performance(seg_metric_cls, self.CLASSES[:num_classes_seg], 
                                                     logger=logger) # 
 
         for k, seg_tb in seg_metric_detail.items():
-            print(f'[SegMetric]{k}\n', seg_tb[:5])
+            print(f'[SegMetric]{k}\n', seg_tb[:4])
         
-        return eval_results
+        return eval_results #, seg_metric_detail
 
 
 def overlap_handler_zaxis(tensor_list, indices_list, stack_axis = 0, verbose = True):
@@ -497,3 +494,52 @@ def logit2mask(seg_logit):
     seg_pred = seg_logit.argmax(dim=1) if seg_logit.shape[1] > 1 else seg_logit.squeeze(1) > 0.5
     seg_pred = seg_pred.int().cpu().numpy()
     return seg_pred
+
+
+
+def load_list_detdj(data_folder:str,  mode = 'train ', 
+                    json_filename = 'dataset.json', 
+                    exclude_pids = None,
+                    key2suffix = {'img_fp': '_image.nii', 
+                                    'seg_fp': '_instance.nii', 
+                                    'roi_fp':'_ins2cls.json'}):
+    """
+
+    img_fp = f"{c}_image.nii"
+        np.ndarray
+    seg_fp = f"{c}_instance.npy"
+        np.ndarray
+    roi_fp = "{c}_ins2cls.json"
+
+    rois: list[dict(), dict(), ...]
+    one_dict: {'instance' : int, start from 1
+                'bbox': list(int), e.g. (x1, y1, z1, x2, y2, z2)
+                'class': int, start from 1 
+                'center' : list(int), (x, y, z)
+                'spine_boudnary': list(int), (x, y)
+                }
+    return 
+        file_list : [{'image' : img_path, 'label' : label_path}, ...]
+    """
+    file_list = list(), list()
+    # a = [print(self.map_key(k)) for k in keys]
+    js_fp = os.path.join(data_folder, json_filename)
+    if not osp.exists(js_fp): return file_list
+    with open(js_fp, 'r') as load_f:
+        load_dict = json.load(load_f)
+    case_fns = load_dict['training'] if mode == 'train' else load_dict['test']
+
+    pid2pathpairs = []
+    for ix, part_fn in enumerate(case_fns):
+        cid = part_fn.split(os.sep)[-1]
+        if ix < 2: print('Check cid', cid)
+        if exclude_pids and (cid in exclude_pids): 
+            print('Exclude ', cid)
+            continue
+        this_holder = {'cid': cid}
+        for k, suffix in key2suffix.items(): 
+            this_holder[k] = osp.join(data_folder, part_fn + suffix)
+            if ix < 3: print(f'\t{k}', this_holder[k])
+        pid2pathpairs.append(this_holder)
+    pathpairs_orderd = sorted(pid2pathpairs, key = lambda x: x['cid']) # TODO: debug
+    return pathpairs_orderd

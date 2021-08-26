@@ -239,6 +239,19 @@ axis_reorder_map4d = {'xzy' : (0, 1, 3, 2), #xczy xcyz
                       'yzx' : (3, 1, 0, 2)} #yczx xcyz
 # image and mask are already saved as nii
 
+def affine_in_sitk_obj(sitk_obj):
+    spacing = np.array(sitk_obj.GetSpacing(), dtype = np.float32).reshape(1, 3)
+    for i in range(2): spacing[0, i] *= -1 # LPS+ > RAS+, only xy are reversed
+    origin = np.array(sitk_obj.GetOrigin(), dtype = np.float32)
+    direction = np.array(sitk_obj.GetDirection())
+    affine_3x3 = direction.reshape(3, 3) * spacing
+    # image_3d = image_3d.transpose(2, 1, 0)
+    affine_mat_raw = np.eye(4, dtype = float )
+    affine_mat_raw[:3,:3] = affine_3x3
+    # for i in range(3): affine_matrix[i, i]  = spacing[i]
+    for i in range(3): affine_mat_raw[i, -1] = origin[i]
+    return affine_mat_raw
+
 class IO4Nii(object):
 
     """
@@ -260,43 +273,29 @@ class IO4Nii(object):
     When conversion to nifti, we need to transform LPS+ to RAS+ 
     by setting the pixel spacing on axial/xy plane to negative. 
 
-
-    Transform all 
-    [[ 0.          0.         -0.93945312  0.        ]
-    [ 0.         -0.93945312  0.          0.        ]
-    [-1.          0.          0.          0.        ]
-    [ 0.          0.          0.          1.        ]]
-
-    To, both affine_matrix and image_tensor
-    [[-0.93945312  0.          0.          0.        ]
-    [ 0.         -0.93945312  0.          0.        ]
-    [ 0.          0.         -1.0         0.        ]
-    [ 0.          0.          0.          1.        ]]
-
     """
     @staticmethod
-    def read(img_nii_fp, verbose = True, axis_order = None, dtype = None):
+    def read(img_nii_fp, verbose = True, axis_order = None, dtype = None, 
+             row_first = True):
  
         assert axis_order in list(axis_order_map)
 
         try:
-            # if verbose: print('NIBABEL')
+            if verbose: print('NIBABEL')
             nii_obj = nb.load(img_nii_fp)
-            affine_mat_raw = nii_obj.affine
+            affine_mat_raw = nii_obj.affine.astype(np.float32)
             image_3d_raw = nii_obj.get_fdata()
-        except EOFError:
-            # if verbose: print('SITK')
+            # permute_order = axis_order_map[axis_order]
+            # image_3d_raw = image_3d_raw.transpose(permute_order)
+            # axis_order = None
+
+        except EOFError or OSError:
+            # print('[Error] IO4Nii.read ', img_nii_fp)
+            print('[IO4Nii] sitk read', img_nii_fp)
             sitk_obj = sitk.ReadImage(img_nii_fp)
             image_3d_raw = sitk.GetArrayFromImage(sitk_obj)
-            spacing = np.array(sitk_obj.GetSpacing()).reshape(1, 3)
-            origin = list(sitk_obj.GetOrigin())
-            direction = list(sitk_obj.GetDirection())
-            affine_3x3 = direction.reshape(3, 3) * spacing
-            # image_3d = image_3d.transpose(2, 1, 0)
-            affine_mat_raw = np.eye(4)
-            affine_mat_raw[:3,:3] = affine_3x3
-            # for i in range(3): affine_matrix[i, i]  = spacing[i]
-            for i in range(3): affine_mat_raw[i, -1] = origin[i]
+            image_3d_raw = np.transpose(image_3d_raw, (2,1,0))
+            affine_mat_raw = affine_in_sitk_obj(sitk_obj)
 
         # In the patient-centered (world) coordinate system, where x pointing from right to left, y from anterior to posterior, z from feet to head
         # the first 3 rows of the affine matrix are base vectors/directions for xyz axis of the tensor.  
@@ -316,14 +315,21 @@ class IO4Nii(object):
         #  [ 0.          0.         -1.0         0.        ]
         #  [ 0.          0.          0.          1.        ]]
 
-        xyz_dim_index = list(np.argmax(np.abs(affine_mat_raw[:3, :3]), axis= 1))
-        xyz_sign = [int(np.sign(-1 * affine_mat_raw[d,i] )) for i, d in enumerate(xyz_dim_index)]
-        image_3d_raw = image_3d_raw[::xyz_sign[0], ::xyz_sign[1], ::xyz_sign[2]]
+        # between axis order
+        xyz_dim_index = list(np.argmax(np.abs(affine_mat_raw[:3, :3]), axis= 0 if row_first else 1))
         image_3d_xyz = np.transpose(image_3d_raw, axes = xyz_dim_index)
         affine_matrix = np.copy(affine_mat_raw)
         for i, d in enumerate(xyz_dim_index): 
-            affine_matrix[i, i], affine_matrix[i, d] = affine_mat_raw[i, d], affine_mat_raw[i, i]
+            if row_first:
+                affine_matrix[i, i], affine_matrix[d, i] = affine_mat_raw[d, i], affine_mat_raw[i, i]
+            else:
+                affine_matrix[i, i], affine_matrix[i, d] = affine_mat_raw[i, d], affine_mat_raw[i, i]
         affine_matrix = np.round(affine_matrix, decimals = 6)
+
+        # within axis direction
+        xyz_sign = [int(np.sign(affine_mat_raw[i,i] * (-1 if i <2 else 1))) for i in range(3)]
+        xyz_sign = [a if a!= 0 else 1 for a in xyz_sign]
+        image_3d_xyz = image_3d_xyz[::xyz_sign[0], ::xyz_sign[1], ::xyz_sign[2]]
         if verbose: 
             print('\n\n[IO4Nii] affine raw\n', affine_mat_raw)
             print('[IO4Nii] affine xyz\n', affine_matrix)
@@ -359,27 +365,24 @@ class IO4Nii(object):
         return image_shape_xyz
 
     @staticmethod
-    def write(image_3d, store_root, file_name, affine_matrix = None, nii_obj= None,
+    def write(mask_3d, store_root, file_name, affine_matrix = None, nii_obj= None,
                 is_compress = True, axis_order = None):
         """
-        
         must transform the input tensor to xyz, which then can be properly saved.
-        
+        and affine matrix are diagonal 
         将输入图像存储为nii
-        输入维度是 x y z; natural/intuitive to human perception 
-                 from left to right; from anterior to posteiro, from head to feet
+        输入维度是z, r=y, c=x
         输出维度是x=c, y=r, z
-        :param image_3d:
+        :param mask_3d:
         :param store_root:
         :param file_name:
-        :param affine_matrix: 4x4, the diagnal elements are normally negative
         :param nii_obj:
         :return:
         """
         extension = 'nii.gz' if is_compress else 'nii'
         permute_order = axis_reorder_map[axis_order]
         if permute_order is not None:
-            image_3d = image_3d.transpose(permute_order)
+            mask_3d = mask_3d.transpose(permute_order)
         # mask_3d = mask_3d[::-1,::-1,:] # be cautious to uncomment this line
         store_path = osp.join(store_root, '.'.join([file_name, extension]))
         if nii_obj is None:
@@ -387,11 +390,11 @@ class IO4Nii(object):
                 affine_matrix = np.eye(4)
                 for i in range(2): affine_matrix[i, i] = -1
             xyz_dim_index = list(np.argmax(np.abs(affine_matrix[:3, :3]), axis= 1))
-            xyz_sign = [int(np.sign(-1 * affine_matrix[d,i] )) for i, d in enumerate(xyz_dim_index)]
+            xyz_sign = [int(np.sign(affine_matrix[d,i] * (-1 if i <2 else 1))) for i, d in enumerate(xyz_dim_index)]
             # print(affine_matrix, x_col_sign, y_row_sign)
-            nb_ojb = nb.Nifti1Image(image_3d[::xyz_sign[0], ::xyz_sign[1], ::xyz_sign[2]], affine_matrix)
+            nb_ojb = nb.Nifti1Image(mask_3d[::xyz_sign[0], ::xyz_sign[1], ::xyz_sign[2]], affine_matrix)
         else:
-            nb_ojb = nb.Nifti1Image(image_3d, nii_obj.affine, nii_obj.header)
+            nb_ojb = nb.Nifti1Image(mask_3d, nii_obj.affine, nii_obj.header)
 
         nb.save(nb_ojb, store_path)
         return store_path

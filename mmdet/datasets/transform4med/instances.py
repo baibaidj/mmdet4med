@@ -22,7 +22,7 @@ from typing import Dict, Union, Sequence, Tuple, Optional
 
 from .base import AbstractTransform
 from ..builder import PIPELINES
-from .io4med import print_tensor, pdb
+from .io4med import print_tensor, pdb, os
 
 
 @PIPELINES.register_module()
@@ -84,6 +84,7 @@ class Instances2Boxes(AbstractTransform):
         self.instance_key = instance_key
         self.present_instances = present_instances
         self.meta_key = meta_key
+        # self.just1cls = just1cls
         self.verbose = verbose
 
     def forward(self, data) -> dict:
@@ -109,8 +110,14 @@ class Instances2Boxes(AbstractTransform):
             # inst_in_map = [(str(int(a.detach().item())) not in inst2class_map) for a in instance_idx]
             # if any(inst_in_map): 
             #     print(data[self.meta_key][batch_idx]['filename_or_obj'])
-            _classes = get_instance_class_from_properties(instance_idx, inst2class_map) 
-            _classes = _classes.to(device=_boxes.device) + 1 # class start from 0
+            try: 
+                _classes = get_instance_class_from_properties(instance_idx, inst2class_map) 
+            except KeyError:
+                _classes = torch.tensor([0 for on in instance_idx], device = instance_element.device)
+                pid = data[self.meta_key][batch_idx]['filename_or_obj'].split(os.sep)[-1]
+                print_tensor(f'[Inst2Box] key error pid {pid} sample tensor', instance_element )
+            _classes = _classes.to(device=_boxes.device) # class start from 0
+            # if self.just1cls is not None: _classes = self.just1cls
             # if self.verbose: print_tensor(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
             #                         + f'ins {instance_idx}  cls {_classes}, instmask', instance_element)
             data[self.box_key].append(_boxes)
@@ -224,7 +231,7 @@ def get_instance_class_from_properties(
         Tensor: extracted instance classes
     """
     instance_idx, _ = instance_idx.sort()
-    classes = [int(map_dict[str(int(idx.detach().item()))]) for idx in instance_idx]
+    classes = [int(map_dict[int(idx.detach().item())]) for idx in instance_idx]
     return torch.tensor(classes, device=instance_idx.device)
 
 
@@ -296,7 +303,7 @@ class Instances2SemanticSeg(AbstractTransform):
                                       instance_idx=_present_instances[batch_idx],
                                       out=semantic[batch_idx])
             if self.verbose: 
-                print_tensor(f'[Inst2Seg] bix {batch_idx} instance raw', ins_mask)
+                print_tensor(f'\n[Inst2Seg] bix {batch_idx} instance raw', ins_mask)
                 print_tensor(f'[Inst2Seg] bix {batch_idx} semantic raw', semantic[batch_idx])
         data[self.seg_key] = semantic
         return data

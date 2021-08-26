@@ -427,11 +427,11 @@ def reset_offset_bbox_batch(results, img_metas):
     assert len(results) == len(img_metas)
 
     for i, (img_result, img_meta) in enumerate(zip(results, img_metas)):
-        det_preds, seg_preds = img_result
+        det_box_nx7, det_label = img_result
         tile_origin  = img_meta.get('tile_origin', None)
         if tile_origin is None: continue
-        det_preds_new = _apply_offsets_to_boxes(det_preds, tile_origin)
-        results[i] = tuple([det_preds_new, seg_preds])
+        det_box_nx7_new = _apply_offsets_to_boxes(det_box_nx7, tile_origin)
+        results[i] = tuple([det_box_nx7_new, det_label])
 
     return results
 

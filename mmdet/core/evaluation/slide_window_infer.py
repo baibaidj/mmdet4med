@@ -91,7 +91,8 @@ class BboxSegEnsembler1Case(object):
         labels_raw = torch.cat([a[1] for a in self.det_storage], axis = 0)
 
         if verbose and bboxes_raw.shape[0]> 0: 
-            print_tensor('\n[SlideInfer] integrate det bbox raw', bboxes_raw)
+            print_tensor('\n[SlideInfer] integrate det bbox raw', bboxes_raw[..., :6])
+            print_tensor('\n[SlideInfer] integrate det score raw', bboxes_raw[..., 6])
             print_tensor('[SlideInfer] integrate det label raw', labels_raw)
         
         bboxes, labels = postprocess_detect_results((bboxes_raw, labels_raw), 
@@ -103,7 +104,8 @@ class BboxSegEnsembler1Case(object):
                 bboxes[:, [dim, dim + 3]] += - slice_dim[0]
                 bboxes[:, [dim, dim + 3]] = torch.max(bboxes[:, [dim, dim + 3]], slice_dim[1])
         if verbose and bboxes.shape[0]> 0:  
-            print_tensor('[SlideInfer] integrate det bbox refine', bboxes)
+            print_tensor('[SlideInfer] integrate det bbox refine', bboxes[..., :6])
+            print_tensor('[SlideInfer] integrate det score refine', bboxes[..., 6])
             print_tensor('[SlideInfer] integrate det label refine', labels)
         return (bboxes, labels)
 
@@ -141,6 +143,10 @@ class BboxSegEnsembler1Case(object):
             if rescale and (ready_img_shape != origin_shape):
                 for i, (f, o) in  enumerate(zip(shape_post_resize, origin_shape)):
                     this_bboxes[:, [i, i+3]] = this_bboxes[:, [i, i+3]] * o/f
+        
+        print_tensor('[SlideIn] postprocess bbox', this_bboxes[:, :6])
+        print_tensor('[SlideIn] postprocess score', this_bboxes[:, 6])
+        print_tensor('[SlideIn] postprocess label', this_label)
         return (this_bboxes, this_label)
 
     def offset_preprocess4seg(self, seg_result, img_meta, ready_img_shape, rescale):
@@ -179,6 +185,7 @@ class BboxSegEnsembler1Case(object):
                                         mode=self.get_output_mode(), #'bilinear'
                                         align_corners=self.align_corners,
                                         warning=False)
+        print_tensor('[SlideIn] postprocess seg', this_seg_5d)
         return this_seg_5d
 
 

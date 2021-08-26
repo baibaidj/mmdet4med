@@ -17,6 +17,7 @@ from .smooth_l1_loss import L1Loss, SmoothL1Loss, l1_loss, smooth_l1_loss
 from .utils import reduce_loss, weight_reduce_loss, weighted_loss
 from .varifocal_loss import VarifocalLoss
 from .combo_loss import ComboLossMed
+from .iou_loss_3d import GIoULoss3D
 
 __all__ = [
     'accuracy', 'Accuracy', 'cross_entropy', 'binary_cross_entropy',
@@ -28,5 +29,5 @@ __all__ = [
     'l1_loss', 'isr_p', 'carl_loss', 'AssociativeEmbeddingLoss',
     'GaussianFocalLoss', 'QualityFocalLoss', 'DistributionFocalLoss',
     'VarifocalLoss', 'KnowledgeDistillationKLDivLoss', 'SeesawLoss', 
-    'ComboLossMed'
+    'ComboLossMed', 'GIoULoss3D'
 ]

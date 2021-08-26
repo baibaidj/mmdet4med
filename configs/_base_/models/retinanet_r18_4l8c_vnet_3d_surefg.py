@@ -1,5 +1,5 @@
 _base_ = [
-    '../datasets/ribfrac_instance_semantic_inhouse.py',
+    '../datasets/ribfrac_instance_semantic_inhouse_surefg.py',
 ]
 num_classes = 1
 # model settings
@@ -64,14 +64,14 @@ model = dict(
         loss_cls=dict(
             type='CrossEntropyLoss', 
             use_sigmoid=False, 
-            loss_weight=3.0, class_weight = (1.0, 0.5), 
+            loss_weight=4.0,  class_weight = (1.0, 0.66), 
             verbose = False),
             # type='FocalLoss',
             # use_sigmoid=True,
             # gamma=2.0,
             # alpha=0.25, verbose = True, 
             # loss_weight=1.0),
-        loss_bbox=dict(type='SmoothL1Loss', loss_weight=3.0)),
+        loss_bbox=dict(type='SmoothL1Loss', loss_weight=4.0)),
 
     seg_head = dict(
         type='FCNHead3D',  verbose = False, 
@@ -125,18 +125,18 @@ model = dict(
     # model training and testing settings
     train_cfg=dict(
         assigner=dict(
-            type='MaxIoUAssigner', # could be replaced by ATSSAssigner
+            type='MaxIoUAssigner',
             pos_iou_thr=0.5,
             neg_iou_thr=0.2,
-            min_pos_iou=0.3, #min_pos_iou=0.3,
+            min_pos_iou=0.3,
             ignore_iof_thr=-1, verbose = False,
             iou_calculator=dict(type='BboxOverlaps3D')
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=32, pool_size = 20,
+                num=32, pool_size = 32,
                 pos_fraction=0.4,
-                neg_pos_ub=-1,
+                neg_pos_ub=-1, 
                 add_gt_as_proposals=False),
         allowed_border=-1,
         pos_weight=1.0,

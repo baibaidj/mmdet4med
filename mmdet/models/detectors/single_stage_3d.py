@@ -1,19 +1,20 @@
-from mmdet.utils.resize import list_dict2dict_list
 import warnings
 
 import torch, pdb, copy
-from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base3d import BaseDetector3D
 from ...datasets.pipelines import Compose
 from ..utils import print_tensor
-from ...utils.resize import resize, resize_3d
+from ...utils.resize import resize_3d
+
+from mmdet.models.semantic_heads import FCNHead3D
+from mmdet.core.post_processing.bbox_nms import batched_nms_3d
+from mmdet.utils.resize import list_dict2dict_list
+from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 
 from monai.data.utils import dense_patch_slices
 from monai.utils import BlendMode, PytorchPadMode, fall_back_tuple
 from typing import Any, Callable, List, Sequence, Tuple, Union
-from mmdet.core.post_processing.bbox_nms import batched_nms_3d
-
 
 get_meta_dict  = lambda img_meta: img_meta[0]['img_meta_dict'] if isinstance(img_meta, (list, tuple)) else img_meta['img_meta_dict']
 
@@ -64,10 +65,11 @@ class SingleStageDetector3D(BaseDetector3D):
         bbox_head.update(train_cfg=train_cfg)
         bbox_head.update(test_cfg=test_cfg)
         self.bbox_head = build_head(bbox_head)
+        # pdb.set_trace()
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
-        self.seg_head = build_head(seg_head) if seg_head is not None else None
-        self.seg_num_classes = getattr(self.seg_head, 'num_classes', 2)
+        self.seg_head: FCNHead3D = build_head(seg_head) if seg_head is not None else None
+        self.seg_num_classes = getattr(self.seg_head, 'cls_out_channels', 2)
         self.gpu_pipelines = Compose(gpu_aug_pipelines + mask2bbox_cfg) \
                                     if mask2bbox_cfg is not None else None
         self.verbose = verbose
@@ -264,19 +266,16 @@ class SingleStageDetector3D(BaseDetector3D):
                     m['scale_factor'] = [1 for _ in range(Shaper.spatial_dim * 2)]
                 window_data = torch.cat([inputs[win_slice] for win_slice in tiles_slicer]).to(device)
                 det_results, seg_results = self.simple_test_tile(window_data, img_meta_tiles)  # batched patch segmentation
-                if self.verbose and six % 30 ==0 : 
-
-                    print_tensor(f'\n[SliceInfer] seg results batch{bix} win{six}', seg_results)
-                    # list[tuple(), tuple] # sample 
-                    for det in det_results:
-                        print_tensor(f'\n[SliceInfer] det result bbox', det[0])
-                        print_tensor(f'\n[SliceInfer] det result score', det[1])
-
+                # if self.verbose and six % 30 ==0 :  #self.verbose and  six % 30 ==0 
+                #     print_tensor(f'\n[SliceInfer] seg results batch{bix} win{six}', seg_results)
+                #     for bi, det in enumerate(det_results):
+                #         print_tensor(f'\n[SliceInfer] bix {bi} det result bbox', det[0])
+                #         print_tensor(f'\n[SliceInfer] bix {bi} det result score', det[1])
+                # pdb.set_trace()
                 ensembler.store_det_output(det_results)
                 ensembler.update_seg_output_batch(seg_results, tiles_slicer)
             
-            # pdb.set_trace()
-            det_result_img = ensembler.finalize_det_bbox(verbose=self.verbose) # (bboxes_nx7, labels_nx1)
+            det_result_img = ensembler.finalize_det_bbox(verbose=False) # (bboxes_nx7, labels_nx1)
             seg_result_img = ensembler.finalize_segmap() # 1CHWD
             # print_tensor(f'[SliceInfer] seg results ensemble {bix}', seg_result_img)
             det_result_img = ensembler.offset_preprocess4detect(det_result_img, img_meta, 
@@ -333,15 +332,15 @@ class SingleStageDetector3D(BaseDetector3D):
             seg_pred = seg_results.cpu() #.float().cpu().numpy()
         else:
             seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
-            # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
+            print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
             seg_pred = seg_pred.to(torch.uint8).cpu()
             # unravel batch dim
             seg_pred = list(seg_pred)
         
-        bbox_results = [
-            bbox2result3d(det_bboxes, det_labels, self.bbox_head.num_classes)
-            for det_bboxes, det_labels in det_results
-        ] # most outer image level; next inner class level; most inner 
+        # pdb.set_trace()
+        bbox_results = [bbox2result3d(det_bboxes, det_labels, self.bbox_head.num_classes) 
+                        for det_bboxes, det_labels in det_results]
+         # most outer image level; next inner class level; most inner 
         # pdb.set_trace()
         return bbox_results, seg_pred
 

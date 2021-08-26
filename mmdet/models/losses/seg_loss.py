@@ -32,6 +32,7 @@ def binary_ce_general(pred,
         if pred.size(1) == 1: label = label.unsqueeze(1)
         else:label = One_Hot(pred.size(1))(label.contiguous())#_expand_onehot_labels(label, weight, pred.size(-1))
 
+    # pdb.set_trace()
     # print_tensor('[BCE] pred', pred)
     # print_tensor('[BCE] label', label)
     B, C, *spatial_size = pred.shape
@@ -42,13 +43,17 @@ def binary_ce_general(pred,
     # weighted element-wise losses
     if weight is not None:
         weight = weight.float()
-    loss_bsc = F.binary_cross_entropy_with_logits(
-        pred, label.float(), pos_weight=class_weight, reduction='none')
-    loss = torch.mean(loss_bsc, dim = -1)
+    loss_bce = F.binary_cross_entropy_with_logits(pred, label.float(), 
+                pos_weight=class_weight, reduction='none')
+    # fg_mask = label> 0
+    # fg_pred = pred[fg_mask]
+    # fg_label = label[fg_mask]
+    # fg_loss = loss_bce[fg_mask]
+    # loss = torch.mean(loss_bsc, dim = -1)
     # print_tensor(f'[BCE] non reduce loss', loss)
     # do the reduction for the weighted loss
     loss = weight_reduce_loss(
-        loss, weight, reduction=reduction, avg_factor=avg_factor)
+        loss_bce, weight, reduction=reduction, avg_factor=avg_factor)
 
     return loss
 

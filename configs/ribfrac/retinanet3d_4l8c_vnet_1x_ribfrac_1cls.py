@@ -5,7 +5,7 @@ _base_ = [
 ]
 
 find_unused_parameters=True
-load_from = None # 'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn/latest.pth'
+load_from = 'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_1cls/latest.pth'
 resume_from = None #'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft/latest.pth' 
 
 # optimizer
@@ -20,11 +20,12 @@ optimizer_config = dict(_delete_=True, type='Fp16OptimizerHook', loss_scale=512.
 runner = dict(type='EpochBasedRunner', max_epochs=12)
 checkpoint_config = dict(interval=2, max_keep_ckpts = 4)
 # yapf:disable
-log_config = dict(interval=2, hooks=[
+log_config = dict(interval=10, hooks=[
                 dict(type='TextLoggerHook'), 
                 # dict(type='TensorboardLoggerHook')
                 ])
 
-evaluation=dict(interval=8, iou_thr=[0.2], proposal_nums=(10, 50, 100)) 
+evaluation=dict(interval=2, iou_thr=[0.2], proposal_nums=(10, 50, 100)) 
 # CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_1cls.py
-# CUDA_VISIBLE_DEVICES=2,4,5 PORT=29001 bash ./tools/dist_train.sh configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_1cls.py 3 --no-validatze
+# CUDA_VISIBLE_DEVICES=2,4,5 PORT=29001 bash ./tools/dist_train.sh configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_1cls.py 3 --no-validatz
+# CUDA_VISIBLE_DEVICES=1 python tools/test_med.py configs/ribfrac/retinanet3d_4l8c_vnet_1x_ribfrac_1cls.py work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_1cls/latest.pth --eval recall

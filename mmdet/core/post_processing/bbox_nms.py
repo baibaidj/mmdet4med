@@ -178,7 +178,10 @@ def multiclass_nms_3d(multi_bboxes,
                     score_factors=None,
                     return_inds=False):
     """NMS for multi-class bboxes.
-
+    NOTE: multi_score is supposed to be onehot format, 
+    namely, the label for the 0th dimension will be 0. 
+    if score only has one channel cooresponding to label 1, 
+    then the returned label of this function should be added by 1 outside
     Args:
         multi_bboxes (Tensor): shape (n, #class*6) or (n, 6)
         multi_scores (Tensor): shape (n, #class), where the last column

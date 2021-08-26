@@ -49,6 +49,8 @@ class BaseDecodeHeadMed(BaseDecodeHead):
         if kwargs['num_classes'] is None: kwargs['num_classes'] = 1
         super(BaseDecodeHeadMed, self).__init__(*args, **kwargs)
 
+        self.cls_out_channels = max(actual_num_classes, 2)
+
         self.num_classes = actual_num_classes
         self.is_3d = False if self.conv_cfg is None else (True if '3d' in self.conv_cfg.get('type', '').lower() else False)
         self.get_shape = lambda x: x.shape[-3:] if self.is_3d else x.shape[-2:]
@@ -69,7 +71,7 @@ class BaseDecodeHeadMed(BaseDecodeHead):
         if self.num_classes is None: 
             self.conv_seg = nn.Identity()
         else:
-            self.conv_seg = self.conv_final(self.final_channel, self.num_classes, kernel_size=1)
+            self.conv_seg = self.conv_final(self.final_channel, self.cls_out_channels, kernel_size=1)
 
         if self.dropout_ratio > 0:
             self.dropout = nn.Dropout3d(self.dropout_ratio) if self.is_3d else nn.Dropout2d(self.dropout_ratio)
@@ -168,7 +170,7 @@ class BaseDecodeHeadMed(BaseDecodeHead):
             ignore_index=self.ignore_index)
         if self.is_3d and seg_label.dim() == 5: seg_label = seg_label[:, acc_gt_index, ...]
         dim_order = chn2last_order(seg_logit.dim() - 2)
-        loss['acc_seg'] = accuracy(seg_logit.permute(*dim_order).reshape(-1, self.num_classes), 
+        loss['acc_seg'] = accuracy(seg_logit.permute(*dim_order).reshape(-1, self.cls_out_channels), 
                                     seg_label.reshape(-1))
         return loss
 

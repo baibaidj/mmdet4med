@@ -1,7 +1,7 @@
 import torch
-
+from mmdet.utils import print_tensor
 from .builder import IOU_CALCULATORS
-
+import pdb
 
 def cast_tensor_type(x, scale=1., dtype=None):
     if dtype == 'fp16':
@@ -214,6 +214,9 @@ def bbox_overlaps_3d(bboxes1, bboxes2, mode='iou', is_aligned=False, eps=1e-6):
     # area2 = (bboxes2[..., 2] - bboxes2[..., 0]) * ( bboxes2[..., 3] - bboxes2[..., 1])
     area1 = length_in_box(bboxes1, 3, 0) * length_in_box(bboxes1, 4, 1) * length_in_box(bboxes1, 5, 2)
     area2 = length_in_box(bboxes2, 3, 0) * length_in_box(bboxes2, 4, 1) * length_in_box(bboxes2, 5, 2)
+    # area1_torch = torch.prod(bboxes1[:, 3:6] - bboxes1[:, 0:3], dim = 1)
+    # print_tensor('[IOU] a1', area1)
+    # print_tensor('[IOU] a2', area2)
 
     if is_aligned:
         lt = torch.maximum(bboxes1[..., :3], bboxes2[..., :3])  # [B, rows, 3] # left top

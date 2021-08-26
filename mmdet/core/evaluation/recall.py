@@ -3,9 +3,9 @@ from collections.abc import Sequence
 import numpy as np
 from mmcv.utils import print_log
 from terminaltables import AsciiTable
-
 from .bbox_overlaps import bbox_overlaps, bbox_overlaps_3d
-
+import pdb
+from .slide_window_infer import print_tensor
 
 def _recalls(all_ious, proposal_nums, thrs):
 
@@ -217,12 +217,17 @@ def eval_recalls_3d(gts,
 
     all_ious = []
     for i in range(img_num):
+        proposal_i = proposals[i]
         if proposals[i].ndim == 2 and proposals[i].shape[1] == 7:
-            scores = proposals[i][:, 6]
+            scores = proposal_i[:, 6]
             sort_idx = np.argsort(scores)[::-1]
-            img_proposal = proposals[i][sort_idx, :]
+            img_proposal = proposal_i[sort_idx, :]
         else:
-            img_proposal = proposals[i]
+            img_proposal = proposal_i
+        if i %10 == 0:
+            print_tensor(f'[EvaRecall] cid {i} pred', proposal_i[:, :6])
+            print_tensor(f'[EvaRecall] cid {i} pred reorder', img_proposal[:, 6])
+            # print_tensor(f'[EvaRecall] cid {i} gt', gts[i])
         prop_num = min(img_proposal.shape[0], proposal_nums[-1])
         if gts[i] is None or gts[i].shape[0] == 0:
             ious = np.zeros((0, img_proposal.shape[0]), dtype=np.float32)

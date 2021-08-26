@@ -1,9 +1,12 @@
+from numpy import unique
 import torch, pdb
 
 from ..builder import BBOX_ASSIGNERS
 from ..iou_calculators import build_iou_calculator
 from .assign_result import AssignResult
 from .base_assigner import BaseAssigner
+from ..iou_calculators.iou3d_calculator import BboxOverlaps3D
+from mmdet.utils import print_tensor
 
 
 @BBOX_ASSIGNERS.register_module()
@@ -46,7 +49,8 @@ class MaxIoUAssigner(BaseAssigner):
                  ignore_wrt_candidates=True,
                  match_low_quality=True,
                  gpu_assign_thr=-1,
-                 iou_calculator=dict(type='BboxOverlaps2D')):
+                 iou_calculator=dict(type='BboxOverlaps2D'), 
+                 verbose = False):
         self.pos_iou_thr = pos_iou_thr
         self.neg_iou_thr = neg_iou_thr
         self.min_pos_iou = min_pos_iou
@@ -55,7 +59,8 @@ class MaxIoUAssigner(BaseAssigner):
         self.ignore_wrt_candidates = ignore_wrt_candidates
         self.gpu_assign_thr = gpu_assign_thr
         self.match_low_quality = match_low_quality
-        self.iou_calculator = build_iou_calculator(iou_calculator)
+        self.verbose = verbose
+        self.iou_calculator : BboxOverlaps3D = build_iou_calculator(iou_calculator)
 
     def assign(self, bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None):
         """Assign gt to bboxes.
@@ -103,6 +108,10 @@ class MaxIoUAssigner(BaseAssigner):
                 gt_labels = gt_labels.cpu()
 
         overlaps = self.iou_calculator(gt_bboxes, bboxes)
+        if self.verbose and overlaps.shape[0] > 0: 
+            print_tensor('[Assigner] overlaps', overlaps)
+            print_tensor('[Assigner] gt labels', gt_labels)
+
 
         if (self.ignore_iof_thr > 0 and gt_bboxes_ignore is not None
                 and gt_bboxes_ignore.numel() > 0 and bboxes.numel() > 0):
@@ -117,7 +126,16 @@ class MaxIoUAssigner(BaseAssigner):
             overlaps[:, ignore_max_overlaps > self.ignore_iof_thr] = -1
 
         assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
-        # pdb.set_trace()
+
+        if self.verbose:
+            unique_values = assign_result.gt_inds.unique()
+            for univ in unique_values:      
+                val_mask = assign_result.gt_inds == univ
+                val_counts = val_mask.sum()
+                val_ious = assign_result.max_overlaps[val_mask].mean()
+                val_label = assign_result.labels[val_mask].unique()
+                print(f'[IouAssign] gt ind {univ} counts {val_counts} miou{val_ious} label{val_label}')
+            
         if assign_on_cpu:
             assign_result.gt_inds = assign_result.gt_inds.to(device)
             assign_result.max_overlaps = assign_result.max_overlaps.to(device)

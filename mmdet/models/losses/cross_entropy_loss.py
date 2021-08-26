@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from ..builder import LOSSES
 from .utils import weight_reduce_loss
-
+import pdb
 
 def cross_entropy(pred,
                   label,
@@ -42,11 +42,14 @@ def cross_entropy(pred,
 
 
 def _expand_onehot_labels(labels, label_weights, label_channels):
-    bin_labels = labels.new_full((labels.size(0), label_channels), 0)
-    inds = torch.nonzero(
-        (labels >= 0) & (labels < label_channels), as_tuple=False).squeeze()
-    if inds.numel() > 0:
-        bin_labels[inds, labels[inds]] = 1
+    if labels.shape[-1] == label_channels:
+        bin_labels = labels
+    else:
+        bin_labels = labels.new_full((labels.size(0), label_channels), 0)
+        inds = torch.nonzero(
+            (labels >= 0) & (labels < label_channels), as_tuple=False).squeeze()
+        if inds.numel() > 0:
+            bin_labels[inds, labels[inds]] = 1
 
     if label_weights is None:
         bin_label_weights = None
@@ -78,17 +81,18 @@ def binary_cross_entropy(pred,
     Returns:
         torch.Tensor: The calculated loss
     """
-    if pred.dim() != label.dim():
-        label, weight = _expand_onehot_labels(label, weight, pred.size(-1))
+    # if pred.dim() != label.dim():
+    #     print(f'pred {pred.shape}, label {label.shape}')
+    label, weight = _expand_onehot_labels(label, weight, pred.size(-1))
 
     # weighted element-wise losses
     if weight is not None:
         weight = weight.float()
     loss = F.binary_cross_entropy_with_logits(
         pred, label.float(), pos_weight=class_weight, reduction='none')
+    # pdb.set_trace()
     # do the reduction for the weighted loss
-    loss = weight_reduce_loss(
-        loss, weight, reduction=reduction, avg_factor=avg_factor)
+    loss = weight_reduce_loss(loss, weight, reduction=reduction, avg_factor=avg_factor)
 
     return loss
 
@@ -148,7 +152,7 @@ class CrossEntropyLoss(nn.Module):
                  use_mask=False,
                  reduction='mean',
                  class_weight=None,
-                 loss_weight=1.0):
+                 loss_weight=1.0, verbose = False):
         """CrossEntropyLoss.
 
         Args:
@@ -169,6 +173,7 @@ class CrossEntropyLoss(nn.Module):
         self.reduction = reduction
         self.loss_weight = loss_weight
         self.class_weight = class_weight
+        self.verbose = verbose
 
         if self.use_sigmoid:
             self.cls_criterion = binary_cross_entropy
@@ -213,4 +218,16 @@ class CrossEntropyLoss(nn.Module):
             reduction=reduction,
             avg_factor=avg_factor,
             **kwargs)
+        
+        # pdb.set_trace()
+        if self.verbose: 
+            fg_mask = weight>0
+            if fg_mask.sum() > 0:
+                fg_label = label[fg_mask]
+                fg_pred = cls_score[fg_mask]
+                fg_loss = self.cls_criterion(fg_pred, fg_label, reduction='none')[:, None]
+                fg_pred_nxc = torch.cat([fg_pred, torch.softmax(fg_pred, dim = 1), fg_label[:, None], fg_loss], axis = 1)
+                # pdb.set_trace()
+                # fg_counts, weight_counts = target.sum(), weight.sum()
+                print(f'[CELoss] fg logit gt loss \n {fg_pred_nxc[:100]}')
         return loss_cls

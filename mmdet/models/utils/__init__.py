@@ -10,6 +10,7 @@ from .se_layer import SELayer
 from .transformer import (DetrTransformerDecoder, DetrTransformerDecoderLayer,
                           DynamicConv, Transformer)
 print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
+chn2last_order = lambda x: tuple([0, *[a + 2 for a in range(x)],  1])
 
 __all__ = [
     'ResLayer', 'gaussian_radius', 'gen_gaussian_target',

@@ -50,6 +50,7 @@ class ComboLossMed(nn.Module):
         self.group_loss_weight = group_loss_weight
         # self.pos_topk = pos_topk
         self.num_classes = num_classes
+        self.cls_out_channels = max(num_classes, 2)
         self.num_classes4loss = 2 if use_marginal else num_classes
         self.dice_cfg = dice_cfg
         self.use_marginal = use_marginal
@@ -63,9 +64,9 @@ class ComboLossMed(nn.Module):
                     if self.focal_loss_gamma:
                         criterion_i = FocalLoss(alpha = self.class_weight_origin, gamma= self.focal_loss_gamma)
                     else:
-                        criterion_i = cross_entropy if num_classes > 1 else binary_ce_general
+                        criterion_i = cross_entropy #if num_classes > 1 else binary_ce_general
                 else:
-                    criterion_i = SoftDiceLoss(self.num_classes4loss, **dice_cfg) 
+                    criterion_i = SoftDiceLoss(self.cls_out_channels, **dice_cfg) 
             self.criterion_list.append(criterion_i)
 
     def forward_inner(self,
@@ -122,14 +123,14 @@ class ComboLossMed(nn.Module):
                 print_tensor('[ComboLoss] truemask', label)
 
         self.class_weight = copy.deepcopy(self.class_weight_origin)
-        if self.loss_weights[1] !=0: self.criterion_list[1].update1hot_encoder(self.num_classes4loss)
+        if self.loss_weights[1] !=0: self.criterion_list[1].update1hot_encoder(self.cls_out_channels)
         loss_main = self.forward_inner(cls_score, label, *args, **kwargs)
 
         if self.group_dict is not None:
             if self.verbose: print('Combine class and compute loss')
             cls_score = group_onehot_prob(cls_score, self.group_dict)
             label = group_class_decimal(label, self.group_dict)
-            self.criterion_list[1].update1hot_encoder(self.num_classes4loss if self.use_marginal else len(self.group_dict))
+            self.criterion_list[1].update1hot_encoder(self.cls_out_channels if self.use_marginal else len(self.group_dict))
             self.class_weight = [sum([self.class_weight_origin[i] for i in self.group_dict[nc]])/len(self.group_dict[nc])
                                  for nc in list(self.group_dict)]            
             if self.verbose: print(f'\tNew num class {self.criterion_list[1].num_classes}, class weight {self.class_weight}')

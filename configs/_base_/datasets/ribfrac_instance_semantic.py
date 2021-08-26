@@ -66,12 +66,12 @@ test_pipeline = [
 # draw_step = 8
 total_samples = 160 #// draw_step #9842
 sample_per_gpu = 3# bs2 >> 24.5 G  # 
-train_sample_rate = 0.2
-val_sample_rate = 0.2
+train_sample_rate = 0.1
+val_sample_rate = 0.33
 
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
-    workers_per_gpu= 6, 
+    workers_per_gpu= 3, 
     train=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = train_sample_rate, split='train',
@@ -88,7 +88,7 @@ data = dict(
         ),
     test=dict(
         type=dataset_type, img_dir=img_dir, 
-        sample_rate = 0.1, split='test', 
+        sample_rate = 0.02, split='test', 
         pipeline=test_pipeline,
         test_mode = True,
         # fn_spliter = ['-', 0]

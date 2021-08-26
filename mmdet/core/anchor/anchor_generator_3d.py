@@ -3,7 +3,8 @@ import torch
 from torch.nn.modules.utils import _pair, _triple
 
 from .builder import PRIOR_GENERATORS
-print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
+from mmdet.utils import print_tensor
+import pdb
 
 @PRIOR_GENERATORS.register_module()
 class AnchorGenerator3D:
@@ -129,7 +130,7 @@ class AnchorGenerator3D:
         """int: number of feature levels that the generator will be applied"""
         return len(self.strides)
 
-    def gen_base_anchors(self):
+    def gen_base_anchors(self, verbose = True):
         """Generate base anchors.
         base_sizes: [1, 2, 4, 8, 16]
         Returns:
@@ -141,12 +142,13 @@ class AnchorGenerator3D:
             center = None
             if self.centers is not None:
                 center = self.centers[i]
-            multi_level_base_anchors.append(
-                self.gen_single_level_base_anchors(
+            anchor_i = self.gen_single_level_base_anchors(
                     base_size,
                     scales=self.scales,
                     ratios=self.ratios,
-                    center=center))
+                    center=center)
+            if verbose: print(f'[BaseAnchor] level {i} basesize {base_size} ', anchor_i)
+            multi_level_base_anchors.append(anchor_i)
         return multi_level_base_anchors
 
     def gen_single_level_base_anchors(self,
@@ -318,7 +320,7 @@ class AnchorGenerator3D:
         return priors
 
 
-    def valid_flags(self, featmap_sizes, pad_shape, device='cuda'):
+    def valid_flags(self, featmap_sizes, pad_shape, device='cuda', verbose = False):
         """Generate valid flags of anchors in multiple feature levels.
 
         Args:
@@ -339,7 +341,7 @@ class AnchorGenerator3D:
             valid_feat_h = min(int(np.ceil(h / anchor_stride[1])), feat_h)
             valid_feat_w = min(int(np.ceil(w / anchor_stride[0])), feat_w)
             valid_feat_d = min(int(np.ceil(d / anchor_stride[2])), feat_d)
-            # print(f'[AnchorGen] level {i} stride {anchor_stride} feat shape {featmap_sizes[i]} img shape {pad_shape} ')
+            if verbose: print(f'[AnchorGen] level {i} stride {anchor_stride} feat shape {featmap_sizes[i]} img shape {pad_shape} ')
             flags = self.single_level_valid_flags((feat_h, feat_w, feat_d),
                                                   (valid_feat_h, valid_feat_w, valid_feat_d),
                                                   self.num_base_anchors[i],

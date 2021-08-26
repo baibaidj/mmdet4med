@@ -112,7 +112,8 @@ class FocalLoss(nn.Module):
                  gamma=2.0,
                  alpha=0.25,
                  reduction='mean',
-                 loss_weight=1.0):
+                 loss_weight=1.0, 
+                 verbose = False):
         """`Focal Loss <https://arxiv.org/abs/1708.02002>`_
 
         Args:
@@ -134,6 +135,7 @@ class FocalLoss(nn.Module):
         self.alpha = alpha
         self.reduction = reduction
         self.loss_weight = loss_weight
+        self.verbose = verbose
 
     def forward(self,
                 pred,
@@ -142,7 +144,8 @@ class FocalLoss(nn.Module):
                 avg_factor=None,
                 reduction_override=None):
         """Forward function.
-
+        NOTE: expect the target without channels, and will be transformed to 1hot (0 will occupy a channel)
+        So, this loss function does not support 1 channel prediction 
         Args:
             pred (torch.Tensor): The prediction.
             target (torch.Tensor): The learning label of the prediction.
@@ -169,10 +172,6 @@ class FocalLoss(nn.Module):
                 target = target[:, :num_classes]
                 calculate_loss_func = py_sigmoid_focal_loss
             
-            print_tensor(f'[FocalLoss] pred', pred )
-            print_tensor(f'[Focalloss] gt', target)
-            if weight is not None:
-                print_tensor(f'[Focalloss] weight', weight)
             loss_cls = self.loss_weight * calculate_loss_func(
                 pred,
                 target,
@@ -181,8 +180,22 @@ class FocalLoss(nn.Module):
                 alpha=self.alpha,
                 reduction=reduction,
                 avg_factor=avg_factor)
-            print_tensor(f'[Focalloss] loss', loss_cls)
-            pdb.set_trace()
+
+            if self.verbose: 
+                fg_mask = weight>0
+                target_gt = target[fg_mask]
+                pdb.set_trace()
+                pred1hot = torch.cat([torch.ones_like(pred[fg_mask]) , pred[fg_mask] ], axis = 1)
+                fg_loss = calculate_loss_func(pred1hot, target_gt, reduction='none')
+                fg_pred_nxc = torch.cat([pred[fg_mask], torch.sigmoid(pred[fg_mask]), target_gt[:, None], fg_loss], axis = 1)
+                # fg_counts, weight_counts = target.sum(), weight.sum()
+                print(f'[Focalloss] fg logit gt loss \n {fg_pred_nxc}')
+                # counts fg-{fg_counts} weight-{weight_counts},
+                # print_tensor(f'[FocalLoss] pred', pred )
+                # print_tensor(f'[Focalloss] gt', target)
+                # if weight is not None:
+                #     print_tensor(f'[Focalloss] weight', weight)
+                # print_tensor(f'[Focalloss] loss', loss_cls)
         else:
             raise NotImplementedError
         return loss_cls

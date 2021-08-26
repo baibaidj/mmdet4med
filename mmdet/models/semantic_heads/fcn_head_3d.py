@@ -97,7 +97,7 @@ class FCNHead3D(BaseDecodeHeadMed):
             print_tensor('[FCNHead] finalfeat', feat_map)
             print_tensor('[FCNHead] fcnout', output)
         if self.is_use_isda and self.training :
-            return output, feat_map.detach()
+            return output, feat_map.detach() 
         else:
             return output
 

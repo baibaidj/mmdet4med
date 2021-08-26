@@ -4,7 +4,7 @@ from mmcv.cnn import ConvModule
 from ..builder import HEADS
 from .anchor_head import AnchorHead
 from .anchor_head_3d import AnchorHead3D
-
+from ..utils import print_tensor
 
 @HEADS.register_module()
 class RetinaHead(AnchorHead):
@@ -166,6 +166,9 @@ class RetinaHead3D(AnchorHead3D):
             anchor_generator=anchor_generator,
             init_cfg=init_cfg,
             **kwargs)
+        
+        print(f'[RetinaHead] spatial dim {self.spatial_dim} anchor/pixle {self.num_anchors}' )
+        print(f'[RetinaHead] inchannels {self.in_channels} start level {self.start_level}')
 
     def _init_layers(self):
         """Initialize layers of the head."""
@@ -223,4 +226,8 @@ class RetinaHead3D(AnchorHead3D):
             reg_feat = reg_conv(reg_feat)
         cls_score = self.retina_cls(cls_feat)
         bbox_pred = self.retina_reg(reg_feat)
+        if self.verbose: 
+            print_tensor('\n[RetinaHead] single input feat', x)
+            print_tensor('[RetinaHead] single cls score', cls_score)
+            print_tensor('[RetinaHead] single bbox pred', bbox_pred)
         return cls_score, bbox_pred

@@ -13,6 +13,7 @@ class BaseSampler(metaclass=ABCMeta):
                  pos_fraction,
                  neg_pos_ub=-1,
                  add_gt_as_proposals=True,
+                #  coord_len = 6,
                  **kwargs):
         self.num = num
         self.pos_fraction = pos_fraction
@@ -20,6 +21,7 @@ class BaseSampler(metaclass=ABCMeta):
         self.add_gt_as_proposals = add_gt_as_proposals
         self.pos_sampler = self
         self.neg_sampler = self
+        # self.coord_len = coord_len
 
     @abstractmethod
     def _sample_pos(self, assign_result, num_expected, **kwargs):
@@ -67,7 +69,7 @@ class BaseSampler(metaclass=ABCMeta):
         if len(bboxes.shape) < 2:
             bboxes = bboxes[None, :]
 
-        bboxes = bboxes[:, :4]
+        # bboxes = bboxes[:, :4]
 
         gt_flags = bboxes.new_zeros((bboxes.shape[0], ), dtype=torch.uint8)
         if self.add_gt_as_proposals and len(gt_bboxes) > 0:

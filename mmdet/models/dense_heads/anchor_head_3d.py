@@ -5,11 +5,12 @@ from mmcv.runner import force_fp32
 from mmdet.core import (anchor, anchor_inside_flags_3d, build_prior_generator,
                         build_assigner, build_bbox_coder, build_sampler,
                         images_to_levels, multi_apply, unmap, 
-                        AnchorGenerator3D, MaxIoUAssigner, PseudoSampler)
+                        AnchorGenerator3D, MaxIoUAssigner, HardNegPoolSampler)
 from ..builder import HEADS, build_loss
 from .base_dense_head import BaseDenseHead
 from .dense_test_mixins import BBoxTestMixin3D, reset_offset_bbox_batch
 from mmdet.core.post_processing.bbox_nms import multiclass_nms_3d
+from mmdet.core.bbox.coder import DeltaXYWHBBoxCoder3D
 from ..utils import print_tensor
 import pdb
 
@@ -74,9 +75,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         self.use_sigmoid_cls = loss_cls.get('use_sigmoid', False)
         self.verbose = verbose
         # TODO better way to determine whether sample or not
-        self.sampling = loss_cls['type'] not in [
-            'FocalLoss', 'GHMC', 'QualityFocalLoss'
-        ]
+        self.sampling = True #loss_cls['type'] not in ['FocalLoss', 'GHMC', 'QualityFocalLoss']
         if self.use_sigmoid_cls:
             self.cls_out_channels = num_classes
         else:
@@ -86,7 +85,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             raise ValueError(f'num_classes={num_classes} is too small')
         self.reg_decoded_bbox = reg_decoded_bbox
 
-        self.bbox_coder = build_bbox_coder(bbox_coder)
+        self.bbox_coder: DeltaXYWHBBoxCoder3D = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
         self.train_cfg = train_cfg
@@ -98,7 +97,8 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                 sampler_cfg = self.train_cfg.sampler
             else:
                 sampler_cfg = dict(type='PseudoSampler')
-            self.sampler : PseudoSampler = build_sampler(sampler_cfg, context=self) #TODO: unsure usage
+            self.sampler : HardNegPoolSampler = build_sampler(sampler_cfg, context=self) 
+            print(f'[Sampler] cfg {sampler_cfg} obj', self.sampler)
         self.fp16_enabled = False
 
         self.anchor_generator : AnchorGenerator3D = build_prior_generator(anchor_generator)
@@ -106,8 +106,6 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         # except SSD detectors
         self.num_anchors = self.anchor_generator.num_base_anchors[0]
         self._init_layers()
-        print(f'[AnchorHead] spatial dim {self.spatial_dim} anchor/pixle {self.num_anchors}' )
-        print(f'[AnchorHead] inchannels {self.in_channels} start level {self.start_level}')
         
 
     def _init_layers(self):
@@ -131,10 +129,6 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         """
         cls_score = self.conv_cls(x)
         bbox_pred = self.conv_reg(x)
-        if self.verbose: 
-            print_tensor('\n[AnchorHead] in feat', x)
-            print_tensor('[AnchorHead] cls score', cls_score)
-            print_tensor('[AnchorHead] bbox pred', bbox_pred)
         return cls_score, bbox_pred
 
     def forward(self, feats):
@@ -195,6 +189,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                             gt_bboxes_ignore,
                             gt_labels,
                             img_meta,
+                            cls_scores, 
                             label_channels=1,
                             unmap_outputs=True):
         """Compute regression and classification targets for anchors in a
@@ -233,33 +228,32 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             return (None, ) * 7
         # assign gt and sample anchors
         anchors = flat_anchors[inside_flags, :] # Nx6
-        # NOTE: debug
-        if self.verbose: 
-            print_tensor('[AssignSingle] anchor', anchors)
-            if gt_bboxes.shape[0] > 0: 
-                print_tensor('[AssignSingle] gtbboxes', gt_bboxes)
-                print_tensor('[AssignSingle] gtlabels', gt_labels)
+        cls_scores = cls_scores[inside_flags, :] #NxC
         # [core.bbox.assigners.max_iou_assigner
-        assign_result = self.assigner.assign(anchors, gt_bboxes, gt_bboxes_ignore, None if self.sampling else gt_labels)
-        # @[core.bbox.samplers.pseudo_sampler]                                    
-        sampling_result = self.sampler.sample(assign_result, anchors, gt_bboxes)  
-
+        assign_result = self.assigner.assign(anchors, gt_bboxes, gt_bboxes_ignore, gt_labels)
+        # @[core.bbox.samplers.pseudo_sampler]                        
+        sampling_result = self.sampler.sample(assign_result, anchors, gt_bboxes, cls_scores = cls_scores)  
+        # if self.verbose: 
+        #     print_tensor('\n[AssignSingle] anchor', anchors)
+        #     if gt_bboxes.shape[0] > 0: 
+        #         print_tensor('[AssignSingle] gtbboxes', gt_bboxes)
+        #         print_tensor('[AssignSingle] gtlabels', gt_labels)
+        #     print('[AHead] target sampling results ', sampling_result)
         num_valid_anchors = anchors.shape[0]
         bbox_targets = torch.zeros_like(anchors)
         bbox_weights = torch.zeros_like(anchors)
-        labels = anchors.new_full((num_valid_anchors, ),
-                                    0 if self.use_sigmoid_cls else self.num_classes ,
+        labels = anchors.new_full((num_valid_anchors, ), self.num_classes ,
                                   dtype=torch.long)
         # NOTE Caution on how to set the default value of proposal class label background in the last channel
+        # 
         label_weights = anchors.new_zeros(num_valid_anchors, dtype=torch.float)
 
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
-        
         if len(pos_inds) > 0:
             if not self.reg_decoded_bbox:
-                pos_bbox_targets = self.bbox_coder.encode(
-                    sampling_result.pos_bboxes, sampling_result.pos_gt_bboxes)
+                pos_bbox_targets = self.bbox_coder.encode(sampling_result.pos_bboxes, 
+                                                            sampling_result.pos_gt_bboxes)
             else:
                 pos_bbox_targets = sampling_result.pos_gt_bboxes
             bbox_targets[pos_inds, :] = pos_bbox_targets
@@ -276,15 +270,12 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                 label_weights[pos_inds] = self.train_cfg.pos_weight
         if len(neg_inds) > 0:
             label_weights[neg_inds] = 1.0
-
+        # pdb.set_trace()
         # map up to original set of anchors
         if unmap_outputs:
             num_total_anchors = flat_anchors.size(0)
-            labels = unmap(
-                labels, num_total_anchors, inside_flags,
-                fill=self.num_classes)  # fill bg label
-            label_weights = unmap(label_weights, num_total_anchors,
-                                  inside_flags)
+            labels = unmap(labels, num_total_anchors, inside_flags, fill=self.num_classes)  # fill bg label
+            label_weights = unmap(label_weights, num_total_anchors, inside_flags)
             bbox_targets = unmap(bbox_targets, num_total_anchors, inside_flags)
             bbox_weights = unmap(bbox_weights, num_total_anchors, inside_flags)
 
@@ -298,6 +289,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                     img_metas,
                     gt_bboxes_ignore_list=None,
                     gt_labels_list=None,
+                    cls_scores_list = None,
                     label_channels=1,
                     unmap_outputs=True,
                     return_sampling_results=False):
@@ -318,6 +310,8 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             gt_bboxes_ignore_list (list[Tensor]): Ground truth bboxes to be
                 ignored.
             gt_labels_list (list[Tensor]): Ground truth labels of each box.
+            cls_scores_list (list[Tensor]): Box scores for each scale level
+                Has shape (N, num_anchors * num_classes, H, W, D) NOTE N means the number of images
             label_channels (int): Channel of label.
             unmap_outputs (bool): Whether to map outputs back to the original
                 set of anchors.
@@ -344,28 +338,34 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
 
         # anchor number of multi levels
         num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
+        
         # concat all level anchors to a single tensor
         concat_anchor_list = []
         concat_valid_flag_list = []
-        for i in range(num_imgs):
+        concat_cls_score_list = [] 
+        for i in range(num_imgs): #concat_cls_score_list.append(torch.cat(cls_scores_list[i]))
             assert len(anchor_list[i]) == len(valid_flag_list[i])
             concat_anchor_list.append(torch.cat(anchor_list[i]))
             concat_valid_flag_list.append(torch.cat(valid_flag_list[i]))
+            cls_score_img = torch.cat([cls_scores_list[l][i].view(self.cls_out_channels, -1).permute(1, 0) 
+                                        for l in range(len(num_level_anchors))], 0)
+            concat_cls_score_list.append(cls_score_img)
 
-        # compute targets for each image
+        # compute targets for each image #NOTE: per image computation
         if gt_bboxes_ignore_list is None:
             gt_bboxes_ignore_list = [None for _ in range(num_imgs)]
         if gt_labels_list is None:
             gt_labels_list = [None for _ in range(num_imgs)]
         
-        results = multi_apply(
+        results = multi_apply( # by level
             self._get_targets_single,
             concat_anchor_list,
             concat_valid_flag_list,
             gt_bboxes_list,
             gt_bboxes_ignore_list,
             gt_labels_list,
-            img_metas,
+            img_metas, 
+            concat_cls_score_list, 
             label_channels=label_channels,
             unmap_outputs=unmap_outputs)
         (all_labels, all_label_weights, all_bbox_targets, all_bbox_weights,
@@ -420,33 +420,27 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
-        # print_tensor('cls', cls_score)
-        # print_tensor('label', labels)
-        # print_tensor('label weight', label_weights)
-        # print_tensor('bbox pred', bbox_pred)
-        # print_tensor('bbox target', bbox_targets)
-        # print_tensor('bbox weight', bbox_weights)
-
         # classification loss
-        labels = labels.reshape(-1)
+        labels = labels.reshape(-1)[:, None] if self.use_sigmoid_cls else labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
-        # b, c, *spatial_shape = label_weights.shape
         cls_score = cls_score.permute(*chn2last_order(self.spatial_dim)).reshape(-1, self.cls_out_channels)
 
-        loss_cls = self.loss_cls(
+        loss_cls = self.loss_cls( # why avg cross 
             cls_score, labels, label_weights, avg_factor=num_total_samples)
+        if self.verbose:
+            print_tensor(f'\n[BoxHead] pred class', cls_score[label_weights>0])
+            print_tensor(f'[BoxHead] target class', labels[label_weights>0])
 
+            print(f'[BoxHead] num sample {num_total_samples} label ', labels.sum())
+            print('[BoxHead] class weight ', label_weights.sum(), label_weights.shape)
+            print_tensor(f'[BoxHead] cls loss', loss_cls)
         # pdb.set_trace()
-        if self.verbose: 
-            print_tensor(f'[AnchorLoss] cls score', cls_score)
-            print_tensor(f'[AnchorLoss] cls gt', labels)
-            print_tensor(f'[AnchorLoss] cls loss', loss_cls )
+
         # regression loss
         bbox_targets = bbox_targets.reshape(-1, self.spatial_dim * 2)
         bbox_weights = bbox_weights.reshape(-1, self.spatial_dim * 2)
         bbox_pred = bbox_pred.permute(*chn2last_order(self.spatial_dim)).reshape(-1, self.spatial_dim * 2)
-        # print_tensor('bbox pred', bbox_pred)
-        # print_tensor('bbox target', bbox_targets)
+
         if self.reg_decoded_bbox:
             # When the regression loss (e.g. `IouLoss`, `GIouLoss`)
             # is applied directly on the decoded bounding boxes, it
@@ -458,12 +452,12 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             bbox_targets,
             bbox_weights,
             avg_factor=num_total_samples)
-
-        if self.verbose: 
-            print_tensor(f'[AnchorLoss] bbox pred', bbox_pred)
-            print_tensor(f'[AnchorLoss] bbox gt', bbox_targets)
-            print_tensor(f'[AnchorLoss] bbox loss', loss_bbox)
-
+        if self.verbose:
+            print_tensor(f'\n[BoxHead] pred bbox', bbox_pred[bbox_weights[:, 0]>0])
+            print_tensor(f'[BoxHead] target bbox', bbox_targets[bbox_weights[:, 0]>0])
+            print('[BoxHead] bbox weight ', bbox_weights[:, 0].sum())
+            print_tensor(f'[BoxHead] bbox loss', loss_bbox)
+        # pdb.set_trace()
         return loss_cls, loss_bbox
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
@@ -499,7 +493,6 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
 
         anchor_list, valid_flag_list = self.get_anchors( # by image 
             featmap_sizes, img_metas, device=device) # outer list by image; inner list by level
-        # label_channels = self.cls_out_channels if self.use_sigmoid_cls else 1 # useless
 
         cls_reg_targets = self.get_targets( # by image 
             anchor_list,
@@ -507,7 +500,8 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             gt_bboxes,
             img_metas,
             gt_bboxes_ignore_list=gt_bboxes_ignore,
-            gt_labels_list=gt_labels)
+            gt_labels_list = gt_labels, 
+            cls_scores_list = cls_scores)
         if cls_reg_targets is None:
             return None
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
@@ -688,7 +682,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                                                  mlvl_bbox_preds,
                                                  mlvl_anchors):
             if self.verbose:
-                print_tensor(f'[Pred2Bbox] anchors raw', anchors)
+                print_tensor(f'\n[Pred2Bbox] anchors raw', anchors)
                 print_tensor(f'[Pred2Bbox] pred score raw', cls_score)
                 print_tensor(f'[Pred2Bbox] pred bbox raw', bbox_pred)
 
@@ -714,7 +708,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                     # since mmdet v2.0
                     # BG cat_id: num_class
                     max_scores, _ = scores[..., :-1].max(-1)
-                if self.verbose: print_tensor(f'[Pred2Bbox] top {nms_pre} pre', max_scores)
+                if self.verbose: print_tensor(f'[Pred2Bbox] top {nms_pre} max scores', max_scores)
                 _, topk_inds = max_scores.topk(nms_pre)
                 batch_inds = torch.arange(batch_size).view(
                     -1, 1).expand_as(topk_inds)
@@ -757,7 +751,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         if self.use_sigmoid_cls:
             # Add a dummy background class to the backend when using sigmoid
             # remind that we set FG labels to [0, num_class-1] since mmdet v2.0
-            # BG cat_id: num_class
+            # BG cat_id: num_class # NOTE: compatible with multiclass_nms_3d
             padding = batch_mlvl_scores.new_zeros(batch_size,
                                                   batch_mlvl_scores.shape[1],
                                                   1)
@@ -767,7 +761,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             print(f'[Pred2Bbox] nms cfg', cfg)
             print_tensor('\n[Pred2Bbox] infer mlvl score', batch_mlvl_scores)
             print_tensor('[Pred2Bbox] infer mlvl bboxes', batch_mlvl_bboxes)
-
+        # pdb.set_trace()
         if with_nms:
             det_results = []
             for bi, (mlvl_bboxes, mlvl_scores) in enumerate(zip(batch_mlvl_bboxes, 
@@ -776,9 +770,11 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                 det_bbox, det_label = multiclass_nms_3d(mlvl_bboxes, mlvl_scores,
                                                      cfg.score_thr, cfg.nms,
                                                      cfg.max_per_img)
+                # if self.use_sigmoid_cls: det_label += 1
                 if self.verbose and det_bbox.shape[0]> 0:
                     print_tensor(f'\t[Pred2Bbox] NMS {bi} bbox ', det_bbox[:, :6])
                     print_tensor(f'\t[Pred2Bbox] NMS {bi} score', det_bbox[:, 6])
+                    print_tensor(f'\t[Pred2Bbox] NMS {bi} label', det_label)
 
                 det_results.append(tuple([det_bbox, det_label]))
         else:
@@ -803,7 +799,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         Returns:
             list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
                 The first item is ``bboxes`` with shape (n, 7),
-                where 57represent (tl_x, tl_y, tl_z, br_x, br_y, br_z, score).
+                where 7 represent (tl_x, tl_y, tl_z, br_x, br_y, br_z, score).
                 The shape of the second tensor in the tuple is ``labels``
                 with shape (n,)
         """
