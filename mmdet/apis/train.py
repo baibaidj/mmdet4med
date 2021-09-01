@@ -14,6 +14,7 @@ from mmdet.core import DistEvalHook, EvalHook
 from mmdet.datasets import (build_dataloader, build_dataset,
                             replace_ImageToTensor)
 from mmdet.utils import get_root_logger
+import pdb
 
 
 def set_random_seed(seed, deterministic=False):
@@ -100,7 +101,7 @@ def train_detector(model,
         if 'total_epochs' in cfg:
             assert cfg.total_epochs == cfg.runner.max_epochs
 
-    runner = build_runner(
+    runner : EpochBasedRunner = build_runner(
         cfg.runner,
         default_args=dict(
             model=model,

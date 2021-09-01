@@ -1,10 +1,11 @@
 _base_ = [
-    '../datasets/ribfrac_instance_semantic_inhouse.py',
+    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128.py',
 ]
 num_classes = 1
 # model settings
 conv_cfg = dict(type = 'Conv3d')
-norm_cfg = dict(type='GN', num_groups=8, requires_grad=True)
+norm_cfg = dict(type='GN', num_groups=8, requires_grad=True) 
+# bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
 stem_channels = 16
 fpn_channel = stem_channels * (2**3)
 model = dict(
@@ -13,7 +14,7 @@ model = dict(
         type='ResNet3dIso', # verbose = False, 
         deep_stem = True,
         avg_down=True,
-        depth='183d',
+        depth='343d', # 18.3G 
         in_channels=1,
         stem_stride_1 = 1,
         stem_stride_2 = 1, 
@@ -70,11 +71,11 @@ model = dict(
             # type='FocalLoss',
             # use_sigmoid=True,
             # gamma=2.0,
-            # alpha=0.25, verbose = True, 
+            # alpha=0.25, #verbose = True, 
             # loss_weight=1.0),
-        loss_bbox=dict(type='GIoULoss3D', loss_weight=1.0), 
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=2.0), 
         loss_centerness=dict(
-            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.5)), 
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)), 
 
     seg_head = dict(
         type='FCNHead3D',  verbose = False, 
@@ -101,7 +102,7 @@ model = dict(
         loss_decode =dict(
                     type='ComboLossMed', loss_weight=(1.0 * 0.5, 0.66 * 0.5), 
                     num_classes = num_classes, 
-                    class_weight = (0.33, 1.0),  verbose = False,  
+                    class_weight = (0.33, 1.0),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True) #, act = 'sigmoid'
                     ),
             ),
@@ -147,9 +148,9 @@ model = dict(
         # nms_pre_tiles = 1000, 
         min_bbox_size=2,
         score_thr=0.4,
-        nms=dict(type='nms', iou_threshold=0.01), # 
+        nms=dict(type='nms', iou_threshold=0.05), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
-        max_per_img=100, 
+        max_per_img=50, 
         mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 2,
         blend_mode = 'gaussian' , overlap=0.5, sigma_scale = 0.125, # 'gaussian or constant
         padding_mode='constant' )

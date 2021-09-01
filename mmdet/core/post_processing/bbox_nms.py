@@ -244,20 +244,20 @@ def multiclass_nms_3d(multi_bboxes,
         if torch.onnx.is_in_onnx_export():
             raise RuntimeError('[ONNX Error] Can not record NMS '
                                'as it has not been executed this time')
-        dets = torch.cat([bboxes, scores[:, None]], -1)
+        dets_nx7 = torch.cat([bboxes, scores[:, None]], -1)
         if return_inds:
-            return dets, labels, inds
+            return dets_nx7, labels, inds
         else:
-            return dets, labels
+            return dets_nx7, labels
 
     # TODO: nms core implemented on CUDA
-    dets, keep = batched_nms_3d(bboxes, scores, labels, nms_cfg)
+    dets_nx7, keep = batched_nms_3d(bboxes, scores, labels, nms_cfg)
 
     if max_num > 0:
-        dets = dets[:max_num]
+        dets_nx7 = dets_nx7[:max_num]
         keep = keep[:max_num]
 
     if return_inds:
-        return dets, labels[keep], keep
+        return dets_nx7, labels[keep], keep
     else:
-        return dets, labels[keep]
+        return dets_nx7, labels[keep]

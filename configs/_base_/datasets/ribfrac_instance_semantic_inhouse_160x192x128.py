@@ -12,9 +12,9 @@ keys = ('img', 'seg') #, seg='instance_seg'
 dtypes = ('float', 'int',) # , 'float', 
 interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
-ext_patch_size = (160, 192, 192) # avoid artifacts such as boarder reflection
-patch_size = (128, 160, 160) 
-rotate_angle = 20.0 
+ext_patch_size = (192, 224, 160) # avoid artifacts such as boarder reflection
+patch_size = (160, 192, 128)  # [160 192 112] # xyz
+rotate_angle = 15.0
 use_aux_sdm = False
 train_pipeline = [
     dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), semantic2binary = True, verbose = False),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
@@ -29,11 +29,8 @@ train_pipeline = [
     dict(type = 'RandFlipd_', keys = keys, spatial_axis=(2, ), prob=0.4),
     # dict(type = 'RideOnLabel', keys = {'seg': ('seg', 'skeleton') }, cat_dim = 0),
     # dict(type = 'DataStatsd', keys = keys, prefix = 'Final'), 
-    #  dict(type = 'SaveImaged', keys = keys, 
-    #                 output_dir = '/home/dejuns/git/mmseg4med/work_dirs/AbdoVeinDataset/vnet3d_res18_4l8c_160x256x256_200eps_sw173_fp16_sgd_mimic_sup_top/debug', 
-    #                 resample = False),
     dict(type='FormatShapeMonai', verbose = False, keys = keys[:core_key_num],  channels = in_channel),
-    dict(type='Collect', keys=keys[:core_key_num], verbose = False, meta_keys = ('img_meta_dict', 'bboxes')),
+    dict(type='Collect', keys=keys[:core_key_num], verbose = False, meta_keys = ('img_meta_dict', )),
 ]
 test_keys = ('img', )
 test_pipeline = [
@@ -41,7 +38,7 @@ test_pipeline = [
         dict(type='MultiScaleFlipAug3D',
             # label_mapping = label_mapping,
             # value4outlier = 1,
-            target_spacings = None,  # TODO debug
+            target_spacings = None, 
             flip=False,
             flip_direction= ['diagonal'],
             transforms=[
@@ -66,20 +63,19 @@ test_pipeline = [
 
 # draw_step = 8
 total_samples = 160 #// draw_step #9842
-sample_per_gpu = 2# bs2 >> 24.5 G  # 
+sample_per_gpu = 1# bs2 >> 24.5 G  # 
 train_sample_rate = 1.0
 val_sample_rate = 0.30
 
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
-    workers_per_gpu= 4, 
+    workers_per_gpu= 6, 
     train=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = train_sample_rate, split='train',
         pipeline=train_pipeline, 
         json_filename = 'dataset.json',
-        # fn_spliter = ['-', 0]
-        # cache_rate = 1.0, num_workers = 4
+        # oversample_classes = (1, 2), 
         ),
     val=dict(
         type=dataset_type, img_dir=img_dir, 
@@ -114,8 +110,8 @@ gpu_aug_pipelines = [
                     percentile_99_5=norm_param['percentile_99_5'],
                     percentile_00_5=norm_param['percentile_00_5']
                     ),
-        dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.1), 
+        dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.15), 
         # dict(type = 'SaveImaged', keys = keys[:core_key_num], 
-        #     output_dir = f'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls/debug', 
+        #     output_dir = f'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf/debug', 
         #     resample = False, save_batch = True, on_gpu = True),    
         ]

@@ -101,7 +101,7 @@ class CustomDatasetDet(Dataset):
                  json_filename = 'dataset.json',
                  fn_spliter = ['_', 1],
                  roi_cls_binary = True,
-                 exclude_classes = None, 
+                 oversample_classes = None, 
                 
                  ):
 
@@ -123,12 +123,12 @@ class CustomDatasetDet(Dataset):
         self.json_filename  = json_filename
         self.fn_spliter = fn_spliter
         self.roi_cls_binary = roi_cls_binary
-        self.exclude_classes = exclude_classes
+        self.oversample_classes = oversample_classes
 
         # load annotations
         self.img_infos = self._img_list2dataset(self.img_dir, mode = self.split, key2suffix = key2suffix)
         self.img_infos = self._sample_img_data(self.img_infos, self.sample_rate)
-        self.instance_cache = None if self.test_mode else self.build_instance_list()
+        self.instance_cache = None #if self.test_mode else self.build_instance_list()
         print('[Dataset] contains %d cases, of which %d used for training' %(len(self.img_infos), len(self)) )
         self._set_group_flag()
         # print(self.img_infos)
@@ -143,8 +143,9 @@ class CustomDatasetDet(Dataset):
 
     def __len__(self):
         """Total number of samples of data."""
-        if self.test_mode: return len(self.img_infos)
-        else: return len(self.instance_cache)
+        return len(self.img_infos)
+        # if self.test_mode:
+        # else: return len(self.instance_cache)
 
     def _img_list2dataset(self, data_folder:str, mode = 'train ', 
                         key2suffix = {'img_fp': '_image.nii', 
@@ -229,8 +230,8 @@ class CustomDatasetDet(Dataset):
                 `instances`: list with tuple of (case_id, instance_id)
         """
         instance_cache = []
-        print("Building Sampling Cache for Dataset")
-        is_exclude = isinstance(self.exclude_classes, (tuple, list))
+        is_oversample = isinstance(self.oversample_classes, (tuple, list))
+        print("Building Sampling Cache for Dataset", f'Oversample Class: {self.oversample_classes}')
         for cix, item in enumerate(self.img_infos):
             rois = load_json(item['roi_fp'])
             if cix < 1: 
@@ -238,8 +239,8 @@ class CustomDatasetDet(Dataset):
                 _ = [print('\t', k, v)  for roi in rois for k, v in roi.items()]
             if rois:
                 for roi in rois:
-                    if is_exclude and roi['class'] in self.exclude_classes:
-                        continue 
+                    if is_oversample and roi['class'] in self.oversample_classes:
+                         instance_cache.append((cix, roi['instance']))
                     instance_cache.append((cix, roi['instance']))
         return instance_cache
 
@@ -265,12 +266,13 @@ class CustomDatasetDet(Dataset):
             dict: Training data and annotation after pipeline with new keys
                 introduced by pipeline.
         """
-        cix, c_ins_ix = self.instance_cache[idx]
+        results = self.img_infos[idx]
+        results['instance_ix'] = -1
+        # cix, c_ins_ix = self.instance_cache[idx]
         # print(f'[start] {idx} caseid {cix} insid {c_ins_ix}')
-        pos_sample_info = self.img_infos[cix]
-        pos_sample_info['instance_ix'] = c_ins_ix #instance_ix
-        
-        results = pos_sample_info
+        # pos_sample_info = self.img_infos[cix]
+        # pos_sample_info['instance_ix'] = c_ins_ix #instance_ix
+        # results = pos_sample_info
         # for neg_ix in range(1):
         #     cix4neg = random.randrange(0, len(self.img_infos))
         #     neg_sample_info = self.img_infos[cix4neg]

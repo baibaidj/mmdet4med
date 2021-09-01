@@ -87,6 +87,9 @@ class DeltaXYWHBBoxCoder3D(BaseBBoxCoder):
         assert pred_bboxes.size(0) == bboxes.size(0)
         if pred_bboxes.ndim == 3:
             assert pred_bboxes.size(1) == bboxes.size(1) 
+        if isinstance(max_shape, (tuple, list)):
+            is_valid = all(max_shape)
+            if not is_valid: max_shape = None
         decoded_bboxes = delta2bbox3d(bboxes, pred_bboxes, self.means, self.stds,
                                     max_shape, wh_ratio_clip, self.clip_border,
                                     self.add_ctr_clamp, self.ctr_clamp)
@@ -132,7 +135,7 @@ def bbox2delta3d(proposals, gt, means=(0., 0., 0., 0., 0., 0.), stds=(1., 1., 1.
     gh = gt[..., 4] - gt[..., 1]
     gd = gt[..., 5] - gt[..., 2]
 
-    dx = (gx - px) / pw
+    dx = (gx - px) / pw 
     dy = (gy - py) / ph
     dz = (gz - pz) / pd
 
@@ -211,7 +214,7 @@ def delta2bbox3d(rois,
                 [0.0000, 0.3161, 4.1945, 0.6839],
                 [5.0000, 5.0000, 5.0000, 5.0000]])
     """
-    # account for multi class, last dim: num_classes * 6
+    # Xaccount for multi class, last dim: num_classes * 6X bbox predition has no class component, but num_anchors
     means = deltas.new_tensor(means).view(1, -1).repeat(1,deltas.size(-1) // 6) 
     stds = deltas.new_tensor(stds).view(1, -1).repeat(1, deltas.size(-1) // 6)
     denorm_deltas = deltas * stds + means

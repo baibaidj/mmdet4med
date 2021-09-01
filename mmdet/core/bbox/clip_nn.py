@@ -146,12 +146,12 @@ def clip_boxes_to_image_3d(boxes: torch.Tensor, img_shape: Tuple[int, int, int],
     boxes[..., 0::6] = boxes[..., 0::6].clamp(min=0, max=s0)
     boxes[..., 1::6] = boxes[..., 1::6].clamp(min=0, max=s1)
     if is_xyz:
-        boxes[..., 2::6].clamp(min=0, max=s2)
-        boxes[..., 3::6].clamp(min=0, max=s0)
-        boxes[..., 4::6].clamp(min=0, max=s1)
+        boxes[..., 2::6] = boxes[..., 2::6].clamp(min=0, max=s2)
+        boxes[..., 3::6] = boxes[..., 3::6].clamp(min=0, max=s0)
+        boxes[..., 4::6] = boxes[..., 4::6].clamp(min=0, max=s1)
     else:
-        boxes[..., 2::6].clamp(min=0, max=s0)
-        boxes[..., 3::6].clamp(min=0, max=s1)
-        boxes[..., 4::6].clamp(min=0, max=s2)
+        boxes[..., 2::6] = boxes[..., 2::6].clamp(min=0, max=s0)
+        boxes[..., 3::6] = boxes[..., 3::6].clamp(min=0, max=s1)
+        boxes[..., 4::6] = boxes[..., 4::6].clamp(min=0, max=s2)
     boxes[..., 5::6] = boxes[..., 5::6].clamp(min=0, max=s2)
     return boxes

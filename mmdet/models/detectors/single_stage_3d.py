@@ -15,6 +15,7 @@ from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 from monai.data.utils import dense_patch_slices
 from monai.utils import BlendMode, PytorchPadMode, fall_back_tuple
 from typing import Any, Callable, List, Sequence, Tuple, Union
+# from profiler import 
 
 get_meta_dict  = lambda img_meta: img_meta[0]['img_meta_dict'] if isinstance(img_meta, (list, tuple)) else img_meta['img_meta_dict']
 
@@ -143,6 +144,7 @@ class SingleStageDetector3D(BaseDetector3D):
 
         img, gt_bboxes, gt_labels, gt_semantic_seg = self.update_img_metas(
                                             img, img_metas, seg)
+        # print_tensor('[Detector] img', img)
         x = self.extract_feat(img)
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
@@ -262,7 +264,7 @@ class SingleStageDetector3D(BaseDetector3D):
                 img_meta_tiles = [copy.deepcopy(img_meta)  for _ in range(len(slice_range))]#[img_meta] * len(slice_range)
                 for i, m in enumerate(img_meta_tiles): 
                     m['tile_origin'] = [window_slices[slice_range[i]][d].start for d in range(Shaper.spatial_dim)]
-                    m['img_shape'] = Shaper.patch_shape
+                    m['img_shape'] = None #Shaper.patch_shape
                     m['scale_factor'] = [1 for _ in range(Shaper.spatial_dim * 2)]
                 window_data = torch.cat([inputs[win_slice] for win_slice in tiles_slicer]).to(device)
                 det_results, seg_results = self.simple_test_tile(window_data, img_meta_tiles)  # batched patch segmentation
@@ -303,7 +305,9 @@ class SingleStageDetector3D(BaseDetector3D):
             rescale (bool): Whether rescale back to original shape.
 
         Returns:
-            Tensor: The output segmentation map.
+            det_results: list[tuple[bbox_nx7, label_nx1], tuple, ...]
+            seg_results: Tensor, The output segmentation map.
+
         """
         assert imgs.shape[0] == 1 and len(img_metas) == 1
 
@@ -332,7 +336,7 @@ class SingleStageDetector3D(BaseDetector3D):
             seg_pred = seg_results.cpu() #.float().cpu().numpy()
         else:
             seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
-            print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
+            # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
             seg_pred = seg_pred.to(torch.uint8).cpu()
             # unravel batch dim
             seg_pred = list(seg_pred)
@@ -372,8 +376,8 @@ class SingleStageDetector3D(BaseDetector3D):
             seg_pred = list(seg_pred)
 
         # detection
-        bbox_nx7 = torch.cat([d1[0] for d1 in det_resutls], axis = 0)
-        label_nx1 = torch.cat([d1[1] for d1 in det_resutls], axis = 0)
+        bbox_nx7 = torch.cat([d1[0] for d1 in det_resutls], axis = 0) # nx7
+        label_nx1 = torch.cat([d1[1] for d1 in det_resutls], axis = 0) # nx1
 
         dets_clean, keep_idx = batched_nms_3d(bbox_nx7[:, :6], bbox_nx7[:, 6], 
                                              label_nx1, self.test_cfg['nms'])

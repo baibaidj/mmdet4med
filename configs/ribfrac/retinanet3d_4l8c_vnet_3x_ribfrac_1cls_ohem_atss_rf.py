@@ -31,7 +31,7 @@ log_config = dict(interval=20, hooks=[
 
 evaluation=dict(interval=2, iou_thr=[0.2], proposal_nums=(1, 2, 4, 8, 50, 100))
 # CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_ohem_atss.py 
-# CUDA_VISIBLE_DEVICES=0,2,4,5 PORT=29001 bash ./tools/dist_train.sh configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_ohem_atss.py 4 --gpus 4 #--no-validate
+# CUDA_VISIBLE_DEVICES=0,2,4,5 PORT=29001 bash ./tools/dist_train.sh configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_ohem_atss_rf.py 4 --gpus 4 #--no-validate
 # CUDA_VISIBLE_DEVICES=0 python tools/test_med.py \
 # configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn.py \
 # work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth --eval recall

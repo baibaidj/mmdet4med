@@ -48,7 +48,7 @@ def init_detector(config, checkpoint=None, device='cuda:0', cfg_options=None):
                           'meta data, use COCO classes by default.')
             model.CLASSES = get_classes('coco')
     model.cfg = config  # save the config in the model for convenience
-    model.to(device)
+    model.to(device) # the most time consuming line
     model.eval()
     return model
 

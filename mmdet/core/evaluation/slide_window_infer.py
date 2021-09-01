@@ -144,9 +144,9 @@ class BboxSegEnsembler1Case(object):
                 for i, (f, o) in  enumerate(zip(shape_post_resize, origin_shape)):
                     this_bboxes[:, [i, i+3]] = this_bboxes[:, [i, i+3]] * o/f
         
-        print_tensor('[SlideIn] postprocess bbox', this_bboxes[:, :6])
-        print_tensor('[SlideIn] postprocess score', this_bboxes[:, 6])
-        print_tensor('[SlideIn] postprocess label', this_label)
+        # print_tensor('[SlideIn] postprocess bbox', this_bboxes[:, :6])
+        # print_tensor('[SlideIn] postprocess score', this_bboxes[:, 6])
+        # print_tensor('[SlideIn] postprocess label', this_label)
         return (this_bboxes, this_label)
 
     def offset_preprocess4seg(self, seg_result, img_meta, ready_img_shape, rescale):
@@ -182,10 +182,10 @@ class BboxSegEnsembler1Case(object):
         if img1info.get('new_pixdim', False):
             if rescale and (shape_post_resize != origin_shape):
                 this_seg_5d = resize_3d(this_seg_5d, size=origin_shape,
-                                        mode=self.get_output_mode(), #'bilinear'
-                                        align_corners=self.align_corners,
+                                        mode='trilinear', 
+                                        align_corners=False,
                                         warning=False)
-        print_tensor('[SlideIn] postprocess seg', this_seg_5d)
+        # print_tensor('[SlideIn] postprocess seg', this_seg_5d)
         return this_seg_5d
 
 
@@ -208,25 +208,26 @@ def postprocess_detect_results(det_tuple, img_shape, test_cfg, verbose = False):
         print_tensor('[WholeImage] all bbox', bbox_nx7[:, :6])
         print_tensor('[WholeImage] all scores', bbox_nx7[:, 6])
 
-    topk = test_cfg.pop('nms_pre_tiles', 1000)
+    topk = test_cfg.pop('nms_pre_tiles', 200)
     topk = min(topk, bbox_nx7.shape[0])
 
     _, topk_idx = bbox_nx7[:, -1].topk(topk)
     bbox_nx7, label_n = bbox_nx7[topk_idx, ...], label_n[topk_idx]
 
+    # pdb.set_trace()
     # 2. score threshold
     # NonZero not supported  in TensorRT
     valid_mask = bbox_nx7[:, 6] >  test_cfg.pop('score_thr', 0.01) # score_thr
     bbox_nx7, label_n = bbox_nx7[valid_mask], label_n[valid_mask]
+    if bbox_nx7.shape[0] == 0: return bbox_nx7, label_n
 
-    # 3. clipping
-    bbox_nx7[:, :6] = clip_boxes_to_image(bbox_nx7[:, :6], img_shape, is_xyz = True)
-
-    # 4. remove small boxes
-    keep = remove_small_boxes(bbox_nx7[:, :6],
-                              min_size=test_cfg.pop('min_bbox_size', 0.01),
-                              is_xyz=True)
+    # 3. remove small boxes
+    keep = remove_small_boxes(bbox_nx7[:, :6], min_size=test_cfg.pop('min_bbox_size', 2), is_xyz=True)
     bbox_nx7, label_n = bbox_nx7[keep], label_n[keep]
+    if bbox_nx7.shape[0] == 0: return bbox_nx7, label_n
+
+    # 4. clipping
+    bbox_nx7[:, :6] = clip_boxes_to_image(bbox_nx7[:, :6], img_shape, is_xyz = True)
 
     # 5. nms
     dets_clean, keep_idx = batched_nms_3d(bbox_nx7[:, :6], bbox_nx7[:, 6], 

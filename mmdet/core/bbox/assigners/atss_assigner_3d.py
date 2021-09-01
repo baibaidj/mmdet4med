@@ -160,6 +160,8 @@ class ATSSAssigner3D(BaseAssigner):
         # pdb.set_trace()
         is_in_gts = torch.stack([l_, t_, a_, r_, b_, p_], dim=1).min(dim=1)[0] > 0.01
         is_pos = is_pos & is_in_gts
+        if self.verbose:
+            print('[ATSSAssigner] positive candidate in GT matrix \n ', is_pos)
 
         # if an anchor box is assigned to multiple gts,
         # the one with the highest IoU will be selected.

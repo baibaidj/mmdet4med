@@ -4,6 +4,7 @@ _base_ = [
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
 ]
 
+data = dict(train=dict(sample_rate = 1.0), val=dict(sample_rate = 0.4), test=dict(sample_rate = 0.1) )
 find_unused_parameters=True
 load_from = 'work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth'
 resume_from = None #'work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth' 

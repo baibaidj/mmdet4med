@@ -728,8 +728,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
 
         batch_mlvl_bboxes = torch.cat(mlvl_bboxes, dim=1)
         if rescale:
-            batch_mlvl_bboxes /= batch_mlvl_bboxes.new_tensor(
-                scale_factors).unsqueeze(1)
+            batch_mlvl_bboxes /= batch_mlvl_bboxes.new_tensor(scale_factors).unsqueeze(1)
         batch_mlvl_scores = torch.cat(mlvl_scores, dim=1)
 
         # Replace multiclass_nms with ONNX::NonMaxSuppression in deployment
@@ -761,7 +760,6 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
             print(f'[Pred2Bbox] nms cfg', cfg)
             print_tensor('\n[Pred2Bbox] infer mlvl score', batch_mlvl_scores)
             print_tensor('[Pred2Bbox] infer mlvl bboxes', batch_mlvl_bboxes)
-        # pdb.set_trace()
         if with_nms:
             det_results = []
             for bi, (mlvl_bboxes, mlvl_scores) in enumerate(zip(batch_mlvl_bboxes, 

@@ -50,7 +50,7 @@ class ComboLossMed(nn.Module):
         self.group_loss_weight = group_loss_weight
         # self.pos_topk = pos_topk
         self.num_classes = num_classes
-        self.cls_out_channels = max(num_classes, 2)
+        self.cls_out_channels = max(num_classes, 2) #0 if dice_cfg.get('act', 'softmax') == 'softmax' else 0
         self.num_classes4loss = 2 if use_marginal else num_classes
         self.dice_cfg = dice_cfg
         self.use_marginal = use_marginal
@@ -64,7 +64,7 @@ class ComboLossMed(nn.Module):
                     if self.focal_loss_gamma:
                         criterion_i = FocalLoss(alpha = self.class_weight_origin, gamma= self.focal_loss_gamma)
                     else:
-                        criterion_i = cross_entropy #if num_classes > 1 else binary_ce_general
+                        criterion_i = cross_entropy if self.cls_out_channels > 1 else binary_ce_general
                 else:
                     criterion_i = SoftDiceLoss(self.cls_out_channels, **dice_cfg) 
             self.criterion_list.append(criterion_i)

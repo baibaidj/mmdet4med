@@ -16,13 +16,14 @@ def _recalls(all_ious, proposal_nums, thrs):
     for k, proposal_num in enumerate(proposal_nums):
         tmp_ious = np.zeros(0)
         for i in range(img_num):
-            ious = all_ious[i][:, :proposal_num].copy()
-            gt_ious = np.zeros((ious.shape[0]))
+            # pdb.set_trace()
+            ious = all_ious[i][:, :proposal_num].copy() # txn
+            gt_ious = np.zeros((ious.shape[0])) # t
             if ious.size == 0:
                 tmp_ious = np.hstack((tmp_ious, gt_ious))
                 continue
-            for j in range(ious.shape[0]):
-                gt_max_overlaps = ious.argmax(axis=1)
+            for j in range(ious.shape[0]): # t
+                gt_max_overlaps = ious.argmax(axis=1) #
                 max_ious = ious[np.arange(0, ious.shape[0]), gt_max_overlaps]
                 gt_idx = max_ious.argmax()
                 gt_ious[j] = max_ious[gt_idx]
@@ -224,15 +225,19 @@ def eval_recalls_3d(gts,
             img_proposal = proposal_i[sort_idx, :]
         else:
             img_proposal = proposal_i
-        if i %10 == 0:
-            print_tensor(f'[EvaRecall] cid {i} pred', proposal_i[:, :6])
-            print_tensor(f'[EvaRecall] cid {i} pred reorder', img_proposal[:, 6])
+        if i < 2 and proposal_i.shape[0] > 0:
+            print_tensor(f'[EvaRecall] cid {i} pred bbox h2l', proposal_i[:, :6])
+            print_tensor(f'[EvaRecall] cid {i} pred score h2l', img_proposal[:, 6])
+            print_tensor(f'[EvaRecall] cid {i} gtbbox', gts[i])
             # print_tensor(f'[EvaRecall] cid {i} gt', gts[i])
         prop_num = min(img_proposal.shape[0], proposal_nums[-1])
         if gts[i] is None or gts[i].shape[0] == 0:
             ious = np.zeros((0, img_proposal.shape[0]), dtype=np.float32)
-        else:
-            ious = bbox_overlaps_3d(gts[i], img_proposal[:prop_num, :6])
+        else: 
+            # txn, n has been ordered from highest to lowest
+            # pdb.set_trace()
+            ious = bbox_overlaps_3d(gts[i], img_proposal[:prop_num, :6]) 
+            # pdb.set_trace()
         all_ious.append(ious)
     all_ious = np.array(all_ious)
     recalls = _recalls(all_ious, proposal_nums, iou_thrs)

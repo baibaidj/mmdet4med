@@ -18,6 +18,15 @@ def save2json(obj, data_rt, filename, indent=4, sort_keys=True):
         json.dump(obj, f, sort_keys=sort_keys, ensure_ascii=False, indent=indent)
     return fp
 
+def load2json(json_fp):
+    assert osp.exists(json_fp)
+    data = dict()
+    if os.path.exists(json_fp):
+        with open(json_fp, 'r') as f:
+            data = json.load(f)
+    return data
+
+
 def convert_label(label, label_mapping = None, inverse=False, value4outlier = 0):
     if label_mapping is None:
         return label
