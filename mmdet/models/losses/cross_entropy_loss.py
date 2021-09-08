@@ -221,13 +221,14 @@ class CrossEntropyLoss(nn.Module):
         
         # pdb.set_trace()
         if self.verbose: 
-            fg_mask = weight>0
-            if fg_mask.sum() > 0:
-                fg_label = label[fg_mask]
-                fg_pred = cls_score[fg_mask]
-                fg_loss = self.cls_criterion(fg_pred, fg_label, reduction='none')[:, None]
-                fg_pred_nxc = torch.cat([fg_pred, torch.softmax(fg_pred, dim = 1), fg_label[:, None], fg_loss], axis = 1)
+            count_mask = weight > 0
+            count_mask[:2] = 1
+            if count_mask.sum() > 0:
+                count_label = label[count_mask]
+                count_pred = cls_score[count_mask]
+                count_loss = self.cls_criterion(count_pred, count_label, reduction='none')[:, None]
+                count_pred_nxc = torch.cat([count_pred, torch.softmax(count_pred, dim = 1), count_label[:, None], count_loss], axis = 1)
                 # pdb.set_trace()
                 # fg_counts, weight_counts = target.sum(), weight.sum()
-                print(f'[CELoss] fg logit gt loss \n {fg_pred_nxc[:100]}')
+                print(f'[CELoss] fg logit gt loss clsw {class_weight} avgf {avg_factor} \n {count_pred_nxc[:8]}')
         return loss_cls

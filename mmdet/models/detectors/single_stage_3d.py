@@ -15,6 +15,7 @@ from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 from monai.data.utils import dense_patch_slices
 from monai.utils import BlendMode, PytorchPadMode, fall_back_tuple
 from typing import Any, Callable, List, Sequence, Tuple, Union
+from mmcv.runner import auto_fp16
 # from profiler import 
 
 get_meta_dict  = lambda img_meta: img_meta[0]['img_meta_dict'] if isinstance(img_meta, (list, tuple)) else img_meta['img_meta_dict']
@@ -155,6 +156,7 @@ class SingleStageDetector3D(BaseDetector3D):
             losses.update(loss_seg)
         return losses
 
+    # @auto_fp16(apply_to=('img', ))
     def simple_test_tile(self, img, img_metas, rescale=False):
         """Test function without test-time augmentation.
 
@@ -391,48 +393,47 @@ class SingleStageDetector3D(BaseDetector3D):
         return bbox_results, seg_pred
 
     def forward_test(self, imgs, img_metas, **kwargs):
-            """
-            Args:
-                imgs (List[Tensor]): the outer list indicates test-time
-                    augmentations and inner Tensor should have a shape NxCxHxW,
-                    which contains all images in the batch.
-                img_metas (List[List[dict]]): the outer list indicates test-time
-                    augs (multiscale, flip, etc.) and the inner list indicates
-                    images in a batch.
-            """
-            for var, name in [(imgs, 'imgs'), (img_metas, 'img_metas')]:
-                if not isinstance(var, list):
-                    raise TypeError(f'{name} must be a list, but got {type(var)}')
+        """
+        Args:
+            imgs (List[Tensor]): the outer list indicates test-time
+                augmentations and inner Tensor should have a shape NxCxHxW,
+                which contains all images in the batch.
+            img_metas (List[List[dict]]): the outer list indicates test-time
+                augs (multiscale, flip, etc.) and the inner list indicates
+                images in a batch.
+        """
+        for var, name in [(imgs, 'imgs'), (img_metas, 'img_metas')]:
+            if not isinstance(var, list):
+                raise TypeError(f'{name} must be a list, but got {type(var)}')
 
-            num_augs = len(imgs)
-            if num_augs != len(img_metas):
-                raise ValueError(f'num of augmentations ({len(imgs)}) '
-                                f'!= num of image meta ({len(img_metas)})')
+        num_augs = len(imgs)
+        if num_augs != len(img_metas):
+            raise ValueError(f'num of augmentations ({len(imgs)}) '
+                            f'!= num of image meta ({len(img_metas)})')
 
-            # NOTE the batched image size information may be useful, e.g.
-            # in DETR, this is needed for the construction of masks, which is
-            # then used for the transformer_head.
-            for img, img_meta in zip(imgs, img_metas):
-                batch_size = len(img_meta)
-                for img_id in range(batch_size):
-                    img_meta[img_id]['batch_input_shape'] = tuple(img.size()[-3:])
-
-            if num_augs == 1:
-                # proposals (List[List[Tensor]]): the outer list indicates
-                # test-time augs (multiscale, flip, etc.) and the inner list
-                # indicates images in a batch.
-                # The Tensor should have a shape Px4, where P is the number of
-                # proposals.
-                if 'proposals' in kwargs:
-                    kwargs['proposals'] = kwargs['proposals'][0]
-                return self.simple_test_global(imgs[0], img_metas[0], **kwargs)
-            else:
-                assert imgs[0].size(0) == 1, 'aug test does not support ' \
-                                            'inference with batch size ' \
-                                            f'{imgs[0].size(0)}'
-                # TODO: support test augmentation for predefined proposals
-                assert 'proposals' not in kwargs
-                return self.aug_test_global(imgs, img_metas, **kwargs)
+        # NOTE the batched image size information may be useful, e.g.
+        # in DETR, this is needed for the construction of masks, which is
+        # then used for the transformer_head.
+        for img, img_meta in zip(imgs, img_metas):
+            batch_size = len(img_meta)
+            for img_id in range(batch_size):
+                img_meta[img_id]['batch_input_shape'] = tuple(img.size()[-3:])
+        if num_augs == 1:
+            # proposals (List[List[Tensor]]): the outer list indicates
+            # test-time augs (multiscale, flip, etc.) and the inner list
+            # indicates images in a batch.
+            # The Tensor should have a shape Px4, where P is the number of
+            # proposals.
+            if 'proposals' in kwargs:
+                kwargs['proposals'] = kwargs['proposals'][0]
+            return self.simple_test_global(imgs[0], img_metas[0], **kwargs)
+        else:
+            assert imgs[0].size(0) == 1, 'aug test does not support ' \
+                                        'inference with batch size ' \
+                                        f'{imgs[0].size(0)}'
+            # TODO: support test augmentation for predefined proposals
+            assert 'proposals' not in kwargs
+            return self.aug_test_global(imgs, img_metas, **kwargs)
 
     def whole_inference(self, img, img_meta, rescale):
         """Inference with full image."""

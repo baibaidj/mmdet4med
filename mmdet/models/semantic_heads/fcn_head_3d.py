@@ -5,6 +5,7 @@ from ..builder import HEADS
 from .decode_head_med import BaseDecodeHeadMed, print_tensor
 from ..utils.implicit_semantic_data_aug import ISDALoss
 from ...utils.resize import bnchw2bchw
+from mmcv.runner import auto_fp16
 
 @HEADS.register_module()
 class FCNHead3D(BaseDecodeHeadMed):
@@ -82,6 +83,7 @@ class FCNHead3D(BaseDecodeHeadMed):
         if is_use_isda:
             self.isda_augmentor = ISDALoss(self.final_channel, self.num_classes, is_3d = self.is_isda_3d)
 
+    @auto_fp16()
     def forward(self, inputs):
         """Forward function."""
         # ratio = args.lambda_0 * global_iteration / args.num_steps # training progress as percentage 

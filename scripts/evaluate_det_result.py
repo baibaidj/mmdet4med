@@ -1,4 +1,3 @@
-from enum import Flag
 import re
 import cc3d, os, pdb
 import numpy as np
@@ -170,7 +169,7 @@ def scan4path_pairs(pred_dir, gt_dir):
     return pid2pairs
 
 
-def main(pred_dir, gt_dir, save_dir, store_fn = 'det_evaluation_result'):
+def main_eval(pred_dir, gt_dir, save_dir, store_fn = 'det_evaluation_result'):
 
     json_store_fp = osp.join(save_dir, store_fn + '.json')
 
@@ -239,6 +238,6 @@ if __name__ == '__main__' :
     gt_dir = '/data/dejuns/ribfrac/processed/organize_raw/refine_labels'
     save_dir = '/data/dejuns/ribfrac/processed/organize_raw'
     
-    main(pred_dir, gt_dir, save_dir, store_fn = 'check_refine_annotation_frac')
+    main_eval(pred_dir, gt_dir, save_dir, store_fn = 'check_refine_annotation_frac')
 
     

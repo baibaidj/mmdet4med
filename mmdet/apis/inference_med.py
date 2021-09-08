@@ -40,7 +40,7 @@ class LoadImageMonai:
 
 
 def inference_detector4med(model, img, affine = None, rescale = True,
-                          need_probs = True, fp16 = False, guide_mask = None):
+                          need_probs = True, guide_mask = None):
     """Inference image(s) with the segmentor.
 
     Args:
@@ -78,8 +78,6 @@ def inference_detector4med(model, img, affine = None, rescale = True,
         data = scatter(data, [device])[0]
     else:
         data['img_metas'] = [i.data[0] for i in data['img_metas']]
-
-    if fp16: data['img'] = [a.half() for a in data['img']]
 
     # forward the model
     with torch.no_grad():

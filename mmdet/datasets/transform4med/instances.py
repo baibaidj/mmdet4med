@@ -118,8 +118,8 @@ class Instances2Boxes(AbstractTransform):
                 print_tensor(f'[Inst2Box] key error pid {pid} sample tensor', instance_element )
             _classes = _classes.to(device=_boxes.device) # class start from 0
             # if self.just1cls is not None: _classes = self.just1cls
-            # if self.verbose: print_tensor(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
-            #                         + f'ins {instance_idx}  cls {_classes}, instmask', instance_element)
+            if self.verbose: print_tensor(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
+                                    + f'ins {instance_idx}  cls {_classes}, instmask', instance_element)
             data[self.box_key].append(_boxes)
             data[self.class_key].append(_classes)
         return data

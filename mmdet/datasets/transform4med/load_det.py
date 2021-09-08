@@ -65,8 +65,8 @@ class Load1CaseDet:
         data[self.meta_key]['original_affine'] = affine_matrix
         data[self.meta_key]['filename_or_obj'] = img_fp
         if 'roi' in data.keys():
-            data[self.meta_key]['inst2cls_map'] = {
-                roi['instance']: 0 if self.semantic2binary else roi['class'] for roi in data['roi']}
+            data[self.meta_key]['inst2cls_map'] = {roi['instance']: 0 if self.semantic2binary 
+                                                    else (roi['class'] - 1) for roi in data['roi']}
         return data
 
 coin_func = lambda : random.random() > 0.5
@@ -109,6 +109,7 @@ class InstanceBasedCropDet:
         # self.pyramid_scale = pyramid_scale
         self.verbose = verbose
         self.num_sample = num_sample
+        self.instance_key = 'instance_ix'
 
     def __call__(self, data) -> Any:
 
@@ -116,44 +117,8 @@ class InstanceBasedCropDet:
         self.cid = data['cid']
         image_shape = data[self.img_key].shape[-3:]
         self.patch_size = fall_back_tuple(self.patch_size, default=image_shape)
-        # instance_ix = data.get(self.instance_key, -1)
-        # roi_info = [r for r in data.get('roi', []) if r.get('instance', 0) == instance_ix]
-        # roi_info = roi_info[0] if len(roi_info) > 0 else None
-        case_rois = data['roi']
-        num_rois = len(case_rois)
-        fg_ixs = []
-        if num_rois > 0:
-            rand_fg_ix = sample_from_range(0, num_rois)
-            fg_ixs.append(rand_fg_ix)
-            if isinstance(self.oversample_classes, (tuple, list)):
-                os_ixs = [i for i in range(num_rois) if case_rois[i]['class'] in self.oversample_classes]
-                if len(os_ixs) != 0 and len(os_ixs) != num_rois:
-                    for _ in range(3):
-                        rand_os_ix = random.choice(os_ixs)
-                        if rand_os_ix != rand_fg_ix:
-                            fg_ixs.append(rand_os_ix)
-                            break
-        
-        # print(f'\n[InsCrop] {self.cid} {roi_info}')
-        # get instance bbox
-        # sample center from foreground
-        sample_centers = []
-        if len(fg_ixs) == 0:
-            sample_centers = [self.rand_rib_region(image_shape, self.patch_size) for i in range(self.num_sample)]
-        else:
-            is2fg = coin_func()
-            num_pos_sample = min(2, len(fg_ixs)) if is2fg else 1
-            num_neg_sample = self.num_sample - num_pos_sample
-            if self.verbose: print(f'\n[InsCrop] {self.cid}  POScenter {num_pos_sample} NEGcenter{num_neg_sample}')
-            for p in range(num_pos_sample):
-                roi_info = case_rois[fg_ixs[p]]
-                fg_ix_center = self.random_foreground_center(roi_info['bbox'], verbose=self.verbose)
-                sample_centers.append(fg_ix_center)
-                if self.verbose: print(f'\t{self.cid} POS center {fg_ix_center} inst {roi_info} imgshape {image_shape} ')
-            for _ in range(num_neg_sample):
-                neg_center_c3 = self.rand_rib_region(image_shape, self.patch_size)
-                sample_centers.append(neg_center_c3)
-                if self.verbose: print(f'\t{self.cid} NEG center {neg_center_c3}')
+        instance_ix = data.get(self.instance_key, -1)
+        sample_centers = self.create2center_per_instance(data.get('roi', []), instance_ix, image_shape)
 
         results = []
         for c3 in sample_centers:
@@ -169,44 +134,21 @@ class InstanceBasedCropDet:
             results.append(crop_data)
         return results
 
-            # if instance_ix == -1:
-            #     try:
-            #         center_c3 = self.select_background_center(image_shape, self.patch_size, data['roi'])
-            #     except Exception as e:
-            #         print(f'[InstCrop] select bg Error {self.cid}', e)
-            #         center_c3 = self.rand_rib_region(image_shape, self.patch_size)
-            # else:
-    def select_background_center(self, image_shape, patch_shape, case_rois):
-        """
-        
-        """
-        assert len(image_shape) == len(patch_shape)
+    def create2center_per_instance(self, case_rois, instance_ix, image_shape):
+        roi_info = [r for r in case_rois if r.get('instance', 0) == instance_ix]
+        roi_info = roi_info[0] if len(roi_info) > 0 else None
 
-        safe_min2max = lambda l : l if l[0] < l[1] else l[::-1]
-        spine_bound_xy = np.array(case_rois[0]['spine_boundary']) # 
-
-        w, h, d = image_shape
-        # sample spine
-        spine_rangexyz = safe_min2max([max(w // 2 - 50, 0), min(w // 2 + 50, w)]) + \
-                        safe_min2max([int(a) for a in spine_bound_xy[2:]]) + \
-                        safe_min2max([patch_shape[2]//2 , min(d - patch_shape[2]//2, d)])
-        spine_rangexyz = np.array(spine_rangexyz).reshape((3, 2))
-        # if coin_func(): 
-        sample_bg_center = [sample_from_range(bound[0], bound[1]) for i, bound in enumerate(spine_rangexyz)]
-        # else:
-        #     # sample opposite of an roi
-        #     rand_roi_ix = random.randrange(0, len(case_rois))
-        #     rand_roi_c3 = case_rois[rand_roi_ix]['center']
-        #     c3_opposite = [a for a in rand_roi_c3]
-        #     for dim, cix in enumerate(rand_roi_c3):
-        #         if dim == 0: c3_opposite[dim] = w - cix if coin_func() else cix
-        #         elif dim == 1: c3_opposite[dim] = cix
-        #         else: 
-        #             bound = spine_rangexyz[2]
-        #             c3_opposite[dim] = sample_from_range(bound[0], bound[1])
-        #     self.verbose: print(f'[InstCrop] opposite {c3_opposite} of foreground  {rand_roi_c3}')
-        #     sample_bg_center = c3_opposite
-        return sample_bg_center
+        num_pos_sample = 1 if roi_info is not None else 0
+        num_neg_sample = 2 - num_pos_sample
+        sample_centers = []
+        if num_pos_sample > 0:
+            pos_center = self.random_foreground_center(roi_info['bbox'])
+            sample_centers.append(pos_center)
+        for _ in range(num_neg_sample):
+            neg_center_c3 = self.rand_rib_region(image_shape, self.patch_size)
+            sample_centers.append(neg_center_c3)
+            if self.verbose: print(f'\t{self.cid} NEG center {neg_center_c3}')
+        return sample_centers
 
     def rand_rib_region(self, image_shape, patch_shape, verbose = False):
         center_bg = []
@@ -232,6 +174,43 @@ class InstanceBasedCropDet:
         center_bg = (cx, cy, cz)
         if self.verbose: print(f'[InstCrop] rand rib region {pick_in_4} c3 {center_bg} ')
         return center_bg
+
+
+    def create3centers_per_case(self, case_rois, image_shape):
+        num_rois = len(case_rois)
+        fg_ixs = []
+        if num_rois > 0:
+            rand_fg_ix = sample_from_range(0, num_rois)
+            fg_ixs.append(rand_fg_ix)
+            if isinstance(self.oversample_classes, (tuple, list)):
+                os_ixs = [i for i in range(num_rois) if case_rois[i]['class'] in self.oversample_classes]
+                if len(os_ixs) != 0 and len(os_ixs) != num_rois:
+                    for _ in range(3):
+                        rand_os_ix = random.choice(os_ixs)
+                        if rand_os_ix != rand_fg_ix:
+                            fg_ixs.append(rand_os_ix)
+                            break
+        # print(f'\n[InsCrop] {self.cid} {roi_info}')
+        # get instance bbox
+        # sample center from foreground
+        sample_centers = []
+        if len(fg_ixs) == 0:
+            sample_centers = [self.rand_rib_region(image_shape, self.patch_size) for i in range(self.num_sample)]
+        else:
+            is2fg = coin_func()
+            num_pos_sample = min(2, len(fg_ixs)) if is2fg else 1
+            num_neg_sample = self.num_sample - num_pos_sample
+            if self.verbose: print(f'\n[InsCrop] {self.cid}  POScenter {num_pos_sample} NEGcenter{num_neg_sample}')
+            for p in range(num_pos_sample):
+                roi_info = case_rois[fg_ixs[p]]
+                fg_ix_center = self.random_foreground_center(roi_info['bbox'], verbose=self.verbose)
+                sample_centers.append(fg_ix_center)
+                if self.verbose: print(f'\t{self.cid} POS center {fg_ix_center} inst {roi_info} imgshape {image_shape} ')
+            for _ in range(num_neg_sample):
+                neg_center_c3 = self.rand_rib_region(image_shape, self.patch_size)
+                sample_centers.append(neg_center_c3)
+                if self.verbose: print(f'\t{self.cid} NEG center {neg_center_c3}')
+        return sample_centers
 
 
     def random_foreground_center(self, bbox_c6, is_nn_order = False, 
@@ -263,6 +242,37 @@ class InstanceBasedCropDet:
         return center_fg
 
 
+    def select_background_center(self, image_shape, patch_shape, case_rois):
+        """
+        
+        """
+        assert len(image_shape) == len(patch_shape)
+
+        safe_min2max = lambda l : l if l[0] < l[1] else l[::-1]
+        spine_bound_xy = np.array(case_rois[0]['spine_boundary']) # 
+
+        w, h, d = image_shape
+        # sample spine
+        spine_rangexyz = safe_min2max([max(w // 2 - 50, 0), min(w // 2 + 50, w)]) + \
+                        safe_min2max([int(a) for a in spine_bound_xy[2:]]) + \
+                        safe_min2max([patch_shape[2]//2 , min(d - patch_shape[2]//2, d)])
+        spine_rangexyz = np.array(spine_rangexyz).reshape((3, 2))
+        # if coin_func(): 
+        sample_bg_center = [sample_from_range(bound[0], bound[1]) for i, bound in enumerate(spine_rangexyz)]
+        # else:
+        #     # sample opposite of an roi
+        #     rand_roi_ix = random.randrange(0, len(case_rois))
+        #     rand_roi_c3 = case_rois[rand_roi_ix]['center']
+        #     c3_opposite = [a for a in rand_roi_c3]
+        #     for dim, cix in enumerate(rand_roi_c3):
+        #         if dim == 0: c3_opposite[dim] = w - cix if coin_func() else cix
+        #         elif dim == 1: c3_opposite[dim] = cix
+        #         else: 
+        #             bound = spine_rangexyz[2]
+        #             c3_opposite[dim] = sample_from_range(bound[0], bound[1])
+        #     self.verbose: print(f'[InstCrop] opposite {c3_opposite} of foreground  {rand_roi_c3}')
+        #     sample_bg_center = c3_opposite
+        return sample_bg_center
 
 @PIPELINES.register_module()
 class RemoveRoiByClass:

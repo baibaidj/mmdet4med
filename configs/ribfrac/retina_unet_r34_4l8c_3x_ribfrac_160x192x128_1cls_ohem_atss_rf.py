@@ -7,14 +7,15 @@ _base_ = [
 data = dict(train=dict(sample_rate = 1.0), 
             val=dict(sample_rate = 0.4), 
             test= dict(sample_rate = 0.1))
+model = dict(seg_head = dict(channels = 32))
 
 find_unused_parameters=True
-load_from = None # 'work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_ohem_atss/latest.pth'
-resume_from = None #'work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_ohem_atss/latest.pth' 
+load_from = None #'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf/latest.pth'
+resume_from = 'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf/latest.pth' 
 
 # optimizer
 optimizer = dict(#type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001, 
-                _delete_ = True, type='AdamW', lr=0.001, weight_decay=0.0005
+                _delete_ = True, type='AdamW', lr=0.0005, weight_decay=0.0005
         ) 
 optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 32, norm_type = 2)) # 31G
 # fp16 = dict(loss_scale=512.) #30G
@@ -23,7 +24,7 @@ lr_config = dict(_delete_=True, policy='poly', power=0.99, min_lr=1e-4, by_epoch
                  warmup='linear', warmup_iters=500
                  )
 
-runner = dict(type='EpochBasedRunner', max_epochs=80)
+runner = dict(type='EpochBasedRunner', max_epochs=100)
 checkpoint_config = dict(interval=4, max_keep_ckpts = 4)
 # yapf:disable
 log_config = dict(interval=20, hooks=[

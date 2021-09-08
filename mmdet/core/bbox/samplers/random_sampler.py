@@ -157,7 +157,7 @@ class HardNegPoolSampler(BaseSampler):
         if cls_scores is not None:
             # 0th channel fg, 1th channel bg # hardest neg samples should be those (bg gt)
             # having highest score on 0th channel.  bg but predicted to highly likely be fg
-            score_max_nx1 = cls_scores[:, -1] #* -1 
+            score_max_nx1 = cls_scores[:, -1] # background probability
             neg_num_pool = min(int(self.pool_size * num_expected), len(neg_inds))
             _, negative_idx_pool = score_max_nx1[neg_inds[:, 0]].topk(neg_num_pool, largest=False, sorted=True)
             neg_inds = neg_inds[negative_idx_pool]

@@ -135,7 +135,7 @@ class AnchorGenerator3D:
         base_sizes: [1, 2, 4, 8, 16]
         Returns:
             list(torch.Tensor): Base anchors of a feature grid in multiple \
-                feature levels.
+                feature levels. num_anchors x 6
         """
         multi_level_base_anchors = []
         for i, base_size in enumerate(self.base_sizes):
@@ -147,7 +147,8 @@ class AnchorGenerator3D:
                     scales=self.scales,
                     ratios=self.ratios,
                     center=center)
-            if verbose: print(f'[BaseAnchor] level {i} basesize {base_size} ', anchor_i)
+            if verbose: print(f'[BaseAnchor] level {i} basesize {base_size} scale ' + 
+                                f'{self.scales} ratio {self.ratios} \n', anchor_i)
             multi_level_base_anchors.append(anchor_i)
         return multi_level_base_anchors
 
@@ -177,8 +178,9 @@ class AnchorGenerator3D:
         else:
             x_center, y_center, z_center = center
 
-        h_ratios = torch.sqrt(ratios)
-        w_ratios = d_ratios = 1 / h_ratios
+        ratio_unit = torch.pow(ratios, 1/3)
+        h_ratios = ratio_unit * ratio_unit
+        w_ratios = d_ratios = 1 / ratio_unit
 
         if self.scale_major:
             ws = (w * w_ratios[:, None] * scales[None, :]).view(-1)
@@ -275,8 +277,10 @@ class AnchorGenerator3D:
         # add A anchors (1, A, 6) to K shifts (K, 1, 6) to get
         # shifted anchors (K, A, 6), reshape to (K*A, 6)
 
-        all_anchors = base_anchors[None, :, :] + shifts[:, None, :]
-        all_anchors = all_anchors.view(-1, 6)
+        all_anchors = shifts[:, None, :] + base_anchors[None, :, :]  # K16 + 1A6 > KA6
+        all_anchors = all_anchors.view(-1, 6) 
+        # iterate each position with multiple different-sized anchors, [A, A, A, ...] * K 
+        # or iterate each position with single sized anchor, and the, [K, K, K, ...] * A
         # first A rows correspond to A anchors of (0, 0, 0) in feature map,
         # then (0, 0, 1), (0, 0, 2), ...
         

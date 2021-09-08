@@ -6,12 +6,13 @@ import SimpleITK, json
 from scipy import ndimage
 from skimage.measure import label, regionprops
 from skimage.morphology import disk, remove_small_objects
-from evaluate_det_result import *
+from evaluate_det_result import roi_info_dets, roi_info_mask, evaluate1case, evaluate_pred_against_label
 from mmdet.apis.inference_med import *
 from mmdet.datasets.transform4med.io4med import *
 from scripts.froc_ import calculate_FROC_by_center
 import cc3d
 from mmcv import Timer
+from mmcv.runner import wrap_fp16_model
 # CLASSES = ('bg', 'hv', 'pv')
 
 def _remove_low_probs(pred, prob_thresh = 0.5):
@@ -107,7 +108,6 @@ def main(cfg,
         pid2niifp_map = dict(),
         is_test = False,
         fold_ix_str = '0@1', 
-        fp16 = False,
         ):
 
     # model configuration prepare
@@ -125,10 +125,10 @@ def main(cfg,
     # build the model from a config file and a checkpoint file
     # with Timer(print_tmpl='Loading model %s takes {:.3f} seconds' %(cfg.model_name)):
     model = init_detector(str(config_file), str(checkpoint_file), device='cuda:%d' %cfg.gpu_ix)
-    if fp16: model = model.half()
-    for param in model.parameters():
-        print('MODEL dtype', param.dtype)
-        break
+    if cfg.fp16: 
+        wrap_fp16_model(model)
+        print('\nFP16 inference')
+
     # Inferer.seg_prob2save = MethodType(seg_prob2save_det, Inferer)
     # print('\nCases to infer : %d \n' %len(pid2niifp_map))
     pcount = 0
@@ -139,19 +139,20 @@ def main(cfg,
     # infer by model
     for cid, cid_infos in pid2niifp_map.items(): #[1:2]
         img_nii_fp = cid_infos['image']
+        if cid != '1112514_20180429': continue  #'1214845_20181014' 
         print(f'\n[INFER] {pcount} {img_nii_fp}')
-        if cid != '1214845_20181014' : continue
         if is_test: continue
         # store_dir
-        img_3d, affine_matrix_i = IO4Nii.read(img_nii_fp, axis_order = None, verbose = False, dtype=np.int32)
+        if cfg.fp16: cid_infos['cid'] = f'{cid}_fp16'
+        img_3d, affine_matrix_i = IO4Nii.read(img_nii_fp, axis_order = None, 
+                                                verbose = False, dtype=np.int16)
         cid_infos['image_3d'] = img_3d
         cid_infos['affine'] = affine_matrix_i
         timer = Timer() 
         det_results, seg_results = inference_detector4med(model, img_3d, 
                                                         affine = affine_matrix_i,
                                                         rescale = True,
-                                                        need_probs = True, 
-                                                        fp16 = fp16)
+                                                        need_probs = True)
         seg_results = seg_results.numpy()                                            
         torch.cuda.empty_cache()
         if cfg.verbose: print_tensor('\tseg logits', seg_results)
@@ -208,18 +209,19 @@ def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_sav
         gt_roi_mask = np.where(gt_roi_mask > 0, 1, 0) 
         # if label_mapping is not None: gt_mask = convert_label(gt_mask, label_mapping = label_mapping, value4outlier=1)
     else: gt_roi_mask = None
-    dice3d = evaluate_pred_against_label(seg_roi_prob > 0, gt_roi_mask, ('dice', ), 2)['dice']
+    seg_roi_mask = np.array(seg_roi_prob > 0, dtype = np.uint8)
+    dice3d = evaluate_pred_against_label(seg_roi_mask, gt_roi_mask, ('dice', ), 2)['dice']
 
     # pdb.set_trace()
-    det_roi_mask = np.zeros_like(img_3d, dtype = np.int16)
+    det_roi_mask = np.zeros_like(img_3d, dtype = np.uint8)
     for roi in det_roi_infos:
         # slicer = tuple([slice(roi['bbox'][i], roi['bbox'][i + 3])  for i in range(3)])
         bbox2slicer = lambda b: tuple([slice(round(b[i]), round(b[i + 3]))  for i in range(3)])
         slicer = bbox2slicer(roi['bbox'])
-        det_roi_mask[slicer] = round(roi['prob'] * 10)
+        det_roi_mask[slicer] = round(roi['prob'] * 100)
 
-    IO4Nii.write(seg_roi_prob, nii_save_dir, f'{cid}_roi_seg_prob', affine_mat)
-    IO4Nii.write(det_roi_mask, nii_save_dir, f'{cid}_roi_det_prob', affine_mat)
+    IO4Nii.write(seg_roi_mask, nii_save_dir, f'{cid}_roi_seg_mask', affine_mat)
+    IO4Nii.write(det_roi_mask, nii_save_dir, f'{cid}_roi_det_mask', affine_mat)
 
     save2json(det_roi_infos, nii_save_dir, f'{cid}_det_roi_infos.json', indent=None, sort_keys=False)
     save2json(seg_roi_infos, nii_save_dir, f'{cid}_seg_roi_infos.json', indent=None, sort_keys=False)
@@ -317,10 +319,9 @@ def parse_args():
                         help="flag for testing",
                         action='store_true'
                     )        
-    parser.add_argument('--seed',
-                        help="random seed for spliting the dataset",
-                        default= 42,
-                        type=int
+    parser.add_argument('--fp16',
+                        help="if infer using fp16 mixed precision",
+                        action='store_true'
                     )        
     parser.add_argument('--run_pid_ixs',
                     help="select pids to run",

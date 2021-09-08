@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule, Scale
-from mmcv.runner import force_fp32
+from mmcv.runner import force_fp32, auto_fp16
 
 from mmdet.core import (anchor_inside_flags_3d, build_assigner, build_sampler,
                         images_to_levels, multi_apply, multiclass_nms,
@@ -147,9 +147,11 @@ class ATSSHead3D(AnchorHead3D):
         # we just follow atss, not apply exp in bbox_pred
         bbox_pred = scale(self.atss_reg(reg_feat)).float()
         centerness = self.atss_centerness(reg_feat)
-        # print_tensor('\n[ATSS] forward class', cls_score)
-        # print_tensor('[ATSS] forward bbox', bbox_pred)
-        # print_tensor('[ATSS] forward centerness', centerness)
+        if self.verbose:
+            print_tensor('\n[ATSS] forward input', x)
+            print_tensor('[ATSS] forward class', cls_score)
+            print_tensor('[ATSS] forward bbox', bbox_pred)
+            print_tensor('[ATSS] forward centerness', centerness)
         return cls_score, bbox_pred, centerness
 
     def loss_single(self, anchors, cls_score, bbox_pred, centerness, labels,
@@ -175,33 +177,46 @@ class ATSSHead3D(AnchorHead3D):
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
+        # pdb.set_trace()
         dim_reorder = chn2last_order(self.spatial_dim)
-        anchors = anchors.reshape(-1, self.spatial_dim * 2)
-        cls_score = cls_score.permute(*dim_reorder).reshape(
-            -1, self.cls_out_channels).contiguous()
-        bbox_pred = bbox_pred.permute(*dim_reorder).reshape(-1, 6)
+        # pdb.set_trace()
+        # prediction 
+        cls_score = cls_score.permute(*dim_reorder).reshape(-1, self.cls_out_channels).contiguous() ## BHWDx a2
+        bbox_pred = bbox_pred.permute(*dim_reorder).reshape(-1, self.spatial_dim * 2) # BHWDx a6
         centerness = centerness.permute(*dim_reorder).reshape(-1) # prediction
+
+        # priors and gt labels
+        anchors = anchors.reshape(-1, self.spatial_dim * 2) # BA6; A = P*a
         bbox_targets = bbox_targets.reshape(-1, self.spatial_dim * 2)
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
 
         # classification loss
-        loss_cls = self.loss_cls(
-            cls_score, labels, label_weights, avg_factor=num_total_samples)
-        # compute_mask = label_weights > 0
+        # compute_mask = label_weights > 0 #[compute_mask]
+        loss_cls = self.loss_cls(cls_score, labels, label_weights, avg_factor=num_total_samples)
+
         # compute_labels= labels[compute_mask]
         # fg_gt_count = (compute_labels == 0).sum()
         # fg_weight_counts = compute_mask.sum()
-        # print(f'\n[ATSSl] clsloss {loss_cls} compute_pixel:{fg_weight_counts}, fg_pixel:{fg_gt_count} numsample{num_total_samples}')
+        # print(f'\n[ATSSl] clsloss {loss_cls} compute_pixel:{fg_weight_counts}, '
+        #         f'fg_pixel:{fg_gt_count} numsample{num_total_samples}')
+
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         bg_class_ind = self.num_classes
         pos_inds = torch.nonzero((labels >= 0)& (labels < bg_class_ind)).squeeze(1)
-
+        
+        # print_tensor(f'[Loss] fg count {pos_inds.sum()}', pos_inds)
+        # pdb.set_trace()
         if len(pos_inds) > 0:
             pos_bbox_targets = bbox_targets[pos_inds] # nx6
             pos_bbox_pred = bbox_pred[pos_inds]
             pos_anchors = anchors[pos_inds] # nx6
             pos_centerness = centerness[pos_inds] 
+            
+            if self.verbose:
+                print_tensor('[Centerness] pred ', pos_centerness)
+                print_tensor('[Centerness] pos anchor', pos_anchors)
+                print_tensor('[Centerness] pos bbox target', pos_bbox_targets)
 
             centerness_targets = self.centerness_target(
                 pos_anchors, pos_bbox_targets)
@@ -242,13 +257,13 @@ class ATSSHead3D(AnchorHead3D):
 
         Args:
             cls_scores (list[Tensor]): Box scores for each scale level
-                Has shape (N, num_anchors * num_classes, H, W)
+                Has shape (N, num_anchors * num_classes, H, W, D)
             bbox_preds (list[Tensor]): Box energies / deltas for each scale
-                level with shape (N, num_anchors * 4, H, W)
+                level with shape (N, num_anchors * 6, H, W, D)
             centernesses (list[Tensor]): Centerness for each scale
-                level with shape (N, num_anchors * 1, H, W)
+                level with shape (N, num_anchors * 1, H, W, D)
             gt_bboxes (list[Tensor]): Ground truth bboxes for each image with
-                shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
+                shape (num_gts, 6) in [tl_x, tl_y, br_x, br_y] format.
             gt_labels (list[Tensor]): class indices corresponding to each box
             img_metas (list[dict]): Meta information of each image, e.g.,
                 image size, scaling factor, etc.
@@ -263,7 +278,7 @@ class ATSSHead3D(AnchorHead3D):
 
         device = cls_scores[0].device
         anchor_list, valid_flag_list = self.get_anchors(
-            featmap_sizes, img_metas, device=device)
+            featmap_sizes, img_metas, device=device) # outer list by image; inner list by level
         label_channels = self.cls_out_channels if self.use_sigmoid_cls else 1
 
         cls_reg_targets = self.get_targets(
@@ -306,23 +321,27 @@ class ATSSHead3D(AnchorHead3D):
             loss_bbox=losses_bbox,
             loss_centerness=loss_centerness)
 
-    def centerness_target(self, anchors, bbox_targets):
+    def centerness_target(self, anchors, bbox_targets, verbose = False):
         # only calculate pos centerness targets, otherwise there may be nan
         # range from 0~1, 1 means the predicted bbox center is right on the center of gt
-
         gts = self.bbox_coder.decode(anchors, bbox_targets)
         bbox2point = lambda nx: nx.view(nx.shape[0], 2, -1).float().mean(dim = 1) 
         anchor_points_nx3 = bbox2point(anchors)
         center2small_bound = anchor_points_nx3 - gts[:, :3]
         center2large_bound = gts[:, 3:] - anchor_points_nx3
-        dist_bound_nx3x2 = torch.stack([center2small_bound, center2large_bound], dim = -1)
-        # 
-        
+        dist_bound_nx3x2 = torch.stack([center2small_bound, center2large_bound], dim = -1).clamp(min = 1e-4)
         centerness = torch.sqrt(
             (dist_bound_nx3x2[:, 0].min(dim=-1)[0] / dist_bound_nx3x2[:, 0].max(dim=-1)[0]) *
             (dist_bound_nx3x2[:, 1].min(dim=-1)[0] / dist_bound_nx3x2[:, 1].max(dim=-1)[0]) *
             (dist_bound_nx3x2[:, 2].min(dim=-1)[0] / dist_bound_nx3x2[:, 2].max(dim=-1)[0])
              )
+        if verbose:
+            print_tensor('[CerterNess] anchors', anchors)
+            print_tensor('[CerterNess] bbox targets', bbox_targets)
+            print_tensor('[CerterNess] bbox gt', gts)
+            print_tensor('[CenterNess] map', centerness)
+            # pdb.set_trace()
+        
         assert not torch.isnan(centerness).any()
         return centerness
 
@@ -367,7 +386,7 @@ class ATSSHead3D(AnchorHead3D):
         device = cls_scores[0].device
         featmap_sizes = [cls_scores[i].shape[-self.spatial_dim:] for i in range(num_levels)]
         mlvl_anchors = self.anchor_generator.grid_priors(
-            featmap_sizes, device=device)
+            featmap_sizes, device=device) 
 
         cls_score_list = [cls_scores[i].detach() for i in range(num_levels)]
         bbox_pred_list = [bbox_preds[i].detach() for i in range(num_levels)]
@@ -407,7 +426,7 @@ class ATSSHead3D(AnchorHead3D):
             centernesses (list[Tensor]): Centerness for a single scale level
                 with shape (N, num_anchors * 1, H, W).
             mlvl_anchors (list[Tensor]): Box reference for a single scale level
-                with shape (num_total_anchors, 4).
+                with shape (num_total_anchors, 6).
             img_shapes (list[tuple[int]]): Shape of the input image,
                 list[(height, width, 3)].
             scale_factors (list[ndarray]): Scale factor of the image arrange as
@@ -448,7 +467,7 @@ class ATSSHead3D(AnchorHead3D):
             assert cls_score.size()[-self.spatial_dim:] == bbox_pred.size()[-self.spatial_dim:]
             dim_reorder = chn2last_order(self.spatial_dim)
             scores = cls_score.permute(*dim_reorder).reshape(
-                batch_size, -1, self.cls_out_channels)
+                                batch_size, -1, self.cls_out_channels)
             
             scores = scores.sigmoid() if self.use_sigmoid_cls else scores.softmax(-1)
 
@@ -456,7 +475,7 @@ class ATSSHead3D(AnchorHead3D):
                                                 batch_size, -1).sigmoid()
             bbox_pred = bbox_pred.permute(*dim_reorder).reshape(
                                                 batch_size, -1, self.spatial_dim * 2)
-            # pdb.set_trace()
+
             # Always keep topk op for dynamic input in onnx
             if nms_pre_tensor > 0 and (torch.onnx.is_in_onnx_export()
                                        or scores.shape[-2] > nms_pre_tensor):
@@ -464,8 +483,8 @@ class ATSSHead3D(AnchorHead3D):
                 # keep shape as tensor and get k
                 num_anchor = _shape_as_tensor(scores)[-2].to(device)
                 nms_pre = torch.where(nms_pre_tensor < num_anchor, nms_pre_tensor, num_anchor)
-                max_scores, _ = (centerness[..., None] * (scores 
-                                    if self.use_sigmoid_cls else scores[..., :-1])).max(-1)
+                max_scores, max_ix = (centerness[..., None] *  (scores if self.use_sigmoid_cls else scores[..., :-1])).max(-1) #
+                # max_scores_full, max_ix_full = (centerness[..., None] * scores).max(-1) #
                 _, topk_inds = max_scores.topk(nms_pre)
                 anchors = anchors[topk_inds, :]
                 batch_inds = torch.arange(batch_size).view(
@@ -565,15 +584,15 @@ class ATSSHead3D(AnchorHead3D):
         num_level_anchors_list = [num_level_anchors] * num_imgs
 
         # concat all level anchors and flags to a single tensor
+        grid2nx2 = lambda x, cls: x.permute(1, 2, 3, 0).reshape(-1, cls)
         concat_cls_score_list = [] 
         for i in range(num_imgs):
             assert len(anchor_list[i]) == len(valid_flag_list[i])
             anchor_list[i] = torch.cat(anchor_list[i])
             valid_flag_list[i] = torch.cat(valid_flag_list[i])
-            cls_score_img = torch.cat([cls_scores_list[l][i].view(self.cls_out_channels, -1).permute(1, 0) 
-                                        for l in range(len(num_level_anchors))], 0)
+            cls_score_img = torch.cat([grid2nx2(cls_scores_list[l][i], self.cls_out_channels) 
+                                        for l in range(len(num_level_anchors))], dim = 0)
             concat_cls_score_list.append(cls_score_img)
-
         # compute targets for each image
         if gt_bboxes_ignore_list is None:
             gt_bboxes_ignore_list = [None for _ in range(num_imgs)]
@@ -667,6 +686,12 @@ class ATSSHead3D(AnchorHead3D):
         anchors = flat_anchors[inside_flags, :]
         cls_scores = cls_scores[inside_flags, : ]
 
+        if self.verbose and gt_bboxes.shape[0] > 0: 
+            print_tensor('\n[GetTarget] anchors', anchors)
+            print_tensor('[GetTarget] cls scores', cls_scores)
+            print_tensor('[GetTarget] gt bbox', gt_bboxes)
+            print_tensor('[GetTarget] gt labels', gt_labels)
+
         num_level_anchors_inside = self.get_num_level_anchors_inside(
             num_level_anchors, inside_flags)
         assign_result = self.assigner.assign(anchors, num_level_anchors_inside,
@@ -675,11 +700,10 @@ class ATSSHead3D(AnchorHead3D):
 
         sampling_result = self.sampler.sample(assign_result, anchors,
                                               gt_bboxes, cls_scores = cls_scores) 
-        # pdb.set_trace()
         num_valid_anchors = anchors.shape[0]
         bbox_targets = torch.zeros_like(anchors)
         bbox_weights = torch.zeros_like(anchors)
-        labels = anchors.new_full((num_valid_anchors, ),self.num_classes,  dtype=torch.long)
+        labels = anchors.new_full((num_valid_anchors, ), self.num_classes,  dtype=torch.long)
         label_weights = anchors.new_zeros(num_valid_anchors, dtype=torch.float)
 
         pos_inds = sampling_result.pos_inds
@@ -698,15 +722,14 @@ class ATSSHead3D(AnchorHead3D):
                 # Foreground is the first class since v2.5.0
                 labels[pos_inds] = 0
             else:
-                labels[pos_inds] = gt_labels[
-                    sampling_result.pos_assigned_gt_inds]
+                labels[pos_inds] = gt_labels[sampling_result.pos_assigned_gt_inds]
             if self.train_cfg.pos_weight <= 0:
                 label_weights[pos_inds] = 1.0
             else:
                 label_weights[pos_inds] = self.train_cfg.pos_weight
         if len(neg_inds) > 0:
             label_weights[neg_inds] = 1.0
-
+        # pdb.set_trace()
         # map up to original set of anchors
         if unmap_outputs:
             num_total_anchors = flat_anchors.size(0)

@@ -2,9 +2,9 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import (build_conv_layer, build_norm_layer, build_plugin_layer,
                       constant_init, kaiming_init)
-from mmcv.runner import load_checkpoint
+from mmcv.runner import load_checkpoint, auto_fp16
 from mmcv.utils.parrots_wrapper import _BatchNorm
-from torch.nn.modules.utils import _ntuple, _triple
+from torch.nn.modules.utils import _ntuple
 
 from ..builder import BACKBONES
 from ..utils import  ResLayerIso
@@ -344,6 +344,7 @@ class ResNet3dIso(nn.Module):
         self.inplanes = stem_channels
         self.is_p3d = True if 'p3d' in str(depth) else False
         self.verbose = verbose
+        self.fp16_enabled = False
         # self.is_stem_down = is_stem_down
 
 
@@ -566,6 +567,7 @@ class ResNet3dIso(nn.Module):
         else:
             raise TypeError('pretrained must be a str or None')
 
+    @auto_fp16()
     def forward(self, x):
         """Forward function.
            outs: [input, 1/2, 1/4, 1/8, 1/16, 1/32] 6 items
@@ -578,7 +580,7 @@ class ResNet3dIso(nn.Module):
             x = self.norm1(x)
             x = self.relu(x)
         outs.append(x)
-        # x = self.maxpool(x)
+
         if self.verbose: print_tensor('l1', x)
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)

@@ -81,7 +81,7 @@ model = dict(
         type='FCNHead3D',  verbose = False, 
         in_channels= stem_channels * 2,
         in_index=0,
-        channels= stem_channels * 2,
+        channels= stem_channels, #
         # input_transform='resize_concat',
         kernel_size=1,
         num_convs=1,
@@ -97,8 +97,6 @@ model = dict(
         # isda_lambda = 2.5,
         # start_iters = 1,
         # max_iters = 4e5,
-        # OHEM
-        # sampler=dict(type='OHEMPixelSampler', min_kept=600000),
         loss_decode =dict(
                     type='ComboLossMed', loss_weight=(1.0 * 0.5, 0.66 * 0.5), 
                     num_classes = num_classes, 
@@ -130,13 +128,13 @@ model = dict(
     train_cfg=dict(
         assigner=dict(
             type='ATSSAssigner3D', # could be replaced by ATSSAssigner
-            topk = 9, 
+            topk = 9,  center_within = False, 
             ignore_iof_thr=-1, verbose = False,
             iou_calculator=dict(type='BboxOverlaps3D')
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=48, pool_size = 32,
+                num=32, pool_size = 20,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),

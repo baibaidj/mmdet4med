@@ -431,12 +431,13 @@ class AffineGridGPU(Transform):
         scale_params: Optional[Union[Sequence[float], float]] = None,
         # as_tensor_output: bool = True,
         device: Optional[torch.device] = None,
+        verbose = False,
     ) -> None:
         self.rotate_params = rotate_params
         self.shear_params = shear_params
         self.translate_params = translate_params
         self.scale_params = scale_params
-
+        self.verbose = verbose
         # self.as_tensor_output = as_tensor_output
         self.device = device
 
@@ -463,19 +464,25 @@ class AffineGridGPU(Transform):
 
         affine = np.eye(spatial_dims + 1)
         if self.rotate_params:
-            affine = affine @ create_rotate(spatial_dims, self.rotate_params)
+            ro_af = create_rotate(spatial_dims, self.rotate_params)
+            if self.verbose: print(f'rotate affine {self.rotate_params} \n', ro_af)
+            affine = affine @ ro_af
         if self.shear_params:
             affine = affine @ create_shear(spatial_dims, self.shear_params)
         if self.translate_params:
-            affine = affine @ create_translate(spatial_dims, self.translate_params)
+            trans_af = create_translate(spatial_dims, self.translate_params)
+            if self.verbose: print(f'translate affine {self.translate_params} \n',  trans_af)
+            affine = affine @ trans_af
         if self.scale_params:
-            affine = affine @ create_scale(spatial_dims, self.scale_params)
+            scale_af = create_scale(spatial_dims, self.scale_params)
+            if self.verbose: print(f'scale afine {self.scale_params} \n',scale_af)
+            affine = affine @ scale_af
         # affine = torch.as_tensor(np.ascontiguousarray(affine), device=self.device)
         # grid = torch.tensor(grid) if not isinstance(grid, torch.Tensor) else grid.detach().clone()
         grid = totensor(grid, device)
         affine = totensor(affine, device).to(grid.dtype)
         # print_tensor('\tgrid', grid)
-        # print_tensor('\taffine', affine)
+        if self.verbose: print('\tfinal affine\n', affine)
         grid = (affine @ grid.reshape((grid.shape[0], -1))).reshape([-1] + list(grid.shape[1:]))
         return grid
 
@@ -567,8 +574,6 @@ class RandAffineGridGPU(Randomizable, Transform):
         )
         return affine_grid(spatial_size, grid)
 
-
-
 class ResampleGPU(Transform):
     def __init__(
         self,
@@ -621,20 +626,18 @@ class ResampleGPU(Transform):
         assert isinstance(grid, torch.Tensor)
         grid = torch.tensor(grid) if not isinstance(grid, torch.Tensor) else grid.detach().clone()
         has_batch_dim = img.dim() == 5
-
-        for i, dim in enumerate(img.shape[-3:]):
-            grid[i] = 2.0 * grid[i] / (dim - 1.0)
+        img_raw_shape = img.shape[-3:]
+        for i, size_i in enumerate(img_raw_shape):
+            grid[i] = 2.0 * grid[i] / (size_i - 1.0)
         
-        if self.verbose: print_tensor('grid norm 3c', grid[:3])
+        if self.verbose: print_tensor(f'grid norm 3c {img_raw_shape}', grid[:3])
         if self.verbose: print_tensor('grid norm 4d', grid[-1:])
-        grid = grid[:-1] / grid[-1:] 
-        
-        if self.verbose: print_tensor('grid norm div', grid)
+        # grid = grid[:-1] / grid[-1:] 
 
         index_ordering: List[int] = list(range(img.ndimension() - (3 if has_batch_dim else 2) , -1, -1))
-        if self.verbose: print(index_ordering)
-        grid = grid[index_ordering]
-        grid = grid.permute(list(range(grid.ndimension()))[1:] + [0])
+        if self.verbose: print(index_ordering) # 2, 1, 0
+        grid = grid[index_ordering] # on 0th dim, reorder the xyz > zyx
+        grid = grid.permute(list(range(grid.ndimension()))[1:] + [0]) # 0, 1, 2, 3 > 1, 2, 3, 0
         
         if self.verbose: print_tensor('grid norm permute', grid)
         if self.verbose: print(f'mode {self.mode.value} pad {self.padding_mode.value}')

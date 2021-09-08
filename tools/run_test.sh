@@ -17,7 +17,7 @@
 task=ribfrac
 # model=retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls
 # model=retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls
-model=retinanet3d_4l8c_vnet_3x_ribfrac_1cls_ohem_atss #retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn
+model=retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf #retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn
 # model=retinanet3d_4l8c_vnet_1x_ribfrac_1cls
 
 

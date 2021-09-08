@@ -19,16 +19,19 @@ class ATSSAssigner3D(BaseAssigner):
 
     Args:
         topk (float): number of bbox selected in each level
+        center_within (boolean) : nndetection suggest not to use this requirement
     """
 
     def __init__(self,
                  topk,
                  iou_calculator=dict(type='BboxOverlaps3D'),
                  ignore_iof_thr=-1, 
+                 center_within = True,
                  verbose = False):
         self.topk = topk
         self.iou_calculator = build_iou_calculator(iou_calculator)
         self.ignore_iof_thr = ignore_iof_thr
+        self.center_within = center_within
         self.verbose = verbose
 
     # https://github.com/sfzhang15/ATSS/blob/master/atss_core/modeling/rpn/atss/loss.py
@@ -139,27 +142,29 @@ class ATSSAssigner3D(BaseAssigner):
 
         is_pos = candidate_overlaps >= overlaps_thr_per_gt[None, :] # tlxk, binary
         # pdb.set_trace()
+        for gt_idx in range(num_gt): candidate_idxs[:, gt_idx] += gt_idx * num_bboxes 
+        
         # limit the positive sample's center in gt
-        for gt_idx in range(num_gt):
-            candidate_idxs[:, gt_idx] += gt_idx * num_bboxes
-        candidate_idxs = candidate_idxs.view(-1)
-        trans_center_dim = lambda p, dim: p[:, dim].view(1, -1).expand( # 1xn > kxn > kn
-                                    num_gt, num_bboxes).contiguous().view(-1)
-        ep_bboxes_cx = trans_center_dim(bboxes_points, 0)
-        ep_bboxes_cy = trans_center_dim(bboxes_points, 1)
-        ep_bboxes_cz = trans_center_dim(bboxes_points, 2)
+        if self.center_within:
+            candidate_idxs = candidate_idxs.view(-1)
+            trans_center_dim = lambda p, dim: p[:, dim].view(1, -1).expand( # 1xn > kxn > kn
+                                        num_gt, num_bboxes).contiguous().view(-1)
+            ep_bboxes_cx = trans_center_dim(bboxes_points, 0)
+            ep_bboxes_cy = trans_center_dim(bboxes_points, 1)
+            ep_bboxes_cz = trans_center_dim(bboxes_points, 2)
 
-        # calculate the left, top, anterior, right, bottom, posterior distance between positive
-        # bbox center and gt side
-        l_ = ep_bboxes_cx[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 0]
-        t_ = ep_bboxes_cy[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 1]
-        a_ = ep_bboxes_cz[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 2]
-        r_ = gt_bboxes[:, 3] - ep_bboxes_cx[candidate_idxs].view(-1, num_gt)
-        b_ = gt_bboxes[:, 4] - ep_bboxes_cy[candidate_idxs].view(-1, num_gt)
-        p_ = gt_bboxes[:, 5] - ep_bboxes_cz[candidate_idxs].view(-1, num_gt)
-        # pdb.set_trace()
-        is_in_gts = torch.stack([l_, t_, a_, r_, b_, p_], dim=1).min(dim=1)[0] > 0.01
-        is_pos = is_pos & is_in_gts
+            # calculate the left, top, anterior, right, bottom, posterior distance between positive
+            # bbox center and gt side
+            l_ = ep_bboxes_cx[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 0]
+            t_ = ep_bboxes_cy[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 1]
+            a_ = ep_bboxes_cz[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 2]
+            r_ = gt_bboxes[:, 3] - ep_bboxes_cx[candidate_idxs].view(-1, num_gt)
+            b_ = gt_bboxes[:, 4] - ep_bboxes_cy[candidate_idxs].view(-1, num_gt)
+            p_ = gt_bboxes[:, 5] - ep_bboxes_cz[candidate_idxs].view(-1, num_gt)
+            # pdb.set_trace()
+            is_in_gts = torch.stack([l_, t_, a_, r_, b_, p_], dim=1).min(dim=1)[0] > 0.01
+            is_pos = is_pos & is_in_gts
+        
         if self.verbose:
             print('[ATSSAssigner] positive candidate in GT matrix \n ', is_pos)
 

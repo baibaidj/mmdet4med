@@ -128,7 +128,7 @@ class CustomDatasetDet(Dataset):
         # load annotations
         self.img_infos = self._img_list2dataset(self.img_dir, mode = self.split, key2suffix = key2suffix)
         self.img_infos = self._sample_img_data(self.img_infos, self.sample_rate)
-        self.instance_cache = None #if self.test_mode else self.build_instance_list()
+        self.instance_cache = None if self.test_mode else self.build_instance_list()
         print('[Dataset] contains %d cases, of which %d used for training' %(len(self.img_infos), len(self)) )
         self._set_group_flag()
         # print(self.img_infos)
@@ -143,9 +143,8 @@ class CustomDatasetDet(Dataset):
 
     def __len__(self):
         """Total number of samples of data."""
-        return len(self.img_infos)
-        # if self.test_mode:
-        # else: return len(self.instance_cache)
+        if self.test_mode: return len(self.img_infos)
+        else: return len(self.instance_cache)
 
     def _img_list2dataset(self, data_folder:str, mode = 'train ', 
                         key2suffix = {'img_fp': '_image.nii', 
@@ -266,19 +265,13 @@ class CustomDatasetDet(Dataset):
             dict: Training data and annotation after pipeline with new keys
                 introduced by pipeline.
         """
-        results = self.img_infos[idx]
-        results['instance_ix'] = -1
-        # cix, c_ins_ix = self.instance_cache[idx]
+        # results = self.img_infos[idx]
+        # results['instance_ix'] = -1
+        cix, c_ins_ix = self.instance_cache[idx]
         # print(f'[start] {idx} caseid {cix} insid {c_ins_ix}')
-        # pos_sample_info = self.img_infos[cix]
-        # pos_sample_info['instance_ix'] = c_ins_ix #instance_ix
-        # results = pos_sample_info
-        # for neg_ix in range(1):
-        #     cix4neg = random.randrange(0, len(self.img_infos))
-        #     neg_sample_info = self.img_infos[cix4neg]
-        #     neg_sample_info['instance_ix'] = - (1 + neg_ix)
-        #     results.append(neg_sample_info)
-        # self.pre_pipeline(results)
+        results = self.img_infos[cix]
+        results['instance_ix'] = c_ins_ix 
+
         return self.pipeline(results)
 
     def prepare_test_img(self, idx):

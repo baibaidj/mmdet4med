@@ -87,7 +87,7 @@ def train_detector(model,
             model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids)
 
     # build runner
-    optimizer = build_optimizer(model, cfg.optimizer)
+    optimizer = build_optimizer(model, cfg.optimizer) #SGD, AdamW
 
     if 'runner' not in cfg:
         cfg.runner = {
@@ -122,7 +122,6 @@ def train_detector(model,
         optimizer_config = OptimizerHook(**cfg.optimizer_config)
     else:
         optimizer_config = cfg.optimizer_config
-
     # register hooks
     runner.register_training_hooks(cfg.lr_config, optimizer_config,
                                    cfg.checkpoint_config, cfg.log_config,

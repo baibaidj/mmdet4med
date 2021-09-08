@@ -14,7 +14,6 @@ interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
 ext_patch_size = (192, 224, 160) # avoid artifacts such as boarder reflection
 patch_size = (160, 192, 128)  # [160 192 112] # xyz
-rotate_angle = 15.0
 use_aux_sdm = False
 train_pipeline = [
     dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), semantic2binary = True, verbose = False),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
@@ -63,13 +62,13 @@ test_pipeline = [
 
 # draw_step = 8
 total_samples = 160 #// draw_step #9842
-sample_per_gpu = 1# bs2 >> 24.5 G  # 
+sample_per_gpu = 2# bs2 >> 24.5 G  # 
 train_sample_rate = 1.0
 val_sample_rate = 0.30
 
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
-    workers_per_gpu= 6, 
+    workers_per_gpu= 4, 
     train=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = train_sample_rate, split='train',
@@ -95,11 +94,12 @@ data = dict(
 gpu_aug_pipelines = [
         # # data in torch tensor, not necessarily on gpu
         dict(type = 'Rand3DElasticGPUd', keys=keys[:core_key_num],
-            sigma_range=(6.2, 9.2),
-            magnitude_range=(48, 128),
+            sigma_range=(9, 13), # larger sigma mean smoother offset with smaller values
+            magnitude_range=(64, 384), # s=8, (-0.008, 0.006) * 256 > (2.04, 1.53)
             spatial_size=patch_size, 
-            rotate_range=[rotate_angle] * 3, #rotate_angle * np.pi / 180.0
-            scale_range=(0.15, 0.15, 0.15),
+            rotate_range=[15] * 3, #rotate_angle * np.pi / 180.0
+            translate_range = [8] * 3, 
+            scale_range=[0.15] * 3,
             prob=1.0,
             mode=interp_modes[:core_key_num], 
             verbose=False
@@ -110,8 +110,8 @@ gpu_aug_pipelines = [
                     percentile_99_5=norm_param['percentile_99_5'],
                     percentile_00_5=norm_param['percentile_00_5']
                     ),
-        dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.15), 
+        dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.05), 
         # dict(type = 'SaveImaged', keys = keys[:core_key_num], 
-        #     output_dir = f'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf/debug', 
+        #     output_dir = f'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_3anchor/debug', 
         #     resample = False, save_batch = True, on_gpu = True),    
         ]
