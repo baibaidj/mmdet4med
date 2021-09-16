@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from ..builder import DETECTORS
 from .single_stage import SingleStageDetector
 from .single_stage_3d import SingleStageDetector3D

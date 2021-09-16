@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from .bfp import BFP
 from .channel_mapper import ChannelMapper
 from .ct_resnet_neck import CTResNetNeck
@@ -12,10 +13,12 @@ from .pafpn import PAFPN
 from .rfp import RFP
 from .ssd_neck import SSDNeck
 from .yolo_neck import YOLOV3Neck
-from .fpn_3d import FPN3D
+from .yolox_pafpn import YOLOXPAFPN
 
+from .fpn_3d import FPN3D
 __all__ = [
     'FPN', 'BFP', 'ChannelMapper', 'HRFPN', 'NASFPN', 'FPN_CARAFE', 'PAFPN',
     'NASFCOS_FPN', 'RFP', 'YOLOV3Neck', 'FPG', 'DilatedEncoder',
-    'CTResNetNeck', 'SSDNeck', 'FPN3D'
+    'CTResNetNeck', 'SSDNeck', 'YOLOXPAFPN', 
+    'FPN3D'
 ]

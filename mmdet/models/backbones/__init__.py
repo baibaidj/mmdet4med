@@ -1,3 +1,5 @@
+# Copyright (c) OpenMMLab. All rights reserved.
+from .csp_darknet import CSPDarknet
 from .darknet import Darknet
 from .detectors_resnet import DetectoRS_ResNet
 from .detectors_resnext import DetectoRS_ResNeXt
@@ -10,6 +12,7 @@ from .resnest import ResNeSt
 from .resnet import ResNet, ResNetV1d
 from .resnext import ResNeXt
 from .ssd_vgg import SSDVGG
+from .swin import SwinTransformer
 from .trident_resnet import TridentResNet
 from .resnet_3d_iso import ResNet3dIso
 from .repvgg import RepVGG
@@ -18,6 +21,7 @@ from .repvgg import RepVGG
 __all__ = [
     'RegNet', 'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet',
     'MobileNetV2', 'Res2Net', 'HourglassNet', 'DetectoRS_ResNet',
-    'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 
+    'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 'CSPDarknet',
+    'SwinTransformer', 
     'ResNet3dIso', 'RepVGG'
 ]

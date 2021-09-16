@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 from .atss import ATSS
 from .autoassign import AutoAssign
 from .base import BaseDetector
@@ -19,6 +20,8 @@ from .mask_rcnn import MaskRCNN
 from .mask_scoring_rcnn import MaskScoringRCNN
 from .nasfcos import NASFCOS
 from .paa import PAA
+from .panoptic_fpn import PanopticFPN
+from .panoptic_two_stage_segmentor import TwoStagePanopticSegmentor
 from .point_rend import PointRend
 from .reppoints_detector import RepPointsDetector
 from .retinanet import RetinaNet, RetinaNet3D
@@ -32,8 +35,9 @@ from .vfnet import VFNet
 from .yolact import YOLACT
 from .yolo import YOLOV3
 from .yolof import YOLOF
-from .single_stage_3d import SingleStageDetector3D
+from .yolox import YOLOX
 
+from .single_stage_3d import SingleStageDetector3D
 __all__ = [
     'ATSS', 'BaseDetector', 'SingleStageDetector', 'TwoStageDetector', 'RPN',
     'KnowledgeDistillationSingleStageDetector', 'FastRCNN', 'FasterRCNN',
@@ -41,6 +45,8 @@ __all__ = [
     'GridRCNN', 'MaskScoringRCNN', 'RepPointsDetector', 'FOVEA', 'FSAF',
     'NASFCOS', 'PointRend', 'GFL', 'CornerNet', 'PAA', 'YOLOV3', 'YOLACT',
     'VFNet', 'DETR', 'TridentFasterRCNN', 'SparseRCNN', 'SCNet',
-    'DeformableDETR', 'AutoAssign', 'YOLOF', 'CenterNet', 
+    'DeformableDETR', 'AutoAssign', 'YOLOF', 'CenterNet', 'YOLOX',
+    'TwoStagePanopticSegmentor', 'PanopticFPN', 
+
     'RetinaNet3D', 'SingleStageDetector3D'
 ]
