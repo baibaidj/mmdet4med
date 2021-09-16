@@ -33,6 +33,7 @@ from .yolact_head import YOLACTHead, YOLACTProtonet, YOLACTSegmHead
 from .yolo_head import YOLOV3Head
 from .yolof_head import YOLOFHead
 from .atss_head_3d import ATSSHead3D
+from .atss_head_3d_noc import ATSSHead3DNOC
 
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
@@ -44,5 +45,5 @@ __all__ = [
     'SABLRetinaHead', 'CentripetalHead', 'VFNetHead', 'StageCascadeRPNHead',
     'CascadeRPNHead', 'EmbeddingRPNHead', 'LDHead', 'CascadeRPNHead',
     'AutoAssignHead', 'DETRHead', 'YOLOFHead', 'DeformableDETRHead',
-    'CenterNetHead', 'RetinaHead3D', 'ATSSHead3D'
+    'CenterNetHead', 'RetinaHead3D', 'ATSSHead3D', 'ATSSHead3DNOC'
 ]

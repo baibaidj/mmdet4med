@@ -340,16 +340,15 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         num_level_anchors = [anchors.size(0) for anchors in anchor_list[0]]
         
         # concat all level anchors to a single tensor
-        concat_anchor_list = []
-        concat_valid_flag_list = []
-        concat_cls_score_list = [] 
+        cls_score_list = [] 
+        grid2nx2 = lambda x, cls: x.permute(1, 2, 3, 0).reshape(-1, cls)
         for i in range(num_imgs): #concat_cls_score_list.append(torch.cat(cls_scores_list[i]))
             assert len(anchor_list[i]) == len(valid_flag_list[i])
-            concat_anchor_list.append(torch.cat(anchor_list[i]))
-            concat_valid_flag_list.append(torch.cat(valid_flag_list[i]))
-            cls_score_img = torch.cat([cls_scores_list[l][i].view(self.cls_out_channels, -1).permute(1, 0) 
-                                        for l in range(len(num_level_anchors))], 0)
-            concat_cls_score_list.append(cls_score_img)
+            anchor_list.append(torch.cat(anchor_list[i]))
+            valid_flag_list.append(torch.cat(valid_flag_list[i]))
+            cls_score_img = torch.cat([grid2nx2(cls_scores_list[l][i], self.cls_out_channels)
+                                            for l in range(len(num_level_anchors))], 0)
+            cls_score_list.append(cls_score_img)
 
         # compute targets for each image #NOTE: per image computation
         if gt_bboxes_ignore_list is None:
@@ -359,13 +358,13 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         
         results = multi_apply( # by level
             self._get_targets_single,
-            concat_anchor_list,
-            concat_valid_flag_list,
+            anchor_list,
+            valid_flag_list,
             gt_bboxes_list,
             gt_bboxes_ignore_list,
             gt_labels_list,
             img_metas, 
-            concat_cls_score_list, 
+            cls_score_list, 
             label_channels=label_channels,
             unmap_outputs=unmap_outputs)
         (all_labels, all_label_weights, all_bbox_targets, all_bbox_weights,

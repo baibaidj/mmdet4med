@@ -13,11 +13,16 @@ def parse_args():
     return args
 
 
-def process_checkpoint(in_file, out_file):
+def process_checkpoint(in_file, out_file, reserve_keys = ('state_dict', 'meta')):
     checkpoint = torch.load(in_file, map_location='cpu')
+    ckp_keys = list(checkpoint.keys())
+    print('Checkpoint keys', checkpoint.keys())
     # remove optimizer for smaller file size
-    if 'optimizer' in checkpoint:
-        del checkpoint['optimizer']
+    # if 'optimizer' in checkpoint:
+    #     del checkpoint['optimizer']
+    for key in ckp_keys:
+        if key not in reserve_keys:
+            del checkpoint[key]
     # if it is necessary to remove some sensitive data in checkpoint['meta'],
     # add the code here.
     if torch.__version__ >= '1.6':
@@ -40,3 +45,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# python tools/model_converters/publish_model.py /mnt/data4t/dejuns/ribfrac/model_save/v2.1.0/verse_instance_model_nnunet.pth  /mnt/data4t/dejuns/ribfrac/model_save/v2.2.0/verse_instance_model_nnunet.pth
+# python tools/model_converters/publish_model.py /mnt/data4t/dejuns/ribfrac/model_save/v2.1.0/model_best-v1.ckpt  /mnt/data4t/dejuns/ribfrac/model_save/v2.2.0/nndet_v1_jqm
+# python tools/model_converters/publish_model.py $repo_rt/$model_name/latest.pth $repo_rt/$model_name/publish.pth

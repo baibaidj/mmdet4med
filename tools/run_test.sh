@@ -28,3 +28,16 @@ CUDA_VISIBLE_DEVICES=1 python tools/test_med.py configs/$task/$model.py \
 # CUDA_VISIBLE_DEVICES=1 python tools/test_med.py \
 # configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn.py \
 # work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth --eval recall
+
+
+model_rt=/mnt/data4t/dejuns/ribfrac/model_save/v2.2.1
+echo mode_rt is $model_rt
+python tools/model_converters/publish_model.py $model_rt/fracture_det_dj.pth  $model_rt/fracture_det_dj
+
+
+# model_rt=/mnt/data4t/dejuns/ribfrac/model_save/lung_combo/networks_nodule
+# echo mode_rt is $model_rt
+# python tools/model_converters/publish_model.py $model_rt/nodule_classifier_dj5cls_final.pth  $model_rt/nodule_classifier_dj5cls
+# python tools/model_converters/publish_model.py $model_rt/mmseg_seg_model_best.pth  $model_rt/lunglobe_2d5cls_mmseg
+
+# python tools/model_converters/publish_model.py $model_rt/res_bifpn_fcn2.pth  $model_rt/res_bifpn_fcn2_slim

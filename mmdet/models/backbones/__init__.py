@@ -12,10 +12,12 @@ from .resnext import ResNeXt
 from .ssd_vgg import SSDVGG
 from .trident_resnet import TridentResNet
 from .resnet_3d_iso import ResNet3dIso
+from .repvgg import RepVGG
 
+# https://github.com/rwightman/pytorch-image-models/
 __all__ = [
     'RegNet', 'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet',
     'MobileNetV2', 'Res2Net', 'HourglassNet', 'DetectoRS_ResNet',
     'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 
-    'ResNet3dIso'
+    'ResNet3dIso', 'RepVGG'
 ]

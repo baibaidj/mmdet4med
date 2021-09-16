@@ -1,7 +1,7 @@
 _base_ = [
     '../datasets/ribfrac_instance_semantic_inhouse_160x192x128.py',
 ]
-num_classes = 1
+num_classes = 1 # this is an RPN 
 # model settings
 conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
@@ -136,7 +136,7 @@ model = dict(
         sampler=dict(
                 type='HardNegPoolSampler',
                 num=32, pool_size = 48,
-                pos_fraction=0.33,
+                pos_fraction=0.5,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),
         allowed_border=4,

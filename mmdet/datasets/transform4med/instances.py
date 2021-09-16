@@ -23,6 +23,7 @@ from typing import Dict, Union, Sequence, Tuple, Optional
 from .base import AbstractTransform
 from ..builder import PIPELINES
 from .io4med import print_tensor, pdb, os
+import random
 
 
 @PIPELINES.register_module()
@@ -63,6 +64,7 @@ class Instances2Boxes(AbstractTransform):
                  box_key: str, class_key: str, grad: bool = False,
                  present_instances: Optional[str] = None,
                  meta_key = 'img_meta_dict',  verbose = False,
+                 move_jitter = 0, 
                  **kwargs):
         """
         Convert instance segmentation to bounding boxes
@@ -86,6 +88,7 @@ class Instances2Boxes(AbstractTransform):
         self.meta_key = meta_key
         # self.just1cls = just1cls
         self.verbose = verbose
+        self.move_jitter = move_jitter
 
     def forward(self, data) -> dict:
         """
@@ -102,8 +105,10 @@ class Instances2Boxes(AbstractTransform):
         for batch_idx, instance_element in enumerate(data[self.instance_key].split(1)):
 
             _present_instances = data[self.present_instances][batch_idx] if self.present_instances is not None else None
-            _boxes, instance_idx = instances_to_boxes(
-                instance_element, instance_element.ndim - 2, instances=_present_instances)
+            _boxes, instance_idx = instances_to_boxes(instance_element, 
+                                                      instance_element.ndim - 2, 
+                                                      instances=_present_instances, 
+                                                      jitter_base=self.move_jitter)
             inst2class_map = data[self.meta_key][batch_idx][self.map_key]
             if self.verbose: 
                 print_tensor(f'\n[PatchBox] bix {batch_idx} instix {instance_idx} map {inst2class_map}', instance_element)
@@ -128,6 +133,7 @@ class Instances2Boxes(AbstractTransform):
 def instances_to_boxes(seg: Tensor,
                        dim: int = None,
                        instances: Optional[Sequence[int]] = None,
+                       jitter_base = 0, 
                        verbose = False,
                        ) -> Tuple[Tensor, Tensor]:
     """
@@ -166,6 +172,7 @@ def instances_to_boxes(seg: Tensor,
             box = [x1, y1, z1, x2, y2, z2]
         if verbose:
             print(f'[edge] min max bbox \n{_mins}\n{_maxs} \n{box}')
+        box = add_jitter2bbox(box, jitter_base)
         boxes.append(torch.tensor(box))
 
     if boxes:
@@ -173,6 +180,22 @@ def instances_to_boxes(seg: Tensor,
     else:
         boxes = torch.empty((0, 6))
     return boxes.to(dtype=torch.float, device=seg.device), instances
+
+
+rand_in_range = lambda a, b : random.randrange(a, b)
+
+def add_jitter2bbox(bbox, jitter_base = 3):
+    """
+    move bbox in each dimension with a small jitter
+    not changing the size of the bbox
+    """
+    if jitter_base <= 0 : return bbox
+    new_bbox = [0 for _ in bbox]
+    for i in range(3):
+        jitter = rand_in_range(-jitter_base, jitter_base)
+        new_bbox[i], new_bbox[i + 3] = bbox[i] + jitter, bbox[i + 3] + jitter
+    return new_bbox
+
 
 
 def instances_to_boxes_np(

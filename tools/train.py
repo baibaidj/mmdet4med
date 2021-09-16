@@ -5,6 +5,8 @@ import os.path as osp
 import time
 import warnings
 from pathlib import Path
+mmseg_rt = '/home/dejuns/git/mmseg4med'
+if mmseg_rt in sys.path: sys.path.remove(mmseg_rt)
 
 import mmcv
 import torch, pdb
@@ -13,12 +15,10 @@ from mmcv.runner import get_dist_info, init_dist
 from mmcv.utils import get_git_hash
 
 from mmdet import __version__
-from mmdet.apis import set_random_seed, train_detector
+from mmdet.apis import set_random_seed, train_detector, train_detector_swa
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
 from mmdet.utils import collect_env, get_root_logger
-mmseg_rt = '/home/dejuns/git/mmseg4med'
-if mmseg_rt in sys.path: sys.path.remove(mmseg_rt)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -177,6 +177,7 @@ def main():
             CLASSES=datasets[0].CLASSES)
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
+    if cfg.get('swa_training', False): train_detector = train_detector_swa
     train_detector(
         model,
         datasets,

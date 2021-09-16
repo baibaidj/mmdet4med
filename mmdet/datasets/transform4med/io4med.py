@@ -7,7 +7,7 @@ from pathlib import Path
 import time, json, random
 import SimpleITK as sitk
 from .png_rw_ import read_png2array, IO4Png
-import pdb
+import pdb, codecs, re
 
 print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 
@@ -26,6 +26,56 @@ def load2json(json_fp):
             data = json.load(f)
     return data
 
+
+def save_string_list(file_path, l, is_utf8=False):
+    """
+    Save string list as mitok file
+    - file_path: file path
+    - l: list store strings
+    """
+    file_path = str(file_path)
+    l = [l] if type(l) is not list else l
+    if is_utf8:
+        f = codecs.open(file_path, 'w', 'utf-8')
+    else:
+        f = open(file_path, 'w')
+    nb_l = len(l)
+    for i, item in enumerate(l):
+        item = str(item)
+        line = item if i == nb_l- 1 else (item + '\n')
+        f.write(line)
+    f.close()
+
+
+def remove_white_space(strings):
+    try:
+        result = re.sub(r'[\(\)\t\n\s]', '', strings)
+    except:
+        result = strings
+    return result
+
+
+def load_string_list(file_path, is_utf8=False):
+    """
+    Load string list from mitok file
+    """
+    try:
+        if is_utf8:
+            f = codecs.open(file_path, 'r', 'utf-8')
+        else:
+            f = open(file_path)
+        l = []
+        for item in f:
+            item = item.strip()
+            if len(item) == 0:
+                continue
+            l.append(item)
+        f.close()
+    except IOError:
+        print('open error %s' % file_path)
+        return None
+    else:
+        return l
 
 def convert_label(label, label_mapping = None, inverse=False, value4outlier = 0):
     if label_mapping is None:

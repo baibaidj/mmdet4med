@@ -4,6 +4,7 @@ from torch.nn.modules.utils import _pair, _triple
 
 from .builder import PRIOR_GENERATORS
 from mmdet.utils import print_tensor
+from itertools import product
 import pdb
 
 @PRIOR_GENERATORS.register_module()
@@ -169,6 +170,11 @@ class AnchorGenerator3D:
 
         Returns:
             torch.Tensor: Anchors in a single-level feature maps.
+
+        'width': [(4.0, 6.0, 8.0), (8.0, 12.0, 16.0), (16.0, 24.0, 32.0), (16.0, 24.0, 32.0)], 
+        'height': [(7.0, 11.0, 16.0), (14.0, 22.0, 32.0), (28.0, 44.0, 64.0), (56.0, 88.0, 128.0)], 
+        'depth': [(6.0, 9.0, 13.0), (12.0, 18.0, 26.0), (24.0, 36.0, 52.0), (48.0, 72.0, 104.0)], 
+
         """
         w = h = d = base_size
         if center is None:
@@ -178,9 +184,27 @@ class AnchorGenerator3D:
         else:
             x_center, y_center, z_center = center
 
-        ratio_unit = torch.pow(ratios, 1/3)
-        h_ratios = ratio_unit * ratio_unit
-        w_ratios = d_ratios = 1 / ratio_unit
+        # ratio_unit = torch.pow(ratios, 1/3)
+        # h_ratios = ratio_unit * ratio_unit
+        # w_ratios = d_ratios = 1 / ratio_unit
+        ratio_unit = torch.pow(ratios, 1/4)
+        ratio_units = torch.unique(torch.cat([ratio_unit, ratio_unit * ratio_unit]))[::2] # 
+        hwd_sizes = torch.tensor(list(product(ratio_units, ratio_units, ratio_units)))
+        hwd_prod = torch.prod(hwd_sizes, axis = -1).view(-1, 1)
+        hwd_sizes_nx4 = torch.cat([hwd_sizes, hwd_prod], axis = -1)
+        hwd_mask = torch.abs(hwd_sizes_nx4[:, -1] - 1 ) < 1e-5
+        hwd1sizes = hwd_sizes[hwd_mask]
+        # all_sizes = torch.tensor(list(product(width, height, depth))
+        # 1/u, 1/u, u^2
+        # 1/u, u, 1
+        # 1/u^2, u, u
+        # 1, 1, 1
+        # print('ratio 1/4', ratio_unit)
+        # print('ratio units', ratio_units)
+        # print('hwd sizes nx4', hwd_sizes_nx4)
+        # print('hwd 1 area', hwd1sizes, hwd1sizes.shape)
+
+        h_ratios, w_ratios, d_ratios = hwd1sizes[:, 0], hwd1sizes[:, 1], hwd1sizes[:, 2]
 
         if self.scale_major:
             ws = (w * w_ratios[:, None] * scales[None, :]).view(-1)
