@@ -79,7 +79,7 @@ class RepVGGBlock(nn.Module):
             self.rbr_1x1 = ConvModule(inplanes, planes, 1, stride, 0, 
                                         dilation=dilation, groups=groups, bias = False, 
                                         conv_cfg = self.conv_cfg, norm_cfg= self.norm_cfg)
-            print('RepVGG Block, identity = ', self.rbr_identity)
+            # print('RepVGG Block, identity = ', self.rbr_identity)
 
 
     def forward(self, inputs):

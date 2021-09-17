@@ -4,7 +4,7 @@ from mmcv.cnn import ConvModule, Scale
 from mmcv.runner import force_fp32, auto_fp16
 
 from mmdet.core import (anchor_inside_flags_3d, build_assigner, build_sampler,
-                        images_to_levels, multi_apply, multiclass_nms,
+                        images_to_levels, multi_apply, multiclass_nms, bbox_overlaps_3d, 
                         reduce_mean, unmap, ATSSAssigner3D, HardNegPoolSampler)
 from ..builder import HEADS, build_loss
 from .anchor_head_3d import AnchorHead3D, chn2last_order, print_tensor
@@ -181,20 +181,11 @@ class ATSSHead3DNOC(AnchorHead3D):
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
 
-        # classification loss
-        # compute_mask = label_weights > 0 #[compute_mask]
-        loss_cls = self.loss_cls(cls_score, labels, label_weights, avg_factor=num_total_samples)
-
-        # compute_labels= labels[compute_mask]
-        # fg_gt_count = (compute_labels == 0).sum()
-        # fg_weight_counts = compute_mask.sum()
-        # print(f'\n[ATSSl] clsloss {loss_cls} compute_pixel:{fg_weight_counts}, '
-        #         f'fg_pixel:{fg_gt_count} numsample{num_total_samples}')
-
         # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
         bg_class_ind = self.num_classes
         pos_inds = torch.nonzero((labels >= 0)& (labels < bg_class_ind)).squeeze(1)
         
+        cls_iou_targets = torch.zeros_like(cls_score) if self.use_vfl else None
         # print_tensor(f'[Loss] fg count {pos_inds.sum()}', pos_inds)
         # pdb.set_trace()
         if len(pos_inds) > 0:
@@ -214,6 +205,18 @@ class ATSSHead3DNOC(AnchorHead3D):
             loss_bbox = self.loss_bbox(pos_decode_bbox_pred,  
                                         pos_decode_bbox_targets, 
                                         avg_factor=len(pos_inds))
+            
+            # build IoU-aware cls_score targets
+            if self.use_vfl:
+                iou_targets_ini = bbox_overlaps_3d(
+                    pos_decode_bbox_pred.detach(),
+                    pos_decode_bbox_targets.detach(),
+                    is_aligned=True).clamp(min=1e-6)
+
+                pos_labels = labels[pos_inds]
+                pos_ious = iou_targets_ini.clone().detach()
+                cls_iou_targets[pos_inds, pos_labels] = pos_ious
+
             # pdb.set_trace()
             if self.verbose:
                 print_tensor('[SingleLoss] anchors', pos_anchors)
@@ -227,6 +230,21 @@ class ATSSHead3DNOC(AnchorHead3D):
             loss_bbox = bbox_pred.sum() * 0
             # loss_centerness = centerness.sum() * 0
             # centerness_targets = bbox_targets.new_tensor(0.)
+        
+        # classification loss
+        # compute_mask = label_weights > 0 #[compute_mask]
+        if self.use_vfl:
+            loss_cls = self.loss_cls(cls_score, cls_iou_targets,  avg_factor=num_total_samples)
+        else:
+            loss_cls = self.loss_cls(cls_score, labels, label_weights, avg_factor=num_total_samples)
+
+        # compute_labels= labels[compute_mask]
+        # fg_gt_count = (compute_labels == 0).sum()
+        # fg_weight_counts = compute_mask.sum()
+        # print(f'\n[ATSSl] clsloss {loss_cls} compute_pixel:{fg_weight_counts}, '
+        #         f'fg_pixel:{fg_gt_count} numsample{num_total_samples}')
+
+
         # pdb.set_trace()
         return loss_cls, loss_bbox #, loss_centerness, centerness_targets.sum()
 

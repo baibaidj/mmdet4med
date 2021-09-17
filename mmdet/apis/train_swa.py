@@ -112,7 +112,7 @@ def train_detector_swa(model,
         eval_cfg = cfg.get('evaluation', {})
         eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
         eval_hook = DistEvalHookMed if distributed else EvalHookMed
-        swa_runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
+        # swa_runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
         swa_eval = True
         swa_eval_hook = eval_hook(val_dataloader,  **eval_cfg) #save_best='bbox_mAP',
     else:
@@ -124,7 +124,7 @@ def train_detector_swa(model,
         swa_eval=swa_eval,
         eval_hook=swa_eval_hook,
         swa_interval=cfg.swa_interval)
-    swa_runner.register_hook(swa_hook, priority='LOW')
+    swa_runner.register_hook(swa_hook, priority='LOW') 
 
     # register user-defined hooks
     if cfg.get('custom_hooks', None):

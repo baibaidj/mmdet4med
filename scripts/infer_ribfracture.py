@@ -139,7 +139,7 @@ def main(cfg,
     # infer by model
     for cid, cid_infos in pid2niifp_map.items(): #[1:2]
         img_nii_fp = cid_infos['image']
-        if cid != '1112514_20180429': continue  #'1214845_20181014' 
+        # if cid != '1112514_20180429': continue  #'1214845_20181014' 
         print(f'\n[INFER] {pcount} {img_nii_fp}')
         if is_test: continue
         # store_dir

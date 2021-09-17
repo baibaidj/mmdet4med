@@ -6,7 +6,7 @@ _base_ = [
 ]
 
 data = dict(train=dict(sample_rate = 1.0), 
-            val=dict(sample_rate = 0.5), 
+            val=dict(sample_rate = 1.0), 
             test= dict(sample_rate = 0.1))
             
 model = dict(bbox_head = dict(anchor_generator = dict(verbose = False), 
@@ -19,14 +19,15 @@ swa_load_from = 'work_dirs/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_o
 swa_resume_from = None
 
 # swa optimizer
-swa_optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
+swa_optimizer = dict(type='SGD', lr=0.008, momentum=0.9, weight_decay=0.0001)
 # swa learning policy
 swa_lr_config = dict(
     policy='cyclic',
     target_ratio=(1, 0.01),
-    cyclic_times=24, #24
+    cyclic_times=12, #24
     step_ratio_up=0.0)
-swa_runner = dict(type='EpochBasedRunner', max_epochs=16)  
+swa_runner = dict(type='EpochBasedRunner', max_epochs=24)  
+swa_interval = 2
 
 # swa_optimizer_config
 swa_optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 8, norm_type = 2)) # 31G
@@ -40,8 +41,10 @@ log_config = dict(interval=10, hooks=[
                 ])
 
 checkpoint_config = dict(interval=1, max_keep_ckpts = 6)
-swa_checkpoint_config = dict(interval=2, filename_tmpl='swa_epoch_{}.pth', max_keep_ckpts = 4)
-evaluation=dict(interval=2, start=None, iou_thr=[0.1], save_best='recall@50@0.1', rule = 'greater', proposal_nums=(1, 2, 4, 8, 50))
+swa_checkpoint_config = dict(interval=4, filename_tmpl='swa_epoch_{}.pth', max_keep_ckpts = 4)
+evaluation=dict(interval=2, start=None, 
+                save_best='recall@8@0.1', rule = 'greater', 
+                iou_thr=[0.1], proposal_nums=(1, 2, 4, 8, 50))
 # CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/ribfrac/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa.py 
 # CUDA_VISIBLE_DEVICES=1,3,5 PORT=29346 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa.py 3 --gpus 3 --no-validate
 # CUDA_VISIBLE_DEVICES=0 python tools/test_med.py \

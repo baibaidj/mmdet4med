@@ -178,8 +178,8 @@ def main():
             CLASSES=datasets[0].CLASSES)
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
-    if cfg.get('swa_training', False): train_detector = train_detector_swa
-    train_detector(
+    train_detector_func = train_detector_swa if cfg.get('swa_training', False) else train_detector
+    train_detector_func(
         model,
         datasets,
         cfg,

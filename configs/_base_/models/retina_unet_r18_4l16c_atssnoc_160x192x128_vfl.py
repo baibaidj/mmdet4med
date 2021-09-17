@@ -65,15 +65,19 @@ model = dict(
             target_stds=[0.1, 0.1, 0.1, 0.2, 0.2, 0.2], 
             clip_border=False),
         loss_cls=dict(
-            type='CrossEntropyLoss', 
-            use_sigmoid=False, 
-            loss_weight=1.0, class_weight = (1.0, 0.5), 
-            verbose = False),
-            # type='FocalLoss',
-            # use_sigmoid=True,
-            # gamma=2.0,
-            # alpha=0.25, #verbose = True, 
-            # loss_weight=1.0),
+            type='FocalLoss',
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25, #verbose = True, 
+            loss_weight=1.0),
+        use_vfl=False, 
+        loss_cls_vfl=dict(
+            type='VarifocalLoss',
+            use_sigmoid=True,
+            alpha=0.75,
+            gamma=2.0,
+            iou_weighted=True,
+            loss_weight=1.0),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=0.33), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)

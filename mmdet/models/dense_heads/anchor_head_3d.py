@@ -4,7 +4,7 @@ from mmcv.runner import force_fp32
 
 from mmdet.core import (anchor, anchor_inside_flags_3d, build_prior_generator,
                         build_assigner, build_bbox_coder, build_sampler,
-                        images_to_levels, multi_apply, unmap, 
+                        images_to_levels, multi_apply, unmap, bbox_overlaps_3d,
                         AnchorGenerator3D, MaxIoUAssigner, HardNegPoolSampler)
 from ..builder import HEADS, build_loss
 from .base_dense_head import BaseDenseHead
@@ -62,6 +62,14 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                      loss_weight=1.0),
                  loss_bbox=dict(
                      type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=1.0),
+                 use_vfl=False,
+                 loss_cls_vfl=dict(
+                     type='VarifocalLoss',
+                     use_sigmoid=True,
+                     alpha=0.75,
+                     gamma=2.0,
+                     iou_weighted=True,
+                     loss_weight=1.0),
                  train_cfg=None,
                  test_cfg=None,
                  init_cfg=dict(type='Normal', layer='Conv3d', std=0.01), 
@@ -73,6 +81,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         self.feat_channels = feat_channels
         self.start_level = start_level
         self.use_sigmoid_cls = loss_cls.get('use_sigmoid', False)
+        self.use_vlf = use_vfl
         self.verbose = verbose
         # TODO better way to determine whether sample or not
         self.sampling = True #loss_cls['type'] not in ['FocalLoss', 'GHMC', 'QualityFocalLoss']
@@ -86,7 +95,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         self.reg_decoded_bbox = reg_decoded_bbox
 
         self.bbox_coder: DeltaXYWHBBoxCoder3D = build_bbox_coder(bbox_coder)
-        self.loss_cls = build_loss(loss_cls)
+        self.loss_cls = build_loss(loss_cls_vfl) if self.use_vlf else build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -424,8 +433,25 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         label_weights = label_weights.reshape(-1)
         cls_score = cls_score.permute(*chn2last_order(self.spatial_dim)).reshape(-1, self.cls_out_channels)
 
-        loss_cls = self.loss_cls( # why avg cross 
-            cls_score, labels, label_weights, avg_factor=num_total_samples)
+        if self.use_vfl:
+            anchors = anchors.reshape(-1, self.spatial_dim * 2)
+            assert not self.reg_decoded_bbox
+            bbox_pred_decoded = self.bbox_coder.decode(anchors,bbox_pred.detach())
+            bbox_targets_decoded = self.bbox_coder.decode( anchors, bbox_targets.detach())
+            ious = bbox_overlaps_3d(bbox_pred_decoded.detach(), bbox_targets_decoded.detach(), is_aligned=True)
+            pos_inds = ((labels >= 0) & (labels < self.num_classes)).nonzero().reshape(-1)
+            pos_labels = labels[pos_inds]
+            pos_ious = ious[pos_inds]
+            cls_iou_targets = torch.zeros_like(cls_score) # nxc
+            cls_iou_targets[pos_inds, pos_labels] = pos_ious
+            loss_cls = self.loss_cls(
+                cls_score,
+                cls_iou_targets,
+                label_weights.unsqueeze(1),
+                avg_factor=num_total_samples)
+        else:
+            loss_cls = self.loss_cls( # why avg cross 
+                cls_score, labels, label_weights, avg_factor=num_total_samples)
         if self.verbose:
             print_tensor(f'\n[BoxHead] pred class', cls_score[label_weights>0])
             print_tensor(f'[BoxHead] target class', labels[label_weights>0])

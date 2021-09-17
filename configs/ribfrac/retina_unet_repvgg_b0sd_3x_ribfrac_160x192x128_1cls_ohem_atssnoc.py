@@ -20,10 +20,10 @@ load_from = 'work_dirs/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_
 resume_from = None #'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf/latest.pth' 
 
 # optimizer
-optimizer = dict(#type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001, 
-                _delete_ = True, type='AdamW', lr=0.0001, weight_decay=0.0001, 
+optimizer = dict(type='SGD', lr=0.008, momentum=0.9, weight_decay=0.0001, 
+                # _delete_ = True, type='AdamW', lr=0.0001, weight_decay=0.0001, 
                 paramwise_cfg = dict(custom_keys={
-                                           r'stage\d.\d?.?rbr': dict(decay_mult = 0)
+                                           r'stage\d.\d?.?rbr': dict(decay_mult = 0.0)
                                                 # '.rbr_dense': dict(decay_mult=0), 
                                                 # '.rbr_1x1': dict(decay_mult=0), 
                                                 # '.bias': dict(decay_mult = 0), 
@@ -36,8 +36,8 @@ optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 32, norm_ty
 fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0, 
             backoff_factor=0.5, growth_interval=2000, enabled=True)) #30G
 # learning policy # 'poly'  power=0.99, 
-lr_config = dict(_delete_=True, policy='CosineAnnealing',min_lr=1e-5, by_epoch=False,
-                 warmup='linear', warmup_iters=1000, 
+lr_config = dict(_delete_=True, policy='CosineAnnealing',min_lr=1e-4, by_epoch=False,
+                 warmup='linear', warmup_iters=100, 
                  )
 
 runner = dict(type='EpochBasedRunner', max_epochs=32)
@@ -48,7 +48,9 @@ log_config = dict(interval=10, hooks=[
                 # dict(type='TensorboardLoggerHook')
                 ])
 
-evaluation=dict(interval=2, iou_thr=[0.1], proposal_nums=(1, 2, 4, 8, 50))
+evaluation=dict(interval=2, start=8, 
+                save_best='recall@8@0.1', rule = 'greater', 
+                iou_thr=[0.1],  proposal_nums=(1, 2, 4, 8, 50))
 # CUDA_VISIBLE_DEVICES=1 python tools/train.py configs/ribfrac/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc.py 
 # CUDA_VISIBLE_DEVICES=1,3,5 PORT=29346 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc.py 3 --gpus 3 #--no-validate
 # CUDA_VISIBLE_DEVICES=0 python tools/test_med.py \

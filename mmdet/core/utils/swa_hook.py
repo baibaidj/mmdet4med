@@ -1,7 +1,7 @@
 import os.path as osp
 from copy import deepcopy
 
-import torch
+import torch, mmcv
 from mmcv.runner import HOOKS, Hook
 from mmcv.runner.checkpoint import save_checkpoint
 from mmcv.runner.log_buffer import LogBuffer
@@ -83,9 +83,11 @@ class SWAHook(Hook):
             self.work_dir = runner.work_dir
             self.rank = runner.rank
             self.epoch = runner.epoch
+            self.iter = runner.iter
             self.logger = runner.logger
+            self.optimizer = runner.optimizer
             self.meta['hook_msgs']['last_ckpt'] = filename
-            self.eval_hook.after_train_epoch(runner)
+            self.eval_hook.after_train_epoch(self)
             for name, val in self.log_buffer.output.items():
                 name = 'swa_' + name
                 runner.log_buffer.output[name] = val
@@ -101,6 +103,48 @@ class SWAHook(Hook):
 
     def before_epoch(self, runner):
         pass
+
+    def save_checkpoint(self,
+                        out_dir,
+                        filename_tmpl='epoch_{}.pth',
+                        save_optimizer=True,
+                        meta=None,
+                        create_symlink=True):
+        """Save the checkpoint.
+
+        Args:
+            out_dir (str): The directory that checkpoints are saved.
+            filename_tmpl (str, optional): The checkpoint filename template,
+                which contains a placeholder for the epoch number.
+                Defaults to 'epoch_{}.pth'.
+            save_optimizer (bool, optional): Whether to save the optimizer to
+                the checkpoint. Defaults to True.
+            meta (dict, optional): The meta information to be saved in the
+                checkpoint. Defaults to None.
+            create_symlink (bool, optional): Whether to create a symlink
+                "latest.pth" to point to the latest checkpoint.
+                Defaults to True.
+        """
+        if meta is None:
+            meta = dict(epoch=self.epoch + 1, iter=self.iter)
+        elif isinstance(meta, dict):
+            meta.update(epoch=self.epoch + 1, iter=self.iter)
+        else:
+            raise TypeError(
+                f'meta should be a dict or None, but got {type(meta)}')
+        if self.meta is not None:
+            meta.update(self.meta)
+
+        filename = filename_tmpl.format(self.epoch + 1)
+        filepath = osp.join(out_dir, filename)
+        optimizer = self.optimizer if save_optimizer else None
+        save_checkpoint(self.model, filepath, optimizer=optimizer, meta=meta)
+        # in some environments, `os.symlink` is not supported, you may need to
+        # set `create_symlink` to False
+        if create_symlink:
+            dst_file = osp.join(out_dir, 'swa_avg_latest.pth')
+            mmcv.symlink(filename, dst_file)
+
 
 
 class AveragedModel(torch.nn.Module):

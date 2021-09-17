@@ -131,7 +131,7 @@ class AnchorGenerator3D:
         """int: number of feature levels that the generator will be applied"""
         return len(self.strides)
 
-    def gen_base_anchors(self, verbose = True):
+    def gen_base_anchors(self, verbose = False):
         """Generate base anchors.
         base_sizes: [1, 2, 4, 8, 16]
         Returns:

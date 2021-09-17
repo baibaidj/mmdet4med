@@ -179,14 +179,14 @@ class CustomDatasetDet(Dataset):
         pid2pathpairs = []
         for ix, part_fn in enumerate(case_fns):
             cid = part_fn.split(os.sep)[-1]
-            if ix < 2: print('Check cid', cid)
+            if self.verbose and ix < 2: print('Check cid', cid)
             if self.exclude_pids and (cid in self.exclude_pids): 
                 print('Exclude ', cid)
                 continue
             this_holder = {'cid': cid}
             for k, suffix in key2suffix.items(): 
                 this_holder[k] = osp.join(data_folder, part_fn + suffix)
-                if ix < 3: print(f'\t{k}', this_holder[k])
+                if self.verbose and ix < 2: print(f'\t{k}', this_holder[k])
             pid2pathpairs.append(this_holder)
         pathpairs_orderd = sorted(pid2pathpairs, key = lambda x: x['cid']) # TODO: debug
         return pathpairs_orderd
@@ -233,7 +233,7 @@ class CustomDatasetDet(Dataset):
         print("Building Sampling Cache for Dataset", f'Oversample Class: {self.oversample_classes}')
         for cix, item in enumerate(self.img_infos):
             rois = load_json(item['roi_fp'])
-            if cix < 1: 
+            if self.verbose and cix < 1: 
                 print(f'{item} \n[BuildCache] {cix}th')
                 _ = [print('\t', k, v)  for roi in rois for k, v in roi.items()]
             if rois:

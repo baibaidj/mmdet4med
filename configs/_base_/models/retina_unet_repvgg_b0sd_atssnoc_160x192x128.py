@@ -105,7 +105,7 @@ model = dict(
                         instance_key="seg",
                         map_key="inst2cls_map", 
                         box_key="gt_bboxes",
-                        class_key="gt_labels", move_jitter = 3, 
+                        class_key="gt_labels", move_jitter = 2, 
                         present_instances="present_instances"),
                     dict(type = 'Instances2SemanticSeg', # verbose = True, 
                         instance_key = 'seg',
@@ -141,7 +141,7 @@ model = dict(
         score_thr=0.5,
         nms=dict(type='nms', iou_threshold=0.05), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
-        max_per_img=50, 
+        max_per_img=32, 
         mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 2,
         blend_mode = 'gaussian' , overlap=0.5, sigma_scale = 0.125, # 'gaussian or constant
         padding_mode='constant' )
