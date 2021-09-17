@@ -7,7 +7,9 @@ import time
 import warnings
 from pathlib import Path
 mmseg_rt = '/home/dejuns/git/mmseg4med'
+monai_rt = '/home/dejuns/git/MONAI'
 if mmseg_rt in sys.path: sys.path.remove(mmseg_rt)
+if monai_rt in sys.path: sys.path.remove(monai_rt)
 
 import mmcv
 import torch, pdb

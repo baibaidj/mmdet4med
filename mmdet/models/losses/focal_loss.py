@@ -183,14 +183,15 @@ class FocalLoss(nn.Module):
                 avg_factor=avg_factor)
 
             if self.verbose: 
-                fg_mask = weight>0
-                target_gt = target[fg_mask]
-                pdb.set_trace()
-                pred1hot = torch.cat([torch.ones_like(pred[fg_mask]) , pred[fg_mask] ], axis = 1)
-                fg_loss = calculate_loss_func(pred1hot, target_gt, reduction='none')
-                fg_pred_nxc = torch.cat([pred[fg_mask], torch.sigmoid(pred[fg_mask]), target_gt[:, None], fg_loss], axis = 1)
+                count_mask = weight>0
+                count_target = target[count_mask]
+                count_pred = pred[count_mask]
+                # pred1hot = torch.cat([torch.ones_like(pred[fg_mask]) , pred[fg_mask] ], axis = 1)
+                fg_loss = calculate_loss_func(count_pred, count_target, reduction='none')
+                fg_pred_nxc = torch.cat([count_pred, torch.sigmoid(count_pred), count_target[:, None], fg_loss], axis = 1)
                 # fg_counts, weight_counts = target.sum(), weight.sum()
-                print(f'[Focalloss] fg logit gt loss \n {fg_pred_nxc}')
+                print(f'[Focalloss] fg logit gt loss \n {fg_pred_nxc[:10]}', fg_pred_nxc.shape)
+                pdb.set_trace()
                 # counts fg-{fg_counts} weight-{weight_counts},
                 # print_tensor(f'[FocalLoss] pred', pred )
                 # print_tensor(f'[Focalloss] gt', target)

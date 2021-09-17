@@ -91,7 +91,7 @@ class CustomDatasetDet(Dataset):
                  test_mode=False,
                  ignore_index=255,
                  sample_rate = 1.0,
-                 view_channel = None,
+                 file_extension = 'nii',
                  verbose = False,
                  key2suffix ={'img_fp': '_image.nii', 
                                 'seg_fp': '_instance.nii', 
@@ -116,7 +116,7 @@ class CustomDatasetDet(Dataset):
         self.test_mode = split != 'train'
         self.ignore_index = ignore_index
         self.sample_rate = sample_rate
-        self.view_channel = view_channel
+        self.file_extension = file_extension
         self.keys = keys
         self.verbose = verbose
         self.exclude_pids = exclude_pids

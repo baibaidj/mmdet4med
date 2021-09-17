@@ -48,7 +48,7 @@ class Load1CaseDet:
             if fp is None:
                 data[k] = None
             else:
-                if fp.endswith('nii'):
+                if fp.endswith('nii') or fp.endswith('nii.gz'):
                     data[k], affine_matrix = IO4Nii.read(fp, verbose=False, axis_order=None, dtype=np.int16)
                     data[self.meta_key]['spatial_shape'] = data[k].shape
                     img_fp = fp
@@ -57,7 +57,7 @@ class Load1CaseDet:
                     data[k] = load_json(fp)
                     if self.verbose: print(f'[load] {k}', data[k])
                 else:
-                    raise ValueError(f'load only npy or pkl but got {fp}')
+                    raise ValueError(f'load only nii(.gz) or pkl but got {fp}')
         if 'set' in data:
             if data['seg'].shape != data['img'].shape:
                 print('[Warn] mask shape not match image shape', data['seg'].shape, data['img'].shape)

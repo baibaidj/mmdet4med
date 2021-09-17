@@ -81,7 +81,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         self.feat_channels = feat_channels
         self.start_level = start_level
         self.use_sigmoid_cls = loss_cls.get('use_sigmoid', False)
-        self.use_vlf = use_vfl
+        self.use_vfl = use_vfl
         self.verbose = verbose
         # TODO better way to determine whether sample or not
         self.sampling = True #loss_cls['type'] not in ['FocalLoss', 'GHMC', 'QualityFocalLoss']
@@ -95,7 +95,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
         self.reg_decoded_bbox = reg_decoded_bbox
 
         self.bbox_coder: DeltaXYWHBBoxCoder3D = build_bbox_coder(bbox_coder)
-        self.loss_cls = build_loss(loss_cls_vfl) if self.use_vlf else build_loss(loss_cls)
+        self.loss_cls = build_loss(loss_cls_vfl) if self.use_vfl else build_loss(loss_cls)
         self.loss_bbox = build_loss(loss_bbox)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg

@@ -68,7 +68,7 @@ model = dict(
             type='FocalLoss',
             use_sigmoid=True,
             gamma=2.0,
-            alpha=0.25, #verbose = True, 
+            alpha=0.25, 
             loss_weight=1.0),
         use_vfl=False, 
         loss_cls_vfl=dict(
@@ -77,7 +77,7 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=1.0),
+            loss_weight=3.0),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=0.33), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
@@ -140,7 +140,7 @@ model = dict(
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=32, pool_size = 20,
+                num=128, pool_size = 32,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),
@@ -151,7 +151,7 @@ model = dict(
         nms_pre=200,
         # nms_pre_tiles = 1000, 
         min_bbox_size=2,
-        score_thr=0.5,
+        score_thr=0.3,
         nms=dict(type='nms', iou_threshold=0.05), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=32, 

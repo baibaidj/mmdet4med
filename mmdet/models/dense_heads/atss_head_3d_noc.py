@@ -216,6 +216,11 @@ class ATSSHead3DNOC(AnchorHead3D):
                 pos_labels = labels[pos_inds]
                 pos_ious = iou_targets_ini.clone().detach()
                 cls_iou_targets[pos_inds, pos_labels] = pos_ious
+                
+                if self.verbose:
+                    print_tensor('[VFLLoss] pos_ious', pos_ious)
+                    print_tensor('[VFLLoss] cls iou targets', cls_iou_targets)
+
 
             # pdb.set_trace()
             if self.verbose:

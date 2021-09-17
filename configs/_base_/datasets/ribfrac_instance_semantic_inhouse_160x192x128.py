@@ -65,7 +65,8 @@ total_samples = 160 #// draw_step #9842
 sample_per_gpu = 2# bs2 >> 24.5 G  # 
 train_sample_rate = 1.0
 val_sample_rate = 0.30
-
+key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 
+                            'roi_fp':'_ins2cls.json'}
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
     workers_per_gpu= 4, 
@@ -74,6 +75,7 @@ data = dict(
         sample_rate = train_sample_rate, split='train',
         pipeline=train_pipeline, 
         json_filename = 'dataset.json',
+        key2suffix = key2suffix,
         # oversample_classes = (1, 2), 
         ),
     val=dict(
@@ -81,6 +83,7 @@ data = dict(
         sample_rate = val_sample_rate, split='test', 
         pipeline=test_pipeline,
         json_filename = 'dataset.json',
+        key2suffix = key2suffix,
         # fn_spliter = ['-', 0]
         ),
     test=dict(
@@ -88,6 +91,7 @@ data = dict(
         sample_rate = 1.0, split='test', 
         pipeline=test_pipeline,
         json_filename = 'dataset.json',
+        key2suffix = key2suffix,
         # fn_spliter = ['-', 0]
         ))
 
