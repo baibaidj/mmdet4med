@@ -380,7 +380,10 @@ class SingleStageDetector3D(BaseDetector3D):
         # detection
         bbox_nx7 = torch.cat([d1[0] for d1 in det_resutls], axis = 0) # nx7
         label_nx1 = torch.cat([d1[1] for d1 in det_resutls], axis = 0) # nx1
-
+        
+        if bbox_nx7.shape[0] < 1: 
+        # pdb.set_trace()
+            return [[torch.zeros((0, 7)), ] ], None
         dets_clean, keep_idx = batched_nms_3d(bbox_nx7[:, :6], bbox_nx7[:, 6], 
                                              label_nx1, self.test_cfg['nms'])
         label_nx1 = label_nx1[keep_idx]

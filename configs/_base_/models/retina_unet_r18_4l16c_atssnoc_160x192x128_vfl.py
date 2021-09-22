@@ -26,7 +26,7 @@ model = dict(
         dilations=(1, 1, 1, 1),
         out_indices=(1, 2, 3, 4, 5), # 0 is input image 
         conv_cfg=conv_cfg,
-        norm_cfg=norm_cfg,
+        norm_cfg=norm_cfg,  # TODO: replace ReLU with Swish
         style='pytorch',
         # non_local=((0, 0), (0, 0), (0, 0), (0, 0)),
         # non_local_cfg=dict(
@@ -140,7 +140,7 @@ model = dict(
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=128, pool_size = 32,
+                num=64, pool_size = 32,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),

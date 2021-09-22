@@ -213,7 +213,7 @@ class Bottleneck3d(nn.Module):
                  with_cp=False,
                  stride = None
                  ):
-        super().__init__()
+        super().__init__() 
         assert style in ['pytorch', 'caffe']
         assert inflate_style in ['3x1x1', '3x3x3']
 
@@ -315,7 +315,7 @@ class Bottleneck3d(nn.Module):
             out = self.conv3(out)
 
             if self.downsample is not None:
-                identity = self.downsample(x)
+                identity = self.downsample(x) # planes * block.expansion
 
             out = out + identity
             return out

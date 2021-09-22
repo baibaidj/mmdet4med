@@ -1,8 +1,11 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from mmcv.cnn.bricks.conv_module import ConvModule
+from mmdet.models.backbones.resnet3d import Bottleneck3d
 from mmcv.cnn import build_conv_layer, build_norm_layer
 from mmcv.runner import BaseModule, Sequential
 from torch import nn as nn
 from torch.nn.modules.utils import _ntuple, _triple
+import torch
 
 class ResLayer(Sequential):
     """ResLayer to build ResNet style backbone.
@@ -404,4 +407,143 @@ class ResLayerIso(nn.Sequential):
             global_ix = global_ix + 1 * st_per_block if global_ix is not None else None
 
         super(ResLayerIso, self).__init__(*layers)
+
+
+class CrossStageLayerIso(nn.Module):
+    """ResLayer to build ResNet style backbone.
+    128
+
+    [ 1x1, 64  ]
+    [ 3x3, 64  ] x 3
+    [ 1x1, 256 ] 
+
+    Args:
+        block (nn.Module): block used to build ResLayer.
+        inplanes (int): inplanes of block.
+        planes (int): planes of block.
+        num_blocks (int): number of blocks.
+        stride (int): stride of the first block. Default: 1
+        avg_down (bool): Use AvgPool instead of stride conv when
+            downsampling in the bottleneck. Default: False
+        conv_cfg (dict): dictionary to construct and config conv layer.
+            Default: None
+        norm_cfg (dict): dictionary to construct and config norm layer.
+            Default: dict(type='BN')
+        multi_grid (int | None): Multi grid dilation rates of last
+            stage. Default: None
+        contract_dilation (bool): Whether contract first dilation of each layer
+            Default: False
+    """
+
+    def __init__(self,
+                 block : Bottleneck3d,
+                 inplanes, # 128
+                 planes, # 64
+                 num_blocks,
+                 stride=1,
+                 dilation=1,
+                 avg_down=False,
+                 conv_cfg=None,
+                 non_local=0,
+                 non_local_cfg=dict(),
+                 norm_cfg=dict(type='BN'),
+                 multi_grid=None,
+                 contract_dilation=False,
+                 **kwargs):
+        
+        super(CrossStageLayerIso, self).__init__() # *layers
+
+        self.block = block
+        st_per_block = 2 if 'basic' in block.__name__.lower() else 1
+        global_ix = kwargs.pop('global_ix', None)
+        non_local = _ntuple(num_blocks)(non_local)
+        conv_downsample = None
+        if stride != 1 or inplanes != planes * block.expansion:
+            conv_downsample = []
+            conv_stride = stride
+            if avg_down and stride != 1: 
+                conv_stride = 1
+                conv_downsample.append(
+                    nn.AvgPool3d(
+                        kernel_size=stride,
+                        stride=stride,
+                        ceil_mode=True,
+                        count_include_pad=False))
+            conv_downsample.extend([
+                build_conv_layer(
+                    conv_cfg,
+                    inplanes,
+                    planes * block.expansion, # TODO: if use expansion 
+                    kernel_size=1,
+                    stride=conv_stride,
+                    bias=False),
+                build_norm_layer(norm_cfg, planes * block.expansion)[1]
+            ])
+            conv_downsample = nn.Sequential(*conv_downsample)
+
+        self.conv_downsample = conv_downsample # down sample channels
+
+        block_out_chs = planes * block.expansion # 256
+        inplanes_side = block_out_chs // 2 # 64
+        planes_side = planes // 2 # 32
+        layers = []
+        if multi_grid is None:
+            if dilation > 1 and contract_dilation:
+                first_dilation = dilation // 2
+            else:
+                first_dilation = dilation
+        else:
+            first_dilation = multi_grid[0]
+
+        kwargs1 = dict(
+                inplanes=inplanes_side,
+                planes=planes_side,
+                stride=stride,
+                dilation=first_dilation,
+                non_local=non_local[0] == 1,
+                non_local_cfg=non_local_cfg,
+                downsample=None,
+                conv_cfg=conv_cfg,
+                norm_cfg=norm_cfg,
+                **kwargs)
+        if global_ix is not None: kwargs1['global_ix'] = global_ix
+        layers.append(block(**kwargs1))
+
+        global_ix = global_ix + 1 * st_per_block if global_ix is not None else None
+        inplanes_side = planes_side * block.expansion #  # 32 x 4   = 128
+        for i in range(1, num_blocks):
+            kwargs_loop = dict(inplanes=inplanes_side, #  32 x 4   = 128
+                                planes=planes_side, # 32
+                                stride=1,
+                                dilation=dilation if multi_grid is None else multi_grid[i],
+                                non_local=(non_local[i] == 1),
+                                non_local_cfg=non_local_cfg,
+                                conv_cfg=conv_cfg,
+                                norm_cfg=norm_cfg,
+                                **kwargs)
+            if global_ix is not None: kwargs_loop['global_ix'] = global_ix
+            layers.append(block(**kwargs_loop))
+            global_ix = global_ix + 1 * st_per_block if global_ix is not None else None
+
+        self.res_block = nn.Sequential(*layers)
+        
+        self.conv_transition_b = ConvModule(inplanes_side, block_out_chs//2, kernel_size=1, 
+                                            conv_cfg = conv_cfg, 
+                                            norm_cfg = norm_cfg, 
+                                            act_cfg=kwargs.get('act_cfg', None))
+        self.conv_transition = ConvModule(block_out_chs//2, block_out_chs,  kernel_size=1, 
+                                          conv_cfg = conv_cfg, 
+                                          norm_cfg = norm_cfg, 
+                                          act_cfg=kwargs.get('act_cfg', None))
+
+    def forward(self, x):
+        if self.conv_downsample is not None:
+            x = self.conv_downsample(x)
+        split = x.shape[1] // 2
+        xs, xb = x[:, : split], x[:, split:]
+        xb = self.res_block(xb)
+        xb = self.conv_transition_b(xb).continuous()
+        out = self.conv_transition(torch.cat([xs, xb]), dim = 1)
+        return out
+
 
