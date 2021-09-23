@@ -792,7 +792,7 @@ class AnchorHead3D(BaseDenseHead): #, BBoxTestMixin3D
                 #TODO: nms                                  
                 det_bbox, det_label = multiclass_nms_3d(mlvl_bboxes, mlvl_scores,
                                                      cfg.score_thr, cfg.nms,
-                                                     cfg.max_per_img)
+                                                     cfg.max_per_img // 2)
                 # if self.use_sigmoid_cls: det_label += 1
                 if self.verbose and det_bbox.shape[0]> 0:
                     print_tensor(f'\t[Pred2Bbox] NMS {bi} bbox ', det_bbox[:, :6])

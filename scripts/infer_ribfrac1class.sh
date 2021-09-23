@@ -5,12 +5,25 @@ numfold=$2
 
 model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1anchor
 weightfile=best_recall@8@0.1_epoch_32.pth
+# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc
+# weightfile=latest.pth
+
+# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl
+# weightfile=best_recall@8@0.1_epoch_24.pth
+
+# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa
+# weightfile=best_recall@8@0.1_epoch_8.pth
 
 # model_name=retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa
 # weightfile=best_recall@50@0.1_epoch_10.pth
 
-repo_rt=/home/dejuns/git/mmdet4med/work_dirs #best_recall@50@0.1_epoch_10.pth #latest.pth #'publish-4ff54096.pth' 
-taskname=ribfrac_det
+model_name=retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1anchor
+weightfile=best_recall@8@0.1_epoch_18.pth # 2 anchors
+
+# model_name=retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_adamw
+# weightfile=best_recall@8@0.1_epoch_24.pth # 14 anchors
+
+repo_rt=/home/dejuns/git/mmdet4med/work_dirs 
 
 
 # python tools/model_converters/publish_model.py $repo_rt/$model_name/latest.pth $repo_rt/$model_name/publish.pth
@@ -22,7 +35,7 @@ split=train
 setname=ky46
 
 gpuix=${gpuix:-0}
-numfold=${numfold:-20}
+numfold=${numfold:-3}
 foldix=${FOLDIX:-0}
 for (( foldix = 0; foldix < $numfold; foldix++ )) # $numfold
 do {
@@ -41,11 +54,12 @@ do {
     } &
 done
 
+wait
 CUDA_VISIBLE_DEVICES=$gpuix python3 scripts/infer_ribfracture.py \
     --data-rt $data_rt --repo-rt $repo_rt --pos-thresh '0.5' \
     --model $model_name --not-ky-style --weight-file $weightfile \
     --split $split --dataset-name $setname --gpu-ix 0 \
     --fold-ix $foldix --num-fold 1 --verbose --eval-final #
 
-# bash scripts/infer_ribfrac1class.sh 0 1
+# bash scripts/infer_ribfrac1class.sh 2 3
 # python -m line_profiler 

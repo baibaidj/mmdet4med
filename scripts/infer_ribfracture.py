@@ -449,8 +449,8 @@ if __name__ == '__main__':
         det_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix='det_roi_infos.json')
         seg_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix='seg_roi_infos.json')
         
-        print('Detection FROC', det_froc)
-        print('Segmentation FROC', seg_froc)
+        print(f'[{cfg.model_name}] Detection FROC \n', det_froc)
+        print(f'[{cfg.model_name}] Segmentation FROC \n', seg_froc)
 
     else:
         main(cfg, 

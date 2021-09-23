@@ -18,6 +18,7 @@ find_unused_parameters=True
 load_from = None # 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl/latest.pth'
 resume_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl/latest.pth' 
 
+
 # optimizer
 optimizer = dict(#type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001, 
                 _delete_ = True, type='AdamW', lr=0.0001, weight_decay=0.0001

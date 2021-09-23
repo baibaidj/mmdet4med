@@ -20,3 +20,13 @@ class RibFractureDet(CustomDatasetDet):
 
     def __init__(self, *args, **kwargs):
         super(RibFractureDet, self).__init__(*args, **kwargs)
+
+
+
+@DATASETS.register_module()
+class RibFractureDet3cls(CustomDatasetDet):
+
+    CLASSES = ('broke', 'buckle', 'old')
+
+    def __init__(self, *args, **kwargs):
+        super(RibFractureDet3cls, self).__init__(*args, **kwargs)

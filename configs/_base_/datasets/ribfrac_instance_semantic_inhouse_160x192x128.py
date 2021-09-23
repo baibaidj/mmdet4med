@@ -14,9 +14,9 @@ interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
 ext_patch_size = (192, 224, 160) # avoid artifacts such as boarder reflection
 patch_size = (160, 192, 128)  # [160 192 112] # xyz
-use_aux_sdm = False
+label_map = {1: 0, 2:0, 3:0, 4:0}
 train_pipeline = [
-    dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), semantic2binary = True, verbose = False),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
+    dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), label_map = label_map),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
     dict(type = 'AddChanneld', keys= keys), 
     # dict(type = 'ConvertLabeld', keys = 'seg', label_mapping = label_mapping, value4outlier = 1), 
     dict(type = 'InstanceBasedCropDet', keys=keys, patch_size= ext_patch_size, verbose = False), # cropshape
@@ -33,7 +33,7 @@ train_pipeline = [
 ]
 test_keys = ('img', )
 test_pipeline = [
-        dict(type = 'Load1CaseDet', keys = ('img', 'roi')), 
+        dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map), 
         dict(type='MultiScaleFlipAug3D',
             # label_mapping = label_mapping,
             # value4outlier = 1,
@@ -65,33 +65,33 @@ total_samples = 160 #// draw_step #9842
 sample_per_gpu = 2# bs2 >> 24.5 G  # 
 train_sample_rate = 1.0
 val_sample_rate = 0.30
-key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 
-                            'roi_fp':'_ins2cls.json'}
+# key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 
+#                             'roi_fp':'_ins2cls.json'}
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
     workers_per_gpu= 4, 
     train=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = train_sample_rate, split='train',
-        pipeline=train_pipeline, 
+        pipeline=train_pipeline,  label_map = label_map, 
         json_filename = 'dataset.json',
-        key2suffix = key2suffix,
+        # key2suffix = key2suffix,
         # oversample_classes = (1, 2), 
         ),
     val=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = val_sample_rate, split='test', 
-        pipeline=test_pipeline,
+        pipeline=test_pipeline, label_map = label_map, 
         json_filename = 'dataset.json',
-        key2suffix = key2suffix,
+        # key2suffix = key2suffix,
         # fn_spliter = ['-', 0]
         ),
     test=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = 1.0, split='test', 
-        pipeline=test_pipeline,
+        pipeline=test_pipeline, label_map = label_map, 
         json_filename = 'dataset.json',
-        key2suffix = key2suffix,
+        # key2suffix = key2suffix,
         # fn_spliter = ['-', 0]
         ))
 

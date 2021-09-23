@@ -100,7 +100,7 @@ class CustomDatasetDet(Dataset):
                  exclude_pids = None,
                  json_filename = 'dataset.json',
                  fn_spliter = ['_', 1],
-                 roi_cls_binary = True,
+                 label_map = {1: 0, 2:0, 3:0, 4:0},
                  oversample_classes = None, 
                 
                  ):
@@ -122,7 +122,7 @@ class CustomDatasetDet(Dataset):
         self.exclude_pids = exclude_pids
         self.json_filename  = json_filename
         self.fn_spliter = fn_spliter
-        self.roi_cls_binary = roi_cls_binary
+        self.label_map = label_map
         self.oversample_classes = oversample_classes
 
         # load annotations
@@ -319,16 +319,18 @@ class CustomDatasetDet(Dataset):
             subdir = str(mask_fp.stem) #view2axis[self.view_channel]
             # 1. load seg mask 
             img_full, af_mat = IO4Nii.read(mask_fp, verbose=False, axis_order= None, dtype=np.uint8)
-            gt_seg_map  = np.array(img_full > 0, dtype = np.uint8)
-
             # 2. load property, image meta dict
             roi_info_list = load_json(roi_fp)
             if len(roi_info_list) ==0 : 
                 bbox_nx6 = np.zeros((0, 6))
                 label_nx1 = np.zeros((0, 1))
+                gt_seg_map = img_full
             else:
+                label_convert = lambda cls: self.label_map.get(cls, 0)
                 bbox_nx6 = np.array([roi['bbox'] for roi in roi_info_list])
-                label_nx1 = np.array([0 if self.roi_cls_binary else roi['class'] for roi in roi_info_list])
+                label_nx1 = np.array([label_convert(roi['class']) for roi in roi_info_list])
+                gt_seg_map = ins2cls4seg(img_full, roi_info_list, self.label_map)
+
             # pdb.set_trace()
             anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})
             anno_by_pids[subdir]['gt_seg'] = gt_seg_map
@@ -367,7 +369,7 @@ class CustomDatasetDet(Dataset):
         eval_results = {}
         anno_by_pids = self.get_anno_infos()
 
-        pred_det_list = [a[0] for a in results]
+        pred_det_list = [a for mini_re in results for a in mini_re[0]] # mini-batch (det, seg)
         # bbox_results from outer to inner: chunk, mini-batch, class
         annotations = [info for pid, info in anno_by_pids.items()]
 
@@ -379,6 +381,7 @@ class CustomDatasetDet(Dataset):
             mean_aps = []
             for iou_thr in iou_thrs:
                 print_log(f'\n{"-" * 15}iou_thr: {iou_thr}{"-" * 15}')
+                # pdb.set_trace()
                 mean_ap, _ = eval_map_3d(
                     pred_det_list,
                     annotations,
@@ -391,7 +394,7 @@ class CustomDatasetDet(Dataset):
             eval_results['mAP'] = sum(mean_aps) / len(mean_aps)
         elif metric == 'recall':
             gt_bboxes = [ann['bboxes'] for ann in annotations]
-            pred_det_list = [b[0][0] for b in pred_det_list]
+            pred_det_list = [np.concatenate(case_re, axis = 0) for case_re in pred_det_list]
             recalls = eval_recalls_3d(gt_bboxes, pred_det_list, proposal_nums, iou_thr, logger=logger)
             for i, num in enumerate(proposal_nums):
                 for j, iou in enumerate(iou_thrs):
@@ -401,7 +404,7 @@ class CustomDatasetDet(Dataset):
                 for i, num in enumerate(proposal_nums):
                     eval_results[f'AR@{num}'] = ar[i]
 
-        num_classes_seg = max(len(self.CLASSES), 2)
+        num_classes_seg = len(self.CLASSES) + 1
         pred_seg_list = [a[1] for a in results] # model return tuple(seg_mask_4d, aux_mask_4d, cls_out)
         gt_seg_list = [info['gt_seg'] for pid, info in anno_by_pids.items()]
         # pdb.set_trace()
@@ -411,9 +414,19 @@ class CustomDatasetDet(Dataset):
                                                     logger=logger) # 
 
         for k, seg_tb in seg_metric_detail.items():
-            print(f'[SegMetric]{k}\n', seg_tb[:4])
+            print(f'[SegMetric]{k}\n', np.around(seg_tb[:4], 4))
         
         return eval_results #, seg_metric_detail
+
+def ins2cls4seg(instance_mask, roi_info_list, label_map = {}, verbose = False):
+    semantic_mask = np.zeros_like(instance_mask)
+    for roi in roi_info_list:
+        ins_id, ins_cls = roi['instance'], roi['class']
+        ins_mask = instance_mask == ins_id
+        target_cls = label_map.get(ins_cls, 0) + 1
+        if verbose: print(f'[Ins2Cls4Seg] map {label_map} ins{ins_id} cls{ins_cls} target{target_cls}')
+        semantic_mask[ins_mask] = target_cls
+    return semantic_mask
 
 
 def overlap_handler_zaxis(tensor_list, indices_list, stack_axis = 0, verbose = True):
