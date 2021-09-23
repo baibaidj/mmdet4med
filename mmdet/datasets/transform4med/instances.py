@@ -320,14 +320,13 @@ class Instances2SemanticSeg(AbstractTransform):
             ins_mask = data[self.instance_key][batch_idx]
 
             # TODO: check classes 
-            instances_to_segmentation(ins_mask,
-                                      data[self.meta_key][batch_idx][self.map_key],
+            instances_to_segmentation(ins_mask, ins2cls, 
                                       add_background=self.add_background,
                                       instance_idx=_present_instances[batch_idx],
                                       out=semantic[batch_idx])
             if self.verbose: 
-                print_tensor(f'\n[Inst2Seg] bix {batch_idx} instance raw', ins_mask)
-                print_tensor(f'[Inst2Seg] bix {batch_idx} semantic raw', semantic[batch_idx])
+                print_tensor(f'\n[Inst2Seg] bix {batch_idx} ins2cls {ins2cls} instance', ins_mask)
+                print_tensor(f'[Inst2Seg] bix {batch_idx} ins2cls {ins2cls} semantic', semantic[batch_idx])
         data[self.seg_key] = semantic
         return data
 

@@ -186,8 +186,7 @@ class ATSSHead3DNOC(AnchorHead3D):
         pos_inds = torch.nonzero((labels >= 0)& (labels < bg_class_ind)).squeeze(1)
         
         cls_iou_targets = torch.zeros_like(cls_score) if self.use_vfl else None
-        # print_tensor(f'[Loss] fg count {pos_inds.sum()}', pos_inds)
-        # pdb.set_trace()
+        # print(f'[SingleLoss] bgcls {bg_class_ind} fg count {len(pos_inds)}', pos_inds)
         if len(pos_inds) > 0:
             pos_bbox_targets = bbox_targets[pos_inds] # nx6
             pos_bbox_pred = bbox_pred[pos_inds]
@@ -218,21 +217,23 @@ class ATSSHead3DNOC(AnchorHead3D):
                 cls_iou_targets[pos_inds, pos_labels] = pos_ious
                 
                 if self.verbose:
-                    print_tensor('[VFLLoss] pos_ious', pos_ious)
-                    print_tensor('[VFLLoss] cls iou targets', cls_iou_targets)
-
+                    print_tensor('\n[VFL_Prepare] poslabel', pos_labels)
+                    print_tensor('[VFL_Prepare] pos_ious', pos_ious)
+                    print_tensor('[VFL_Prepare] cls iou targets', cls_iou_targets)
 
             # pdb.set_trace()
             if self.verbose:
-                print_tensor('[SingleLoss] anchors', pos_anchors)
-                print_tensor('[SingleLoss] pred delta', pos_bbox_pred)
-                print_tensor('[SingleLoss] target delta', pos_bbox_targets)
+                print_tensor('[BboxLoss1level] anchors', pos_anchors)
+                print_tensor('[BboxLoss1level] pred delta', pos_bbox_pred)
+                print_tensor('[BboxLoss1level] target delta', pos_bbox_targets)
 
-                print_tensor('[SingleLoss] pred bbox coord', pos_decode_bbox_pred)
-                print_tensor('[SingleLoss] target bbox coord', pos_decode_bbox_targets)
+                print_tensor('[BboxLoss1level] pred bbox coord', pos_decode_bbox_pred)
+                print_tensor('[BboxLoss1level] target bbox coord', pos_decode_bbox_targets)
             # pdb.set_trace()
         else:
-            loss_bbox = bbox_pred.sum() * 0
+            # pdb.set_trace()
+            if self.verbose: print_tensor(f'[BboxLoss1level] bbox pred ', bbox_pred)
+            loss_bbox = bbox_pred.clamp(min = 1e-4).sum() * 0
             # loss_centerness = centerness.sum() * 0
             # centerness_targets = bbox_targets.new_tensor(0.)
         
@@ -243,14 +244,10 @@ class ATSSHead3DNOC(AnchorHead3D):
         else:
             loss_cls = self.loss_cls(cls_score, labels, label_weights, avg_factor=num_total_samples)
 
-        # compute_labels= labels[compute_mask]
-        # fg_gt_count = (compute_labels == 0).sum()
-        # fg_weight_counts = compute_mask.sum()
-        # print(f'\n[ATSSl] clsloss {loss_cls} compute_pixel:{fg_weight_counts}, '
-        #         f'fg_pixel:{fg_gt_count} numsample{num_total_samples}')
-
-
-        # pdb.set_trace()
+        if self.verbose: 
+            print_tensor('[SingleLoss] cls loss', loss_cls)
+            print_tensor('[SingleLoss] bbox loss', loss_bbox)
+            print('\n')
         return loss_cls, loss_bbox #, loss_centerness, centerness_targets.sum()
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds')) #, 'centernesses'
@@ -324,8 +321,7 @@ class ATSSHead3DNOC(AnchorHead3D):
         # bbox_avg_factor = sum(bbox_avg_factor)
         # bbox_avg_factor = reduce_mean(bbox_avg_factor).clamp_(min=1).item()
         # losses_bbox = list(map(lambda x: x / bbox_avg_factor, losses_bbox))
-        return dict(loss_cls=losses_cls,  loss_bbox=losses_bbox,)
-            # loss_centerness=loss_centerness)
+        return dict(loss_cls=losses_cls,  loss_bbox=losses_bbox)
 
     def get_targets(self,
                     anchor_list,

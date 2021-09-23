@@ -99,7 +99,7 @@ def bbox_overlaps_3d(bboxes1, bboxes2, mode='iou', eps=1e-6):
     # inner_start_dim = lambda b1, b2, dim: np.maximum(b1[dim], b2[dim])
     # inner_end_dim = lambda b1, b2, dim: np.minimum(b1[dim], b2[dim])
     lt = np.maximum(bboxes1[:, None, :3], bboxes2[None, :, :3])  # [B, rows, cols, 3]
-    rb = np.minimum(bboxes1[:, None, 3:], bboxes2[None, :, 3:])  # [B, rows, cols, 3]
+    rb = np.minimum(bboxes1[:, None, 3:6], bboxes2[None, :, 3:6])  # [B, rows, cols, 3]
     whd = np.clip(rb - lt, 0, 1024) # nxkx3
     overlap = whd[..., 0] * whd[..., 1] * whd[..., 2] # nxk
     if mode == 'iou':

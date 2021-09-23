@@ -29,12 +29,15 @@ class Load1CaseDet:
     """
     def __init__(self, keys = ('img', 'seg', 'roi'), 
                  meta_key = 'img_meta_dict', verbose = False,
-                 semantic2binary = True
+                 semantic2binary = True, 
+                 label_map = {1: 0, 2: 0, 3: 0, 4: 0}, 
+                 
                 ) -> None:
         self.keys = keys
         self.meta_key = meta_key
         self.verbose = verbose
         self.semantic2binary = semantic2binary
+        self.label_map = label_map
         # self.axis_reorder = axis_reorder
 
     def __call__(self, data):
@@ -65,8 +68,11 @@ class Load1CaseDet:
         data[self.meta_key]['original_affine'] = affine_matrix
         data[self.meta_key]['filename_or_obj'] = img_fp
         if 'roi' in data.keys():
-            data[self.meta_key]['inst2cls_map'] = {roi['instance']: 0 if self.semantic2binary 
-                                                    else (roi['class'] - 1) for roi in data['roi']}
+            label_convert = lambda cls: self.label_map.get(cls, 0)
+            ins2cls_map = {roi['instance']: label_convert(roi['class']) for roi in data['roi']}
+            # print(f'[LoadDet] label_map {self.label_map} ins2cls map', ins2cls_map)
+            data[self.meta_key]['inst2cls_map'] = ins2cls_map
+            
         return data
 
 coin_func = lambda : random.random() > 0.5
@@ -131,6 +137,7 @@ class InstanceBasedCropDet:
                 crop_data[k] = cropper(data[k])
                 crop_data['img_meta_dict'][f'cropshape'] = tuple(crop_data[k].shape[1:])
                 if self.verbose: print_tensor(f'[InsCrop] {self.cid} {k} {c3} pre {prior_shape} after', crop_data[k])
+                # print('[InstanceCrop] check ins2cls', crop_data['img_meta_dict']['inst2cls_map'])
             results.append(crop_data)
         return results
 

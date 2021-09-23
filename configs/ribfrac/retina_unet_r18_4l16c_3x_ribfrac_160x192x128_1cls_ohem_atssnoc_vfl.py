@@ -15,7 +15,7 @@ model = dict(bbox_head = dict(
                             use_vfl = True, ))
 
 find_unused_parameters=True
-load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa/swa_runavg_model_8.pth'
+load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa/best_recall@8@0.1_epoch_8.pth'
 resume_from = None #'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf/latest.pth' 
 
 # optimizer

@@ -108,7 +108,7 @@ class SoftDiceLoss(nn.Module):
         
         if self.verbose: 
             print_tensor('[DiceLoss] pred prob', pred_prob)
-            print_tensor('[DiceLoss] label', gt_1hot)
+            print_tensor(f'[DiceLoss] gt1hot{gt_1hot.shape}, actual gt', gt)
         
         if self.centerline_dice_weight > 0: cl_dice_loss = self.cldice_loss(pred_prob, gt_1hot)
 
@@ -146,7 +146,7 @@ class SoftDiceLoss(nn.Module):
         mdice_by_class = torch.mean(dice_by_sample_class, dim = 0)
         start_class = 1 if (self.ignore_0 and self.num_classes > 1) else 0
         mdice_loss_by_class = 1.0 - mdice_by_class
-        if self.verbose: print(f'[DiceLoss] mdice final start{start_class}', mdice_loss_by_class)
+        if self.verbose: print(f'[DiceLoss] mdiceloss final start{start_class}', mdice_loss_by_class)
         loss_ = torch.mean(mdice_loss_by_class[start_class:] * class_weight[start_class:], dim = 0)
         # print('nb_class %d;  start class %d' %(self.num_classes, start_class), mdice)
         if self.centerline_dice_weight > 0: loss_ = loss_ + cl_dice_loss

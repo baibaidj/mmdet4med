@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pylab as plt
 import os.path as osp
 import json, os, pdb
-
+from tqdm import tqdm
 
 
 def check_bbox_IOU(pred_bbox, gt_bboxes):
@@ -115,6 +115,7 @@ def calculate_FROC_by_center(gt_by_case, pred_by_case, luna_output_format=True, 
     # pred_centers = np.array(pred_centers, dtype = float)
     nImg = len(gt_by_case)
     img_idxs = np.hstack([[i] * len(pred_by_case[i]) for i in range(nImg)]).astype(int)
+    # pdb.set_trace()
     pred_bbox_nx7 = np.vstack(pred_by_case)
 
     orders = np.argsort(pred_bbox_nx7[:, -1])[::-1]
@@ -133,7 +134,7 @@ def calculate_FROC_by_center(gt_by_case, pred_by_case, luna_output_format=True, 
     tps = []
     fps = []
     # pdb.set_trace()
-    for i in range(len(pred_bbox_nx7)):
+    for i in tqdm(range(len(pred_bbox_nx7))):
         # pdb.set_trace()
         inside = check_center_inside(pred_bbox_nx7[i][:6], gt_nx6=gt_by_case[img_idxs[i]])
         # print(f'Prob {i} ', centers_cat[i], gt_boxes[img_idxs[i]], inside)

@@ -79,6 +79,8 @@ def tpfp_default_3d(det_bboxes,
         tuple[np.ndarray]: (tp, fp) whose elements are 0 and 1. The shape of
             each array is (num_scales, m).
     """
+    # print('[TPFP] det bbox', det_bboxes)
+    # print('[TPFP] gt bbox', gt_bboxes)
     # an indicator of ignored gts
     gt_ignore_inds = np.concatenate(
         (np.zeros(gt_bboxes.shape[0], dtype=np.bool),
@@ -106,8 +108,9 @@ def tpfp_default_3d(det_bboxes,
             for i, (min_area, max_area) in enumerate(area_ranges):
                 fp[i, (det_areas >= min_area) & (det_areas < max_area)] = 1
         return tp, fp
-
-    ious = bbox_overlaps_3d(det_bboxes, gt_bboxes) # nxk
+    if det_bboxes.shape[0] == 0:
+        return tp, fp
+    ious = bbox_overlaps_3d(det_bboxes[:, :6], gt_bboxes) # nxk
     # for each det, the max iou with all gts
     ious_max = ious.max(axis=1)
     # for each det, which gt overlaps most with it
@@ -240,6 +243,11 @@ def eval_map_3d(det_results,
                 f'tpfp_fn has to be a function or None, but got {tpfp_fn}')
 
         # compute tp and fp for each image with multiple processes
+        # tp, fp = [], []
+        # for i in range(num_imgs):
+        #     tp_i, fp_i = tpfp_fn(cls_dets[i], cls_gts[i], cls_gts_ignore[i], iou_thr, area_ranges)
+        #     tp.append(tp_i)
+        #     fp.append(fp_i)
         tpfp = pool.starmap(
             tpfp_fn,
             zip(cls_dets, cls_gts, cls_gts_ignore,

@@ -247,9 +247,12 @@ def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json
         detroi_by_case.append(det_roi_infos)
         gtroi_by_case.append(gt_det_infos)
     
-    gt_bboxes = [[roi['bbox'] for roi in rois] for i, rois in enumerate(gtroi_by_case)]
-    pred_centers = [[roi['bbox'] + [roi['prob']] for roi in rois] for i, rois in enumerate(detroi_by_case)]
-    result_dict, fig = calculate_FROC_by_center(gt_bboxes, pred_centers, 
+    safe_nx7_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 7))
+    safe_nx6_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 6))
+
+    gt_bboxes = [safe_nx6_array([roi['bbox'] for roi in rois]) for i, rois in enumerate(gtroi_by_case)]
+    pred_bbox_nx7 = [safe_nx7_array([roi['bbox'] + [roi['prob']] for roi in rois]) for i, rois in enumerate(detroi_by_case)]
+    result_dict, fig = calculate_FROC_by_center(gt_bboxes, pred_bbox_nx7, 
                                                 luna_output_format=True, plt_figure=True)
     if fig is not None: fig.savefig(osp.join(nii_save_dir, suffix.replace('.json', '_FROC.pdf')))
     return result_dict
@@ -428,10 +431,11 @@ if __name__ == '__main__':
     assert isinstance(cfg.run_pid_ixs, (type(None), list, tuple))
 
     pid2niifp_map = load_list_detdj(Path(cfg.data_rt), mode = cfg.split)
-        
-    pid2niifp_map = sample_list2run(pid2niifp_map, run_pid_ixs=cfg.run_pid_ixs, 
-                                              num_fold=cfg.num_fold, 
-                                              fold_ix=cfg.fold_ix)
+    
+    if not cfg.eval_final:
+        pid2niifp_map = sample_list2run(pid2niifp_map, run_pid_ixs=cfg.run_pid_ixs, 
+                                                num_fold=cfg.num_fold, 
+                                                fold_ix=cfg.fold_ix)
     fold_ix_str = f'{cfg.fold_ix}@{cfg.num_fold}'
 
     git_rt = Path(cfg.repo_rt)
@@ -445,8 +449,8 @@ if __name__ == '__main__':
         det_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix='det_roi_infos.json')
         seg_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix='seg_roi_infos.json')
         
-        print('Detection FROC', det_froc)
-        print('Segmentation FROC', seg_froc)
+        print(f'[{cfg.model_name}] Detection FROC \n', det_froc)
+        print(f'[{cfg.model_name}] Segmentation FROC \n', seg_froc)
 
     else:
         main(cfg, 

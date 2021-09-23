@@ -145,15 +145,21 @@ class SingleStageDetector3D(BaseDetector3D):
 
         img, gt_bboxes, gt_labels, gt_semantic_seg = self.update_img_metas(
                                             img, img_metas, seg)
-        # print_tensor('[Detector] img', img)
         x = self.extract_feat(img)
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
+        # print_tensor('[Detector] img', img)
+        # print('[Detector] gt bbox', gt_bboxes)
+        # print('[Detector] gt labels', gt_labels)
+        # print('[Detector] loss', losses)
         if self.with_seghead:
             # print_tensor('semantic seg', gt_semantic_seg)
+            # pdb.set_trace()
             loss_seg = self.seg_head.forward_train(x, img_metas, gt_semantic_seg, 
                                                    self.train_cfg)
+            # print('Detector] seg loss', loss_seg)
             losses.update(loss_seg)
+        # pdb.set_trace()
         return losses
 
     # @auto_fp16(apply_to=('img', ))
@@ -380,9 +386,12 @@ class SingleStageDetector3D(BaseDetector3D):
         # detection
         bbox_nx7 = torch.cat([d1[0] for d1 in det_resutls], axis = 0) # nx7
         label_nx1 = torch.cat([d1[1] for d1 in det_resutls], axis = 0) # nx1
-
+        if bbox_nx7.shape[0] < 1: 
+            return [[torch.zeros((0, 7)), ]], None
+            
         dets_clean, keep_idx = batched_nms_3d(bbox_nx7[:, :6], bbox_nx7[:, 6], 
                                              label_nx1, self.test_cfg['nms'])
+        # TODO: 2897118_image.nii cause exception,  max_coordinate = boxes.max()  operation does not have an identity
         label_nx1 = label_nx1[keep_idx]
 
         if self.test_cfg['max_per_img'] > 0:
