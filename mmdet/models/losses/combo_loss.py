@@ -118,7 +118,7 @@ class ComboLossMed(nn.Module):
         # pdb.set_trace(header=...)
         if self.verbose:
             with torch.no_grad():
-                print_tensor('[ComboLoss] predscore', cls_score)
+                print_tensor('\n\n[ComboLoss] predscore', cls_score)
                 # print_tensor('predmask', cls_score.argmax(1) if self.num_classes > 1 else cls)
                 print_tensor('[ComboLoss] truemask', label)
 

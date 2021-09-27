@@ -1,11 +1,11 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule, build_upsample_layer, build_norm_layer
-from mmcv.runner import BaseModule, auto_fp16
+from mmcv.runner import BaseModule
 from typing import Sequence, List
 from ..builder import NECKS
 from ..utils.ccnet_pure import print_tensor
-import pdb
+import pdb, torch
 
 
 @NECKS.register_module()
@@ -202,7 +202,6 @@ class FPN3D(BaseModule):
                 up_ops.append(up)
         return up_ops
 
-    @auto_fp16()
     def forward(self, inputs):
         """Forward function."""
         assert len(inputs) == len(self.in_channels)
@@ -258,4 +257,9 @@ class FPN3D(BaseModule):
                         outs.append(self.fpn_convs[i](F.relu(outs[-1])))
                     else:
                         outs.append(self.fpn_convs[i](outs[-1]))
+        # bb = [print_tensor(f'[FPNeck] inputlevel {i}', o) for i, o in enumerate(inputs)]
+        # level_hasnan = [torch.isnan(a).any() for i, a in enumerate(outs)]
+        # aa = [print_tensor(f'[FPNeck] level {i} hasnan {level_hasnan[i]}', o) for i, o in enumerate(outs)]
+        # if any(level_hasnan): 
+        #     pdb.set_trace()
         return tuple(outs)

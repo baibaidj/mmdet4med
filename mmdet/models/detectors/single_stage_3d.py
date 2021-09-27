@@ -15,7 +15,6 @@ from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 from monai.data.utils import dense_patch_slices
 from monai.utils import BlendMode, PytorchPadMode, fall_back_tuple
 from typing import Any, Callable, List, Sequence, Tuple, Union
-from mmcv.runner import auto_fp16
 # from profiler import 
 
 get_meta_dict  = lambda img_meta: img_meta[0]['img_meta_dict'] if isinstance(img_meta, (list, tuple)) else img_meta['img_meta_dict']
@@ -162,7 +161,6 @@ class SingleStageDetector3D(BaseDetector3D):
         # pdb.set_trace()
         return losses
 
-    # @auto_fp16(apply_to=('img', ))
     def simple_test_tile(self, img, img_metas, rescale=False):
         """Test function without test-time augmentation.
 
@@ -187,7 +185,6 @@ class SingleStageDetector3D(BaseDetector3D):
         else: mask = None
         return results_list, mask
 
-    # @auto_fp16(apply_to=('inputs', ))
     def sliding_window_inference(self, 
         inputs: torch.Tensor,
         img_metas, 
@@ -296,6 +293,7 @@ class SingleStageDetector3D(BaseDetector3D):
             seg_result_batch.append(seg_result_img)
             ensembler.reset_seg_output(); ensembler.reset_seg_countmap()
             ensembler.reset_det_storage()
+            torch.cuda.empty_cache()
             # print_tensor('[Ensemble] reset', ensembler.seg_output_4d)
             # print_tensor('[Ensemble] reset', ensembler.seg_countmap_4d)
         return det_result_batch, seg_result_batch
@@ -332,7 +330,7 @@ class SingleStageDetector3D(BaseDetector3D):
             det_results, seg_results= self.whole_inference(imgs, img_metas, rescale)
 
         seg_results = torch.cat([torch.softmax(seg, dim=1) if seg.shape[1] > 1 else torch.sigmoid(seg)
-                                for seg in seg_results], axis = 0)
+                                for seg in seg_results], axis = 0).cpu()
         return det_results, seg_results 
 
 
@@ -366,14 +364,17 @@ class SingleStageDetector3D(BaseDetector3D):
         # to save memory, we get augmented seg logit inplace
         # print(img_metas)
         det_resutls, seg_results = self.inference(imgs[0], img_metas[0], rescale)
-
+        imgs[0] = None; torch.cuda.empty_cache()
+        infer_times = 1
         # print('aug, post inference', seg_logit.shape)
         for i in range(1, len(imgs)):
             cur_det_results, cur_seg_results = self.inference(imgs[i], img_metas[i], rescale)
-            seg_results += cur_seg_results
+            # Cumulvate Moving Average: CMA_n+1 = (X_n+1 + n * CMA_n)/ (n + 1); CMA_n = (x1 + x2 + ...) / n
+            seg_results = (cur_seg_results + seg_results * infer_times) / (infer_times + 1)
+            infer_times += 1
             det_resutls.extend(cur_det_results)
+            imgs[i] = None; torch.cuda.empty_cache()
 
-        seg_results /= len(imgs)
         if need_probs:
             seg_pred = seg_results.cpu() #.float().cpu().numpy()
         else:

@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import (build_conv_layer, build_norm_layer, build_plugin_layer,
                       constant_init, kaiming_init)
-from mmcv.runner import load_checkpoint, auto_fp16
+from mmcv.runner import load_checkpoint
 from mmcv.utils.parrots_wrapper import _BatchNorm
 from torch.nn.modules.utils import _ntuple
 
@@ -11,6 +11,7 @@ from ..utils import  ResLayerIso
 from .resnet import BasicBlock, Bottleneck
 from .resnet3d import BasicBlock3d, Bottleneck3d
 from ...utils import get_root_logger
+import torch
 
 print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 class BasicBlockP3D(nn.Module):
@@ -567,7 +568,6 @@ class ResNet3dIso(nn.Module):
         else:
             raise TypeError('pretrained must be a str or None')
 
-    @auto_fp16()
     def forward(self, x):
         """Forward function.
            outs: [input, 1/2, 1/4, 1/8, 1/16, 1/32] 6 items
@@ -588,7 +588,9 @@ class ResNet3dIso(nn.Module):
             x = res_layer(x)
             if self.verbose: print_tensor(f'l{i+2}', x)
             outs.append(x)
-        # print('out indices', self.out_indices)
+        
+        # print('\n')
+        # aa = [print(f'[Backbone] level {i} has nan? ', torch.isnan(t).any()) for i, t in enumerate(outs)]
         return tuple([outs[i] for i in self.out_indices])
 
     def train(self, mode=True):

@@ -210,7 +210,7 @@ class ATSSHead3DNOC(AnchorHead3D):
                 iou_targets_ini = bbox_overlaps_3d(
                     pos_decode_bbox_pred.detach(),
                     pos_decode_bbox_targets.detach(),
-                    is_aligned=True).clamp(min=1e-6)
+                    is_aligned=True).clamp(min=1e-4)
 
                 pos_labels = labels[pos_inds]
                 pos_ious = iou_targets_ini.clone().detach()
@@ -233,7 +233,7 @@ class ATSSHead3DNOC(AnchorHead3D):
         else:
             # pdb.set_trace()
             if self.verbose: print_tensor(f'[BboxLoss1level] bbox pred ', bbox_pred)
-            loss_bbox = bbox_pred.clamp(min = 1e-4).sum() * 0
+            loss_bbox = bbox_pred.sum() * 0
             # loss_centerness = centerness.sum() * 0
             # centerness_targets = bbox_targets.new_tensor(0.)
         

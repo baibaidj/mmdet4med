@@ -12,7 +12,7 @@ fpn_channel = stem_channels * (2**3)
 model = dict(
     type='RetinaNet3D',
     backbone=dict(
-        type='ResNet3dIso', # verbose = False, 
+        type='ResNet3dIso',
         deep_stem = True,
         avg_down=True,
         depth='183d', # 18.3G 
@@ -69,7 +69,7 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25, 
-            loss_weight=1.0),
+            loss_weight=10.0),
         use_vfl=False, 
         loss_cls_vfl=dict(
             type='VarifocalLoss',
@@ -77,16 +77,16 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=3.0),
+            loss_weight=16),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=0.33), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
         ), 
 
     seg_head = dict(
-        type='FCNHead3D',  #verbose = True, 
-        in_channels= stem_channels * 2,
-        in_index=0,
+        type='FCNHead3D', 
+        in_channels= stem_channels * 4,
+        in_index=1,
         channels= stem_channels,
         # input_transform='resize_concat',
         kernel_size=1,
@@ -107,20 +107,20 @@ model = dict(
                     type='ComboLossMed', loss_weight=(1.0 * 0.5, 0.66 * 0.5), 
                     num_classes = num_classes, 
                     class_weight = (0.33, 1.0),  verbose = False,   #(0.33, 1.0)
-                    dice_cfg = dict(ignore_0 = True) #, act = 'sigmoid'
+                    dice_cfg = dict(ignore_0 = True, verbose = False) #, act = 'sigmoid'
                     ),
             ),
     # convert instance mask to bbox 
-    mask2bbox_cfg = [dict(type = 'FindInstances', #verbose = True, 
+    mask2bbox_cfg = [dict(type = 'FindInstances', verbose = False, 
                         instance_key="seg",
                         save_key="present_instances"), 
-                    dict(type = 'Instances2Boxes', #verbose = True, 
+                    dict(type = 'Instances2Boxes', verbose = False, 
                         instance_key="seg",
                         map_key="inst2cls_map", 
                         box_key="gt_bboxes",
                         class_key="gt_labels", move_jitter = 2, 
                         present_instances="present_instances"),
-                    dict(type = 'Instances2SemanticSeg', # verbose = True, 
+                    dict(type = 'Instances2SemanticSeg', verbose = False, 
                         instance_key = 'seg',
                         map_key="inst2cls_map",
                         seg_key = 'seg',

@@ -1,21 +1,22 @@
 _base_ = [
-    # '../_base_/models/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl.py',
-    '../ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
+    '../_base_/models/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_1anchor.py',
+    '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py', 
     '../_base_/swa.py',
 ]
 
 data = dict(train=dict(sample_rate = 1.0), 
-            val=dict(sample_rate = 0.5), 
+            val=dict(sample_rate = 1.0), 
             test= dict(sample_rate = 0.1))
             
-model = dict(bbox_head = dict(
+model = dict(backbone = dict(verbose = False ), 
+            seg_head = dict(verbose = False),
+            bbox_head = dict(verbose = False, use_vfl = True, 
                             anchor_generator = dict(verbose = False), 
                             loss_cls = dict(verbose = False), 
-                            verbose = False, 
-                            use_vfl = True, ))
+                             ))
 
 find_unused_parameters=True
-load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa/best_recall@8@0.1_epoch_8.pth'
+load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1anchor/best_recall@50@0.1_epoch_38.pth'
 resume_from = None #'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf/latest.pth' 
 
 # optimizer
@@ -38,23 +39,22 @@ log_config = dict(interval=10, hooks=[
                 # dict(type='TensorboardLoggerHook')
                 ])
 
-evaluation=dict(interval=2, start=None, 
+evaluation=dict(interval=2, start=4, 
                 save_best='recall@8@0.1', rule = 'greater', 
                 iou_thr=[0.1], proposal_nums=(1, 2, 4, 8, 50))
 
-
 swa_training = True
-swa_load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl/latest.pth'
-swa_resume_from = None
+swa_load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_swa/swa_runavg_model_2.pth'
+swa_resume_from = None # 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_swa/swa_runavg_model_2.pth'
 # swa optimizer
-swa_optimizer = dict(type='SGD', lr=0.008, momentum=0.9, weight_decay=0.0001)
+swa_optimizer = dict(type='SGD', lr=0.0005, momentum=0.9, weight_decay=0.0001)
 # swa learning policy
 swa_lr_config = dict(
     policy='cyclic',
     target_ratio=(1, 0.01),
     cyclic_times=12,
     step_ratio_up=0.0)
-swa_runner = dict(type='EpochBasedRunner', max_epochs=12)  
+swa_runner = dict(type='EpochBasedRunner', max_epochs=16)  
 swa_interval = 2
 # swa_optimizer_config
 swa_optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 8, norm_type = 2)) # 31G

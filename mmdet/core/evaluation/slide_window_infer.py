@@ -9,6 +9,7 @@ from monai.data.utils import compute_importance_map
 from ...utils.resize import resize_3d, print_tensor
 import copy, pdb
 
+hasnan = lambda t: torch.isnan(t).any()
 
 class BboxSegEnsembler1Case(object):
 
@@ -26,6 +27,8 @@ class BboxSegEnsembler1Case(object):
         self.tile_weight_map_3d = compute_importance_map(*args, 
                                                         device = self.device, 
                                                         **kwargs) #.clip(1e-8) #.to(torch.half)
+        # print_tensor('[BuildTile] tile weight map', self.tile_weight_map_3d)
+        # pdb.set_trace()
 
     def reset_det_storage(self):
         self.det_storage = []
@@ -52,15 +55,38 @@ class BboxSegEnsembler1Case(object):
             slice_tile ([type]): [description]
         """
         # pdb.set_trace()
+        if self.tile_weight_map_3d.dtype != seg_logit_tile.dtype:
+            self.tile_weight_map_3d = self.tile_weight_map_3d.to(seg_logit_tile.dtype)
+        
+        if seg_logit_tile.shape[-3:] != self.tile_weight_map_3d.shape:
+            # print_tensor('[TileSeg] input ', seg_logit_tile)
+            seg_logit_tile = resize_3d(seg_logit_tile[None], self.patch_size, 
+                                        mode='trilinear', 
+                                        align_corners=False, 
+                                        warning=False)[0]
+        # print_tensor(f'[BuildTile] seg_logit_tile', seg_logit_tile)
         self.seg_output_4d[slice_tile] = seg_logit_tile * self.tile_weight_map_3d[None, ...]
         self.seg_countmap_4d[slice_tile] += self.tile_weight_map_3d[None,  ...]
-        
+        # print_tensor(f'[BuildTile] segout', self.seg_output_4d)
+        # print_tensor(f'[BuildTile] seg count', self.seg_countmap_4d)
+        # pdb.set_trace()
+
     def update_seg_output_batch(self, seg_logit_tiles, slice_tiles):
         """
         Args:
             seg_logit_tiles (5d_tensor): bchwd, b for number of windows
             slice_tiles ([type]): slice for the b windows in the original image space
+
+        # 
+        preds_final = preds.new_full((bs, cs, resh, resw, resd), -16)
+        preds_final[:, 0] = 16  # default [logit] 1hot vector for all pixels are (16, -16, ...)
         """
+        # print_tensor(f'[BuildTile] seg logit tiles', seg_logit_tiles)
+        if torch.isnan(seg_logit_tiles).any(): 
+            print_tensor(f'[BuildTile] these tiles contains nan, so set to zero', seg_logit_tiles)
+            seg_logit_tiles = seg_logit_tiles.new_full(seg_logit_tiles.shape, -16)
+            if seg_logit_tiles.shape[1] > 1:  #for multi channels, 0th channel should set to 16 as logit
+                seg_logit_tiles[:, 0] = 16
         for seg, sli in zip(seg_logit_tiles, slice_tiles):
             # print_tensor(f'[SegFill] seg tile slice {sli}', seg)
             # print_tensor(f'[SegFill] weight map', self.tile_weight_map_3d)

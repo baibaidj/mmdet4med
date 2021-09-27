@@ -15,7 +15,7 @@ def largest_region_index(mask_multi):
     mask_max_index = np.argmax(np.bincount(non_zero_arr))
     return int(mask_max_index)
 
-def roi_info_mask(mask_semantic, is_prob = False):
+def roi_info_mask(mask_semantic, is_prob = False, is_percent = False):
     mask_instance, num_rois = cc3d.connected_components(
                                 mask_semantic > 0, return_N = True)
     if num_rois == 0:
@@ -30,7 +30,7 @@ def roi_info_mask(mask_semantic, is_prob = False):
             roi_cls = 0
         else:
             roi_cls = int(largest_region_index(mask_semantic[roi_slicer]))
-        roi_prob = roi_prop.mean_intensity
+        roi_prob = roi_prop.mean_intensity / (100 if is_percent else 1)
         roi_info = {'instance' : ix + 1, 'bbox': roi_bbox, 
                     'class': -1 if roi_cls == 66535 else roi_cls , 
                     'center' : roi_center, 'prob': float(roi_prob)}
@@ -45,6 +45,13 @@ def roi_info_dets(det_results):
         [list[np.ndarray, nx7],  ] classes, bbox_nx7
     
     return
+            {"mask": 1,
+            "fracClass": "nondisplaced",
+            "ribSide": "R",
+            "ribNum": 11,
+            "ribType": "middle",
+            "ribPosition": [-190.412506, -282.800003,  -256.75,   -195.225006,  -287.612503, -249.25], 
+            rib_bbox_px": [129, 187, 241, 162, 217, 254]}
 
     """
     case_roi_infos = []
@@ -132,11 +139,12 @@ def extract_roi_info_bunch(pids, pid2pairs, verbose = False, **kwargs):
         pred_fp, gt_fp = pair_dict['pred_fp'], pair_dict['gt_fp']
         pred_mask, af = IO4Nii.read(pred_fp, verbose=verbose, dtype=np.uint8)
         gt_mask, af = IO4Nii.read(gt_fp, verbose= verbose, dtype = np.uint8)
-        pred_rois = roi_info_mask(pred_mask)
+        pred_rois = roi_info_mask(pred_mask, is_prob = True, is_percent=True)
         gt_rois = roi_info_mask(gt_mask)
         pid_info = {'pid' : pid, 'gt_rois': gt_rois, 'pred_rois': pred_rois}
         pid_info_list.append(pid_info)
     return pid_info_list
+
 
 
 def compuate_det_metric_bunch(pid_info_list, verbose = False, **kwargs):
@@ -152,11 +160,14 @@ def compuate_det_metric_bunch(pid_info_list, verbose = False, **kwargs):
         if verbose: print(infos)
     return pid_info_list
 
+# def match_file_by_order(order_candidate, fp):
 
-def scan4path_pairs(pred_dir, gt_dir):
+def scan4path_pairs(pred_dir, gt_dir, pred_ext = '_image_seg_ribfrac.nii.gz', gt_ext = '_fracture.nii.gz'):
 
-    pid2preds = {f.split('_')[0]: osp.join(pred_dir, f) for f in os.listdir(pred_dir)}
-    pid2gts = {f.split('_')[0]: osp.join(gt_dir, f) for f in os.listdir(gt_dir)}
+    pid2preds = {f.split(pred_ext)[0]: osp.join(pred_dir, f) 
+                    for f in os.listdir(pred_dir) if pred_ext in f}
+    pid2gts = {f.split(gt_ext)[0]: osp.join(gt_dir, f) 
+                    for f in os.listdir(gt_dir) if gt_ext in f}
 
     pid2pairs = dict()
     for pid, ofp in pid2preds.items():
@@ -169,7 +180,8 @@ def scan4path_pairs(pred_dir, gt_dir):
     return pid2pairs
 
 
-def main_eval(pred_dir, gt_dir, save_dir, store_fn = 'det_evaluation_result'):
+def main_eval(pred_dir, gt_dir, save_dir, store_fn = 'det_evaluation_result', 
+            pred_ext = '_image_seg_ribfrac.nii.gz', gt_ext = '_fracture.nii.gz'):
 
     json_store_fp = osp.join(save_dir, store_fn + '.json')
 
@@ -177,8 +189,8 @@ def main_eval(pred_dir, gt_dir, save_dir, store_fn = 'det_evaluation_result'):
         print('Pid info read from ', json_store_fp)
         pid_info_list = load2json(json_store_fp)
     else:
-        pid2pairs = scan4path_pairs(pred_dir, gt_dir)
-        pids_all = sorted(list(pid2pairs), key = lambda k: int(k[7:])) #[:2]
+        pid2pairs = scan4path_pairs(pred_dir, gt_dir, pred_ext, gt_ext)
+        pids_all = sorted(list(pid2pairs), key = lambda k: k) #[:2]
         pid2run = pids_all #['RibFrac332']#
         pid_info_list, *_ = run_parralel(extract_roi_info_bunch, pid2run, pid2pairs, num_workers=8)
 
@@ -203,7 +215,31 @@ def main_eval(pred_dir, gt_dir, save_dir, store_fn = 'det_evaluation_result'):
 
     print(f'Per Lesion Metric : count {gt_total}  recall {recall_total}  precision {precision_total}')
 
+# def _extract_roi_info1case(info_fp, verbose = False, **kwargs):
+#     """
+#     roi_info = {'instance' : ix + 1, 
+#             'bbox': roi_bbox, 
+#             'class': -1 if roi_cls == 66535 else roi_cls , 
+#             'center' : roi_center, 
+#             'prob': float(roi_prob)}
+        
+#             {"mask": 1,
+#             "fracClass": "nondisplaced",
+#             "ribSide": "R",
+#             "ribNum": 11,
+#             "ribType": "middle",
+#             "ribPosition": [-190.412506, -282.800003,  -256.75,   -195.225006,  -287.612503, -249.25], 
+#             rib_bbox_px": [129, 187, 241, 162, 217, 254]}
+#     """
+#     print('[LoadRoi] pid', info_fp)
+#     if 'nii.gz' in info_fp:
+#         pred_mask, af = IO4Nii.read(info_fp, verbose=verbose, dtype=np.uint8)
+#         pred_rois = roi_info_mask(pred_mask)
+#     else:
+#         roi_infos = load2json(info_fp)['frac']
+#         pass
 
+#     return pred_rois
 
 from mmdet.core.evaluation.mean_dice import *
 
@@ -234,10 +270,14 @@ def evaluate_pred_against_label(pred_3d, gt_3d = None, metric_keys = ('dice', ),
 
 if __name__ == '__main__' :
 
-    pred_dir = '/data/dejuns/ribfrac/processed/organize_raw/origin_labels'
-    gt_dir = '/data/dejuns/ribfrac/processed/organize_raw/refine_labels'
-    save_dir = '/data/dejuns/ribfrac/processed/organize_raw'
-    
-    main_eval(pred_dir, gt_dir, save_dir, store_fn = 'check_refine_annotation_frac')
+    # pred_dir = '/data/dejuns/ribfrac/processed/organize_raw/origin_labels'
+    # gt_dir = '/data/dejuns/ribfrac/processed/organize_raw/refine_labels'
+    # save_dir = '/data/dejuns/ribfrac/processed/organize_raw'
+    pred_dir = '/mnt/data4t/dejuns/ribfrac/raw_rename/pred/v2.2.4'
+    gt_dir = '/mnt/data4t/dejuns/ribfrac/raw_rename/mask_all'
+    save_dir = '/mnt/data4t/dejuns/ribfrac/raw_rename/pred/v2.2.4'
+
+    main_eval(pred_dir, gt_dir, save_dir, store_fn = 'check_refine_annotation_frac', 
+            pred_ext = '_image_seg_ribfrac.nii.gz', gt_ext = '_fracture.nii.gz')
 
     

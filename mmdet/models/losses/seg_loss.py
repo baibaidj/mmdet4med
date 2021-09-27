@@ -107,8 +107,8 @@ class SoftDiceLoss(nn.Module):
         gt_1hot = gt if self.is_gt1hot else self.one_hot_encoder(gt).contiguous()
         
         if self.verbose: 
-            print_tensor('[DiceLoss] pred prob', pred_prob)
-            print_tensor(f'[DiceLoss] gt1hot{gt_1hot.shape}, actual gt', gt)
+            print_tensor('\n\t[DiceLoss] pred prob', pred_prob)
+            print_tensor(f'\t[DiceLoss] gt1hot{gt_1hot.shape}, actual gt', gt)
         
         if self.centerline_dice_weight > 0: cl_dice_loss = self.cldice_loss(pred_prob, gt_1hot)
 
@@ -121,7 +121,7 @@ class SoftDiceLoss(nn.Module):
             gt_1hot = gt_1hot * spatial_weight
 
         if self.verbose:
-            print_tensor('[Diceloss] pred', pred_temp)
+            print_tensor('\t[Diceloss] pred', pred_temp)
             # print_tensor('[Diceloss] gt1hot', gt_1hot )
         # with GuruMeditation():
         if abs(self.alpha - 1) > 1e-5 or abs(self.beta - 1) > 1e-5: # TODO: this not right 
@@ -135,18 +135,19 @@ class SoftDiceLoss(nn.Module):
         else:
             intersection = torch.sum(pred_temp * gt_1hot, 2) #+ smooth
             union = torch.sum(pred_temp, 2) + torch.sum(gt_1hot, 2)
+            if self.verbose: 
+                print_tensor('\t[Diceloss]intersection', intersection)
+                print_tensor('\t[Diceloss]union' , union)
             # union = torch.pow(input, 2).sum(dim=axes) + torch.pow(target, 2).sum(dim=axes)
             # TODO: may generate RuntimeError: Function 'DivBackward0' returned nan values in its 0th output.
             dice_by_sample_class = (2.0 * intersection + (union == 0) * smooth) / ( intersection + union + smooth)  #* (union == 0)
             if self.verbose: 
-                print_tensor('[Diceloss]intersection', intersection)
-                print_tensor('[Diceloss]union' , union)
-                print('[DiceLoss] by sample by class', dice_by_sample_class[0])
+                print('\t\t[DiceLoss] by sample by class', dice_by_sample_class[0])
 
         mdice_by_class = torch.mean(dice_by_sample_class, dim = 0)
         start_class = 1 if (self.ignore_0 and self.num_classes > 1) else 0
         mdice_loss_by_class = 1.0 - mdice_by_class
-        if self.verbose: print(f'[DiceLoss] mdiceloss final start{start_class}', mdice_loss_by_class)
+        if self.verbose: print(f'\t[DiceLoss] mdiceloss final start{start_class}', mdice_loss_by_class)
         loss_ = torch.mean(mdice_loss_by_class[start_class:] * class_weight[start_class:], dim = 0)
         # print('nb_class %d;  start class %d' %(self.num_classes, start_class), mdice)
         if self.centerline_dice_weight > 0: loss_ = loss_ + cl_dice_loss

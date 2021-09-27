@@ -144,6 +144,12 @@ def main(cfg,
         if is_test: continue
         # store_dir
         if cfg.fp16: cid_infos['cid'] = f'{cid}_fp16'
+        cid_true = cid_infos['cid']
+        det_result_fp = osp.join(nii_save_dir, f'{cid_true}_roi_det_mask.nii.gz')
+        if osp.exists(det_result_fp): 
+            print(f'{det_result_fp} exist, so skip inference')
+            continue
+
         img_3d, affine_matrix_i = IO4Nii.read(img_nii_fp, axis_order = None, 
                                                 verbose = False, dtype=np.int16)
         cid_infos['image_3d'] = img_3d
@@ -247,6 +253,8 @@ def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json
         detroi_by_case.append(det_roi_infos)
         gtroi_by_case.append(gt_det_infos)
     
+    print(f'[ScanPred] {suffix} files ', len(detroi_by_case))
+    print('[ScanPred] gt label files ', len(gtroi_by_case))
     safe_nx7_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 7))
     safe_nx6_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 6))
 
@@ -446,8 +454,10 @@ if __name__ == '__main__':
     mkdir(nii_save_dir)
 
     if cfg.eval_final:
-        det_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix='det_roi_infos.json')
-        seg_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix='seg_roi_infos.json')
+        det_suffix, seg_suffix = 'det_roi_infos.json', 'seg_roi_infos.json'
+        if cfg.fp16: det_suffix, seg_suffix = f'fp16_{det_suffix}', f'fp16_{seg_suffix}'
+        det_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix=det_suffix)
+        seg_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix=seg_suffix)
         
         print(f'[{cfg.model_name}] Detection FROC \n', det_froc)
         print(f'[{cfg.model_name}] Segmentation FROC \n', seg_froc)
