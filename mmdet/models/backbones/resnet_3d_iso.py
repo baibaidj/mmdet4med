@@ -567,7 +567,6 @@ class ResNet3dIso(nn.Module):
         else:
             raise TypeError('pretrained must be a str or None')
 
-    @auto_fp16()
     def forward(self, x):
         """Forward function.
            outs: [input, 1/2, 1/4, 1/8, 1/16, 1/32] 6 items

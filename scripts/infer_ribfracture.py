@@ -125,6 +125,7 @@ def main(cfg,
     # build the model from a config file and a checkpoint file
     # with Timer(print_tmpl='Loading model %s takes {:.3f} seconds' %(cfg.model_name)):
     model = init_detector(str(config_file), str(checkpoint_file), device='cuda:%d' %cfg.gpu_ix)
+    label_map = model.cfg.get('label_map', None)
     if cfg.fp16: 
         wrap_fp16_model(model)
         print('\nFP16 inference')
@@ -161,13 +162,15 @@ def main(cfg,
         (case_result, det_roi_infos, seg_roi_infos, gt_det_infos) = \
                 evaluate_store_prediction_1case(det_results, seg_results,
                                                 cid_infos, nii_save_dir, 
-                                                seg_prob_thresh=cfg.pos_thresh)
+                                                seg_prob_thresh=cfg.pos_thresh,
+                                                label_map = label_map)
         case_result['infertime'] = duration
         result_by_case.append(case_result)
         detroi_by_case.append(det_roi_infos)
         segroi_by_case.append(seg_roi_infos)
         gtroi_by_case.append(gt_det_infos)
         pcount += 1
+        break
 
     per_case_fp = osp.join(nii_save_dir, f'aug_inference_{fold_ix_str}.csv')
     result_tb = pd.DataFrame(result_by_case)
@@ -175,7 +178,8 @@ def main(cfg,
     print(result_tb.describe())
     return per_case_fp
 
-def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_save_dir, seg_prob_thresh = 0.5):
+def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_save_dir, 
+                                    seg_prob_thresh = 0.5, label_map = None):
     """
     Args:
         det_results: list of detection results of 1 image
@@ -184,52 +188,60 @@ def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_sav
     
 
     cid, img_3d, affine_mat = cid_infos['cid'], cid_infos['image_3d'], cid_infos['affine']
-
-    det_roi_infos = roi_info_dets(det_results[0])
-    seg_roi_prob = post_process_ribfrac(seg_results[0], image_spine_2d=locate_spine_region(img_3d), 
-                                        prob_thresh=seg_prob_thresh)
-    # pdb.set_trace()
-    seg_roi_infos = roi_info_mask(seg_roi_prob,  is_prob = True)
-    print_tensor('\timage', img_3d)
-    print_tensor('\tpred', seg_results)
-
-
     gt_det_infos = load2json(cid_infos['roi'])
+    seg_channel = seg_results.shape[1]
+
+    # compute metrics for detection head first 
+    det_roi_infos = roi_info_dets(det_results[0])
     # recall, precision, fp, fn, tp
     metric_keys = ('recall', 'precision', 'fp', 'fn', 'tp')
     det_roi_metrics = evaluate1case(det_roi_infos, gt_det_infos)
-    seg_roi_metrics = evaluate1case(seg_roi_infos, gt_det_infos)
-    det_result = {f'det_{k}': det_roi_metrics[i]  for i, k in  enumerate(metric_keys)}
-    seg_result = {f'seg_{k}': seg_roi_metrics[i]  for i, k in  enumerate(metric_keys)}
-    
-    seg_gt_fp = cid_infos['label']
-    if seg_gt_fp: 
-        gt_roi_mask, af_mat = IO4Nii.read(seg_gt_fp, axis_order= None, verbose = False, dtype=np.uint8)
-        print_tensor('\tGTmask', gt_roi_mask)
-        gt_roi_mask = np.where(gt_roi_mask > 0, 1, 0) 
-        # if label_mapping is not None: gt_mask = convert_label(gt_mask, label_mapping = label_mapping, value4outlier=1)
-    else: gt_roi_mask = None
-    seg_roi_mask = np.array(seg_roi_prob > 0, dtype = np.uint8)
-    dice3d = evaluate_pred_against_label(seg_roi_mask, gt_roi_mask, ('dice', ), 2)['dice']
 
+    det_result = {f'det_{k}': det_roi_metrics[i]  for i, k in  enumerate(metric_keys)}
     # pdb.set_trace()
-    det_roi_mask = np.zeros_like(img_3d, dtype = np.uint8)
+    det_roi_mask = np.zeros_like(img_3d, dtype = np.uint16)
     for roi in det_roi_infos:
         # slicer = tuple([slice(roi['bbox'][i], roi['bbox'][i + 3])  for i in range(3)])
         bbox2slicer = lambda b: tuple([slice(round(b[i]), round(b[i + 3]))  for i in range(3)])
         slicer = bbox2slicer(roi['bbox'])
-        det_roi_mask[slicer] = round(roi['prob'] * 100)
-
-    IO4Nii.write(seg_roi_mask, nii_save_dir, f'{cid}_roi_seg_mask', affine_mat)
+        cls_base = roi['class'] * 100
+        det_roi_mask[slicer] = int(round(roi['prob'] * 100) + cls_base)
     IO4Nii.write(det_roi_mask, nii_save_dir, f'{cid}_roi_det_mask', affine_mat)
-
     save2json(det_roi_infos, nii_save_dir, f'{cid}_det_roi_infos.json', indent=None, sort_keys=False)
+
+
+    # compute metrics for segmentation head
+    if seg_channel > 2:
+        seg_roi_mask = np.argmax(seg_results[0], axis = 0)
+        seg_roi_infos = roi_info_mask(seg_roi_mask,  is_prob = False)
+    else:
+        seg_roi_prob = post_process_ribfrac(seg_results[0], image_spine_2d=locate_spine_region(img_3d), 
+                                        prob_thresh=seg_prob_thresh)
+        seg_roi_mask = np.array(seg_roi_prob > 0, dtype = np.uint8)
+        seg_roi_infos = roi_info_mask(seg_roi_prob,  is_prob = True)
+    # pdb.set_trace()
+    print_tensor('\timage', img_3d)
+    print_tensor('\tpred', seg_results)
+    seg_roi_metrics = evaluate1case(seg_roi_infos, gt_det_infos)
+    seg_result = {f'seg_{k}': seg_roi_metrics[i]  for i, k in  enumerate(metric_keys)}
+    IO4Nii.write(seg_roi_mask, nii_save_dir, f'{cid}_roi_seg_mask', affine_mat)
     save2json(seg_roi_infos, nii_save_dir, f'{cid}_seg_roi_infos.json', indent=None, sort_keys=False)
 
+    seg_gt_fp = cid_infos['label']
+    if seg_gt_fp: 
+        gt_roi_mask, af_mat = IO4Nii.read(seg_gt_fp, axis_order= None, verbose = False, dtype=np.uint8)
+        print_tensor('\tGTmask', gt_roi_mask)
+        # gt_roi_mask = gt_roi_mask if seg_channel > 2 else np.where(gt_roi_mask > 0, 1, 0) 
+        if label_map is not None: 
+            gt_roi_mask = convert_label(gt_roi_mask, label_mapping = label_map, value4outlier=1)
+    else: gt_roi_mask = None
+    dice3d = evaluate_pred_against_label(seg_roi_mask, gt_roi_mask, ('dice', ), num_classes = seg_channel)['dice']
+    dice_by_cls = {f'seg_dice{i}': d for i, d in enumerate(dice3d)}
+    # 'seg_dice': float(dice3d)
     img_dim = {f'img_dim{i}': img_3d.shape[i] for i in range(3)}
     space_dim = {f'spacing_dim{i}': affine_mat[i, i] for i in range(3)}
     case_result = {'cid' : cid, **img_dim, **space_dim,
-                    **det_result, **seg_result, 'seg_dice': float(dice3d)}
+                    **det_result, **seg_result, **dice_by_cls}
     return case_result, det_roi_infos, seg_roi_infos, gt_det_infos
 
 
@@ -376,8 +388,8 @@ def sample_list2run(pid2niifp_map, run_pid_ixs = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii.gz', 
-                                  'label': '_instance.nii.gz', 
+                    key2suffix = {'image': '_image.nii', 
+                                  'label': '_instance.nii', 
                                   'roi':'_ins2cls.json'}):
     """
 

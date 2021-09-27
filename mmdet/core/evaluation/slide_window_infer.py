@@ -8,16 +8,19 @@ from monai.utils import fall_back_tuple
 from monai.data.utils import compute_importance_map
 from ...utils.resize import resize_3d, print_tensor
 import copy, pdb
-
+hasnan = lambda t: torch.isnan(t).any()
 
 class BboxSegEnsembler1Case(object):
 
-    def __init__(self, image_size, patch_size, num_classes = 2, test_cfg = {}, device = 'cpu') -> None:
+    def __init__(self, image_size, patch_size, num_classes = 2, test_cfg = {}, device = 'cpu', 
+                seg_in_index = 0) -> None:
         self.image_size = image_size
         self.patch_size = patch_size
         self.num_classes = num_classes
         self.device = device
         self.test_cfg = test_cfg
+        # self.seg_output_stride = max(seg_in_index + 1, 1)
+        # self.seg_output_size = [int(a/self.seg_output_stride) for a in self.image_size]
         self.reset_seg_output()
         self.reset_seg_countmap()
         self.reset_det_storage()
@@ -51,7 +54,15 @@ class BboxSegEnsembler1Case(object):
             seg_logit_tile ([4d_tensor]): chwd, prediction of 1 tile/window 
             slice_tile ([type]): [description]
         """
-        # pdb.set_trace()
+
+        if seg_logit_tile.shape[-3:] != self.tile_weight_map_3d.shape:
+            # print_tensor('[TileSeg] input ', seg_logit_tile)
+            seg_logit_tile = resize_3d(seg_logit_tile[None], self.patch_size, 
+                                        mode='trilinear', 
+                                        align_corners=False, 
+                                        warning=False)[0]
+            # print_tensor('[TileSeg] resize ', seg_logit_tile)
+            # pdb.set_trace()
         self.seg_output_4d[slice_tile] = seg_logit_tile * self.tile_weight_map_3d[None, ...]
         self.seg_countmap_4d[slice_tile] += self.tile_weight_map_3d[None,  ...]
         
@@ -61,6 +72,12 @@ class BboxSegEnsembler1Case(object):
             seg_logit_tiles (5d_tensor): bchwd, b for number of windows
             slice_tiles ([type]): slice for the b windows in the original image space
         """
+        if torch.isnan(seg_logit_tiles).any(): 
+            print_tensor(f'[BuildTile] these tiles contains nan, so set to zero', seg_logit_tiles)
+            seg_logit_tiles = seg_logit_tiles.new_full(seg_logit_tiles.shape, -16)
+            if seg_logit_tiles.shape[1] > 1:  #for multi channels, 0th channel should set to 16 as logit
+                seg_logit_tiles[:, 0] = 16
+                
         for seg, sli in zip(seg_logit_tiles, slice_tiles):
             # print_tensor(f'[SegFill] seg tile slice {sli}', seg)
             # print_tensor(f'[SegFill] weight map', self.tile_weight_map_3d)

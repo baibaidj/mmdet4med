@@ -202,7 +202,6 @@ class FPN3D(BaseModule):
                 up_ops.append(up)
         return up_ops
 
-    @auto_fp16()
     def forward(self, inputs):
         """Forward function."""
         assert len(inputs) == len(self.in_channels)
