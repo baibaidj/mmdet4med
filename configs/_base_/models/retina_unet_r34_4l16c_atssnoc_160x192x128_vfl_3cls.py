@@ -15,7 +15,7 @@ model = dict(
         type='ResNet3dIso', # verbose = False, 
         deep_stem = True,
         avg_down=True,
-        depth='183d', # 18.3G 
+        depth='343d', # 18.3G 
         in_channels=1,
         stem_stride_1 = 1,
         stem_stride_2 = 1, 
@@ -77,7 +77,7 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=8.0),
+            loss_weight=16),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=0.33), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
@@ -85,8 +85,8 @@ model = dict(
 
     seg_head = dict(
         type='FCNHead3D', # verbose = True, 
-        in_channels= stem_channels * 2,
-        in_index=0,
+        in_channels= stem_channels * 4,
+        in_index=1,
         channels= stem_channels,
         # input_transform='resize_concat',
         kernel_size=1,
@@ -104,7 +104,7 @@ model = dict(
         # start_iters = 1,
         # max_iters = 4e5,
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.5, 0.66 * 0.5), 
+                    type='ComboLossMed', loss_weight=(1.0 * 0.4, 0.66 * 0.4), 
                     num_classes = num_classes + 1, class_weight = (0.33, 1.5, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
