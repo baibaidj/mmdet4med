@@ -58,8 +58,7 @@ def train_detector_swa(model,
 
     # perform swa training
     # build swa training runner
-    # if not cfg.get('swa_training', False):
-    #     return
+
     from mmdet.core import SWAHook
     logger.info('Start SWA training')
     swa_optimizer = build_optimizer(model, cfg.swa_optimizer)

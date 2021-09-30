@@ -3,8 +3,10 @@ export PYTHONPATH=':'
 gpuix=$1 #${PORT:-29500}
 numfold=$2
 
-model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1anchor
-weightfile=best_recall@8@0.1_epoch_32.pth
+# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_swa
+# weightfile=latest
+# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1anchor
+# weightfile=best_recall@8@0.1_epoch_32.pth
 
 # model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc
 # weightfile=latest.pth
@@ -24,8 +26,13 @@ weightfile=best_recall@8@0.1_epoch_32.pth
 # model_name=retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_adamw
 # weightfile=best_recall@8@0.1_epoch_24.pth # 14 anchors
 
+# model_name=retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls
+# weightfile=latest.pth
+
+model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_14anchor
+weightfile=best_recall@8@0.1_epoch_26.pth
 model_name=retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls
-weightfile=latest.pth
+weightfile=best_mAP_epoch_12_round2.pth
 
 repo_rt=/home/dejuns/git/mmdet4med/work_dirs 
 
@@ -33,10 +40,19 @@ repo_rt=/home/dejuns/git/mmdet4med/work_dirs
 # python tools/model_converters/publish_model.py $repo_rt/$model_name/latest.pth $repo_rt/$model_name/publish.pth
 # python tools/model_converters/publish_model.py /mnt/data4t/dejuns/ribfrac/model_save/v2.2.4/fracture_det_dj.pth /mnt/data4t/dejuns/ribfrac/model_save/v2.2.4/fracture_det_dj_publish.pth 
 
+# data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_Keya
+# data_rt=/mnt/data4t/dejuns/ribfrac/processed/plan_rib_whole
+# split=test
+# setname=ky46
+
 data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_Keya
 # data_rt=/mnt/data4t/dejuns/ribfrac/raw_rename
+# label_rt=''
+
+data_rt=/data/dejuns/ribfrac/validation/image
+label_rt=/data/dejuns/ribfrac/validation/gt
 split=test
-setname=ky46
+setname=ky46tta
 
 gpuix=${gpuix:-0}
 numfold=${numfold:-3}

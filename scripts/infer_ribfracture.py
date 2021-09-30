@@ -1,4 +1,5 @@
 
+from numpy.core.fromnumeric import sort
 import pandas as pd
 import os, sys, argparse
 
@@ -140,11 +141,17 @@ def main(cfg,
     # infer by model
     for cid, cid_infos in pid2niifp_map.items(): #[1:2]
         img_nii_fp = cid_infos['image']
-        # if cid != '1112514_20180429': continue  #'1214845_20181014' 
+        # if cid != '1112514_20180429': continue  #'1214845_20181014'  #3837016_image.nii.gz
         print(f'\n[INFER] {pcount} {img_nii_fp}')
         if is_test: continue
         # store_dir
         if cfg.fp16: cid_infos['cid'] = f'{cid}_fp16'
+        cid_true = cid_infos['cid']
+        det_result_fp = osp.join(nii_save_dir, f'{cid_true}_roi_det_mask.nii.gz')
+        if osp.exists(det_result_fp): 
+            print(f'{det_result_fp} exist, so skip inference')
+            continue
+
         img_3d, affine_matrix_i = IO4Nii.read(img_nii_fp, axis_order = None, 
                                                 verbose = False, dtype=np.int16)
         cid_infos['image_3d'] = img_3d
@@ -184,13 +191,25 @@ def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_sav
         det_results: list of detection results of 1 image
         seg_results: 5d tensor
     """
-    
 
+    roi_fp, seg_gt_fp = cid_infos['roi'], cid_infos['label']
     cid, img_3d, affine_mat = cid_infos['cid'], cid_infos['image_3d'], cid_infos['affine']
-    gt_det_infos = load2json(cid_infos['roi'])
     seg_channel = seg_results.shape[1]
 
-    # compute metrics for detection head first 
+    # 1. prepare the detection target and segmentation target from either json file and mask labels
+    if isinstance(roi_fp, (str, Path)) and osp.exists(roi_fp):
+        gt_det_infos = load2json(cid_infos['roi'])
+    else: gt_det_infos = []
+
+    if isinstance(seg_gt_fp, (str, Path)) and osp.exists(seg_gt_fp):
+        gt_roi_mask, af_mat = IO4Nii.read(seg_gt_fp, axis_order= None, verbose = False, dtype=np.uint8)
+        print_tensor('\tGTmask', gt_roi_mask)
+        if len(gt_det_infos) == 0 :  gt_det_infos = roi_info_mask(gt_roi_mask)
+        if label_map is not None: 
+            gt_roi_mask = convert_label(gt_roi_mask, label_mapping = label_map, value4outlier=1)
+    else: gt_roi_mask = None
+
+    # 2. compute metrics for detection head first 
     det_roi_infos = roi_info_dets(det_results[0])
     # recall, precision, fp, fn, tp
     metric_keys = ('recall', 'precision', 'fp', 'fn', 'tp')
@@ -207,11 +226,9 @@ def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_sav
         det_roi_mask[slicer] = int(round(roi['prob'] * 100) + cls_base)
     IO4Nii.write(det_roi_mask, nii_save_dir, f'{cid}_roi_det_mask', affine_mat)
     save2json(det_roi_infos, nii_save_dir, f'{cid}_det_roi_infos.json', indent=None, sort_keys=False)
-
-
-    # compute metrics for segmentation head
+    # 3. compute metrics for segmentation head
     if seg_channel > 2:
-        seg_roi_mask = np.argmax(seg_results[0], axis = 0)
+        seg_roi_mask = np.argmax(seg_results[0], axis = 0).astype(np.uint8)
         seg_roi_infos = roi_info_mask(seg_roi_mask,  is_prob = False)
     else:
         seg_roi_prob = post_process_ribfrac(seg_results[0], image_spine_2d=locate_spine_region(img_3d), 
@@ -226,14 +243,6 @@ def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_sav
     IO4Nii.write(seg_roi_mask, nii_save_dir, f'{cid}_roi_seg_mask', affine_mat)
     save2json(seg_roi_infos, nii_save_dir, f'{cid}_seg_roi_infos.json', indent=None, sort_keys=False)
 
-    seg_gt_fp = cid_infos['label']
-    if seg_gt_fp: 
-        gt_roi_mask, af_mat = IO4Nii.read(seg_gt_fp, axis_order= None, verbose = False, dtype=np.uint8)
-        print_tensor('\tGTmask', gt_roi_mask)
-        # gt_roi_mask = gt_roi_mask if seg_channel > 2 else np.where(gt_roi_mask > 0, 1, 0) 
-        if label_map is not None: 
-            gt_roi_mask = convert_label(gt_roi_mask, label_mapping = label_map, value4outlier=1)
-    else: gt_roi_mask = None
     dice3d = evaluate_pred_against_label(seg_roi_mask, gt_roi_mask, ('dice', ), num_classes = seg_channel)['dice']
     dice_by_cls = {f'seg_dice{i}': d for i, d in enumerate(dice3d)}
     # 'seg_dice': float(dice3d)
@@ -251,13 +260,28 @@ def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json
     for cid, cid_infos in pid2niifp_map.items():
         det_fp = osp.join(nii_save_dir, f'{cid}_{suffix}')
         if not osp.exists(det_fp): continue
-        gt_fp = cid_infos['roi']
-        gt_det_infos = load2json(gt_fp)
+        # gt_fp = cid_infos['roi']
+        # gt_det_infos = load2json(gt_fp)
+        roi_fp, seg_gt_fp = cid_infos['roi'], cid_infos['label']
+        gt_det_infos = []
+        # 1. prepare the detection target and segmentation target from either json file and mask labels
+        if isinstance(roi_fp, (str, Path)) and osp.exists(roi_fp):
+            gt_det_infos = load2json(roi_fp)
+        else:
+            print(f'[FROC] gt det fp {roi_fp} not exist, please check')
+
+        # if len(gt_det_infos) == 0 and isinstance(seg_gt_fp, (str, Path)) and osp.exists(seg_gt_fp):
+        #     gt_roi_mask, af_mat = IO4Nii.read(seg_gt_fp, axis_order= None, verbose = False, dtype=np.uint8)
+        #     print_tensor('\tGTmask', gt_roi_mask)
+        #     gt_det_infos = roi_info_mask(gt_roi_mask)
+
         # print(f'{cid} {gt_fp} {det_fp}')
         det_roi_infos = load2json(det_fp)
         detroi_by_case.append(det_roi_infos)
         gtroi_by_case.append(gt_det_infos)
     
+    print(f'[ScanPred] {suffix} files ', len(detroi_by_case))
+    print('[ScanPred] gt label files ', len(gtroi_by_case))
     safe_nx7_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 7))
     safe_nx6_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 6))
 
@@ -290,6 +314,12 @@ def parse_args():
     parser.add_argument('--data-rt',
                         help="data rt ",
                         default='/raid/data/lung/公开数据集/lola11/nii',
+                        type=str
+                        # nargs=argparse.REMAINDER
+                        )
+    parser.add_argument('--label-rt',
+                        help="label root ",
+                        default=None,
                         type=str
                         # nargs=argparse.REMAINDER
                         )
@@ -387,8 +417,8 @@ def sample_list2run(pid2niifp_map, run_pid_ixs = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii', 
-                                  'label': '_instance.nii', 
+                    key2suffix = {'image': '_image.nii.gz', 
+                                  'label': '_instance.nii.gz', 
                                   'roi':'_ins2cls.json'}):
     """
 
@@ -432,6 +462,39 @@ def load_list_detdj(data_folder:str,  mode = 'test ',
     return pid2pathpairs
 
 
+def load_list_scan(data_rt = '/data/dejuns/lung_nodule/test_case/check100',
+                     label_rt = None, 
+                      image_suffix = '_image.nii.gz',
+                      label_suffix = '_fracture.nii.gz', 
+                      ):
+    print('Scanning folder for data list')
+    pid2niifp_map = {}
+    data_rt = Path(data_rt)
+    for f in os.listdir(data_rt):
+        if not f.endswith(image_suffix): continue
+        pid = f.split(image_suffix)[0]
+        pid2niifp_map[pid] = {'cid': pid, 'image':data_rt/f, 'label': None, 'roi': None}
+
+    if label_rt is not None:
+        label_rt = Path(label_rt)
+        for f in os.listdir(label_rt):
+            if not f.endswith(label_suffix): continue
+            pid = f.split(label_suffix)[0]
+            pid2niifp_map[pid]['label'] = label_rt/f
+            roi_fn = f.replace(label_suffix, '_ins2cls.json')
+            roi_fp = label_rt/roi_fn
+            if not osp.exists(roi_fp):
+                print(f'[ScanList] {roi_fp}  not exist so generate')
+                gt_roi_mask, af_mat = IO4Nii.read(label_rt/f, axis_order= None, verbose = False, dtype=np.uint8)
+                print_tensor('\tGTmask', gt_roi_mask)
+                gt_det_infos = roi_info_mask(gt_roi_mask)
+                save2json(gt_det_infos, label_rt, roi_fn, indent=None, sort_keys=False)
+            pid2niifp_map[pid]['roi'] = roi_fp
+
+    print(f'Under {data_rt} {len(pid2niifp_map)} {image_suffix} files found')
+    return pid2niifp_map
+
+
 if __name__ == '__main__':
 
     # data path preparation 
@@ -440,8 +503,10 @@ if __name__ == '__main__':
     dataset_name = cfg.dataset_name
     # assert dataset_name in ('shiwei', 'keya', 'rfmix', 'testcase', 'ircad', 'swnew')
     assert isinstance(cfg.run_pid_ixs, (type(None), list, tuple))
-
-    pid2niifp_map = load_list_detdj(Path(cfg.data_rt), mode = cfg.split)
+    if cfg.label_rt:
+        pid2niifp_map = load_list_scan(cfg.data_rt, label_rt=cfg.label_rt)
+    else:
+        pid2niifp_map = load_list_detdj(cfg.data_rt, mode = cfg.split)
     
     if not cfg.eval_final:
         pid2niifp_map = sample_list2run(pid2niifp_map, run_pid_ixs=cfg.run_pid_ixs, 

@@ -77,7 +77,7 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=3.0),
+            loss_weight=16.0),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=0.33), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
@@ -85,8 +85,8 @@ model = dict(
 
     seg_head = dict(
         type='FCNHead3D',  #verbose = True, 
-        in_channels= stem_channels * 2,
-        in_index=0,
+        in_channels= stem_channels * 4,
+        in_index=1,
         channels= stem_channels,
         # input_transform='resize_concat',
         kernel_size=1,
@@ -144,7 +144,7 @@ model = dict(
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),
-        allowed_border=4,
+        allowed_border=3,
         pos_weight=1.0,
         debug=False),
     test_cfg=dict(

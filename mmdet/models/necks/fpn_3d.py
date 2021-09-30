@@ -1,11 +1,11 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule, build_upsample_layer, build_norm_layer
-from mmcv.runner import BaseModule, auto_fp16
+from mmcv.runner import BaseModule
 from typing import Sequence, List
 from ..builder import NECKS
 from ..utils.ccnet_pure import print_tensor
-import pdb
+import pdb, torch
 
 
 @NECKS.register_module()
@@ -74,7 +74,7 @@ class FPN3D(BaseModule):
                  min_out_channels = 8, 
                  conv_cfg=None,
                  norm_cfg=None,
-                 act_cfg=None,
+                 act_cfg=None, verbose = False, 
                  upsample_cfg=dict(type='deconv3d', mode=None, 
                                     kernel_size = (2,2,2), stride = (2,2,2) ),
                  init_cfg=dict(
@@ -111,10 +111,10 @@ class FPN3D(BaseModule):
 
         self.out_channels = self.compute_output_channels()
         self.up_ops = self.build_upsample_layers()
-        print('[FPN3D] out channels', self.out_channels)
+        print(f'[FPN3D] input channels {self.in_channels} out channels {self.out_channels}')
         self.lateral_convs = nn.ModuleList()
         self.fpn_convs = nn.ModuleList()
-
+        self.verbose = verbose
         for i in range(0, self.backbone_end_level):
             l_conv = ConvModule(
                 in_channels[i],
@@ -173,7 +173,7 @@ class FPN3D(BaseModule):
             ouput_levels = [ol for ol in ouput_levels if ol < self.start_level]
             assert max(ouput_levels) < self.start_level, "Can not decrease channels below decoder level"
             for ol in ouput_levels[::-1]: # 1, 0 
-                oc = max(self.min_out_channels, out_channels[ol + 1] // 2)
+                oc = max(self.min_out_channels, self.in_channels[ol]*2)
                 out_channels[ol] = oc
         return out_channels
 
@@ -257,4 +257,9 @@ class FPN3D(BaseModule):
                         outs.append(self.fpn_convs[i](F.relu(outs[-1])))
                     else:
                         outs.append(self.fpn_convs[i](outs[-1]))
+        # bb = [print_tensor(f'[FPNeck] inputlevel {i}', o) for i, o in enumerate(inputs)]
+        # level_hasnan = [torch.isnan(a).any() for i, a in enumerate(outs)]
+        if self.verbose: 
+            aa = [print_tensor(f'[FPNeck] level {i}', o) for i, o in enumerate(outs)] #hasnan {level_hasnan[i]}
+        # if any(level_hasnan): pdb.set_trace()
         return tuple(outs)

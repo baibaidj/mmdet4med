@@ -330,7 +330,7 @@ class SingleStageDetector3D(BaseDetector3D):
             det_results, seg_results= self.whole_inference(imgs, img_metas, rescale)
 
         seg_results = torch.cat([torch.softmax(seg, dim=1) if seg.shape[1] > 1 else torch.sigmoid(seg)
-                                for seg in seg_results], axis = 0)
+                                for seg in seg_results], axis = 0).cpu()
         return det_results, seg_results 
 
 

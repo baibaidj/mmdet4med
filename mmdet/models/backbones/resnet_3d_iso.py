@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import (build_conv_layer, build_norm_layer, build_plugin_layer,
                       constant_init, kaiming_init)
-from mmcv.runner import load_checkpoint, auto_fp16
+from mmcv.runner import load_checkpoint
 from mmcv.utils.parrots_wrapper import _BatchNorm
 from torch.nn.modules.utils import _ntuple
 
@@ -11,6 +11,7 @@ from ..utils import  ResLayerIso
 from .resnet import BasicBlock, Bottleneck
 from .resnet3d import BasicBlock3d, Bottleneck3d
 from ...utils import get_root_logger
+import torch
 
 print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 class BasicBlockP3D(nn.Module):
@@ -303,6 +304,7 @@ class ResNet3dIso(nn.Module):
                  zero_init_residual=True,
                  stem_stride_1 = 2,
                  stem_stride_2 = 1, 
+                 stem_channel_div = 1,
                  non_local=(0, 0, 0, 0, 0),
                  non_local_cfg=dict(),
                  verbose = False, 
@@ -348,7 +350,8 @@ class ResNet3dIso(nn.Module):
         # self.is_stem_down = is_stem_down
 
 
-        self._make_stem_layer(in_channels, stem_channels, stem_stride_1, stem_stride_2)
+        self._make_stem_layer(in_channels, stem_channels, stem_stride_1, stem_stride_2, 
+                                stem_channel_div = stem_channel_div)
 
         self.res_layers = []    
         global_block_ix = 0
@@ -463,14 +466,15 @@ class ResNet3dIso(nn.Module):
         """nn.Module: the normalization layer named "norm1" """
         return getattr(self, self.norm1_name)
 
-    def _make_stem_layer(self, in_channels, stem_channels, stem_stride_1 = 1, stem_stride_2 = 1):
+    def _make_stem_layer(self, in_channels, stem_channels, stem_stride_1 = 1, stem_stride_2 = 1, 
+                        stem_channel_div = 1):
         """Make stem layer for ResNet."""
         if self.deep_stem:
             self.stem = nn.Sequential(
                 build_conv_layer(
                     self.conv_cfg,
                     in_channels,
-                    stem_channels, # 
+                    stem_channels // stem_channel_div, # 
                     kernel_size=(3, 3, 3),
                     stride=[stem_stride_1] * 3,
                     padding=(1, 1, 1),
@@ -479,7 +483,7 @@ class ResNet3dIso(nn.Module):
                 nn.ReLU(inplace=True),
                 build_conv_layer(
                     self.conv_cfg,
-                    stem_channels,#
+                    stem_channels // stem_channel_div,#
                     stem_channels ,#// 2
                     kernel_size=(3, 3, 3),
                     stride= [stem_stride_2] * 3,
@@ -587,7 +591,9 @@ class ResNet3dIso(nn.Module):
             x = res_layer(x)
             if self.verbose: print_tensor(f'l{i+2}', x)
             outs.append(x)
-        # print('out indices', self.out_indices)
+        
+        # print('\n')
+        # aa = [print(f'[Backbone] level {i} has nan? ', torch.isnan(t).any()) for i, t in enumerate(outs)]
         return tuple([outs[i] for i in self.out_indices])
 
     def train(self, mode=True):
