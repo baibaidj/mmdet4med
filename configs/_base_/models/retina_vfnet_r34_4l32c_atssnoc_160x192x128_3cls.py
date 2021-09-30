@@ -7,7 +7,7 @@ conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
 norm_cfg = dict(type='IN3d', requires_grad=True) 
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
-stem_channels = 16
+stem_channels = 32
 fpn_channel = stem_channels * (2**3)
 model = dict(
     type='RetinaNet3D',
@@ -76,8 +76,8 @@ model = dict(
             gamma=2.0,
             iou_weighted=True,
             loss_weight=8.0),
-        loss_bbox=dict(type='GIoULoss', loss_weight=0.2),
-        loss_bbox_refine=dict(type='GIoULoss', loss_weight=0.4)
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.2),
+        loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=0.4)
         ), 
 
     seg_head = dict(

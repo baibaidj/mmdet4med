@@ -12,7 +12,7 @@ fpn_channel = stem_channels * (2**3)
 model = dict(
     type='RetinaNet3D',
     backbone=dict(
-        type='ResNet3dIso', verbose = False, 
+        type='ResNet3dIso',
         deep_stem = True,
         avg_down=True,
         depth='343d', # 18.3G 
@@ -78,10 +78,9 @@ model = dict(
             gamma=2.0,
             iou_weighted=True,
             loss_weight=8.0),
-        loss_bbox=dict(type='GIoULoss', loss_weight=0.2),
-        loss_bbox_refine=dict(type='GIoULoss', loss_weight=0.4)
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=1.0),
+        loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=1.0)
         ), 
-
     seg_head = dict(
         type='FCNHead3D', # verbose = True, 
         in_channels= stem_channels * 2,
@@ -103,7 +102,7 @@ model = dict(
         # start_iters = 1,
         # max_iters = 4e5,
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.4, 0.66 * 0.4), 
+                    type='ComboLossMed', loss_weight=(1.0 * 0.3, 0.66 * 0.3), 
                     num_classes = num_classes + 1, class_weight = (0.33, 1.5, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
@@ -138,7 +137,7 @@ model = dict(
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=64, pool_size = 32,
+                num=512, pool_size = 20,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),

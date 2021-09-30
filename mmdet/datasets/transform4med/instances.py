@@ -165,11 +165,11 @@ def instances_to_boxes(seg: Tensor,
 
         _mins = instance_idx[:, -3:].min(dim=0)[0] # 
         _maxs = instance_idx[:, -3:].max(dim=0)[0]
-        x1, y1, x2, y2 = _mins[-dim] - 1, _mins[(-dim) + 1] - 1, _maxs[-dim] + 1, _maxs[(-dim) + 1] + 1
-        box = [x1, y1, x2, y2]
+        h1, w1, h2, w2 = _mins[-dim] - 1, _mins[(-dim) + 1] - 1, _maxs[-dim] + 1, _maxs[(-dim) + 1] + 1
+        box = [h1, w1, h2, w2]
         if dim > 2:
             z1, z2 = [_mins[(-dim) + 2] - 1, _maxs[(-dim) + 2] + 1]
-            box = [x1, y1, z1, x2, y2, z2]
+            box = [h1, w1, z1, h2, w2, z2]
         if verbose:
             print(f'[edge] min max bbox \n{_mins}\n{_maxs} \n{box}')
         box = add_jitter2bbox(box, jitter_base)

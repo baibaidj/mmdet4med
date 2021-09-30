@@ -193,7 +193,7 @@ class FCOSHead3D(AnchorFreeHead3D):
             dict[str, Tensor]: A dictionary of loss components.
         """
         assert len(cls_scores) == len(bbox_preds) == len(centernesses)
-        featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
+        featmap_sizes = [featmap.size()[2:] for featmap in cls_scores]
         all_level_points = self.get_points(featmap_sizes, bbox_preds[0].dtype,
                                            bbox_preds[0].device)
         labels, bbox_targets = self.get_targets(all_level_points, gt_bboxes,
@@ -298,7 +298,7 @@ class FCOSHead3D(AnchorFreeHead3D):
         assert len(cls_scores) == len(bbox_preds)
         num_levels = len(cls_scores)
 
-        featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
+        featmap_sizes = [featmap.size()[2:] for featmap in cls_scores]
         mlvl_points = self.get_points(featmap_sizes, bbox_preds[0].dtype,
                                       bbox_preds[0].device)
 

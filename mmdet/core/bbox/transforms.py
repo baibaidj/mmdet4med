@@ -1,7 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
-import torch
-
+import torch, pdb
+from mmdet.utils import print_tensor
 
 def bbox_flip(bboxes, img_shape, direction='horizontal'):
     """Flip bboxes horizontally or vertically.
@@ -364,7 +364,7 @@ def distance2bbox3d(points, distance, max_shape=None):
     return bboxes
 
 
-def bbox2distance3d(points, bbox, max_dis=None, eps=0.1):
+def bbox2distance3d(points, bbox, max_dis=None, eps=0.1, verbose = False):
     """Decode bounding box based on distances.
 
     Args:
@@ -376,6 +376,14 @@ def bbox2distance3d(points, bbox, max_dis=None, eps=0.1):
     Returns:
         Tensor: Decoded distances.
     """
+    if verbose:
+        print_tensor('\n\t[bbox2distance] dim0 point', points[:, 0])
+        print_tensor('\t[bbox2distance] dim0 bbox', bbox[:, [0, 3]])
+        print_tensor('\t[bbox2distance] dim1 point', points[:, 1])
+        print_tensor('\t[bbox2distance] dim1 bbox', bbox[:, [1, 4]])
+        print_tensor('\t[bbox2distance] dim2 point', points[:, 2])
+        print_tensor('\t[bbox2distance] dim2 bbox', bbox[:, [2, 5]])
+
     left = points[:, 0] - bbox[:, 0]
     top = points[:, 1] - bbox[:, 1]
     upper = points[:, 2] - bbox[:, 2]

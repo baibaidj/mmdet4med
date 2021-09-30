@@ -450,11 +450,11 @@ class ATSSHead3DNOC(AnchorHead3D):
         cls_scores = cls_scores[inside_flags, : ]
 
         if self.verbose and gt_bboxes.shape[0] > 0: 
-            print_tensor('\n[GetTarget] anchors', anchors)
-            print_tensor('[GetTarget] cls scores', cls_scores)
-            print_tensor('[GetTarget] gt bbox', gt_bboxes)
+            # print_tensor('\n[GetTarget] anchors', anchors)
+            print_tensor('\n[GetTarget] cls scores', cls_scores)
             print_tensor('[GetTarget] gt labels', gt_labels)
 
+        # pdb.set_trace()
         num_level_anchors_inside = self.get_num_level_anchors_inside(
             num_level_anchors, inside_flags)
         assign_result = self.assigner.assign(anchors, num_level_anchors_inside,
@@ -476,6 +476,7 @@ class ATSSHead3DNOC(AnchorHead3D):
                 pos_bbox_targets = self.bbox_coder.encode(
                     sampling_result.pos_bboxes, sampling_result.pos_gt_bboxes)
             else:
+                # print('For VFNet, gt bbox should not be encoded to deltas')
                 # used in VFNetHead
                 pos_bbox_targets = sampling_result.pos_gt_bboxes
             bbox_targets[pos_inds, :] = pos_bbox_targets
@@ -492,6 +493,18 @@ class ATSSHead3DNOC(AnchorHead3D):
                 label_weights[pos_inds] = self.train_cfg.pos_weight
         if len(neg_inds) > 0:
             label_weights[neg_inds] = 1.0
+        
+        if self.verbose:
+            if len(gt_bboxes)> 0:
+                print_tensor('\n[GetTarget] gt bbox', gt_bboxes)
+            # print_tensor('[GetTarget] anchor dim0 h', anchors[:, [0, 3]])
+            # print_tensor('[GetTarget] anchor dim1 w', anchors[:, [1, 4]])
+            # print_tensor('[GetTarget] anchor dim2 d', anchors[:, [2, 5]])
+            if len(pos_inds)> 0:
+                print_tensor(f'[GetTarget] pos anchors {len(pos_inds)}', anchors[pos_inds, :])
+                print_tensor(f'[GetTarget] pos targets {len(pos_inds)}', bbox_targets[pos_inds, :])
+            print(f'[GetTarget] neg anchors {len(neg_inds)} totol anchors {len(anchors)}')
+
         # pdb.set_trace()
         # map up to original set of anchors
         if unmap_outputs:

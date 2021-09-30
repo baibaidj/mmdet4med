@@ -193,8 +193,7 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
             self.dcn_kernel,
             1,
             padding=self.dcn_pad)
-        self.vfnet_cls = nn.Conv3d(
-            self.feat_channels, self.cls_out_channels, 3, padding=1)
+        self.vfnet_cls = nn.Conv3d(self.feat_channels, self.cls_out_channels, 3, padding=1)
 
     def forward(self, feats):
         """Forward features from the upstream network.
@@ -284,7 +283,7 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
         Returns:
             dcn_offsets (Tensor): The offsets for deformable convolution.
         """
-        dcn_base_offset = self.dcn_base_offset.type_as(bbox_pred) # (1, 18, 1, 1, 1), 9 points
+        dcn_base_offset = self.dcn_base_offset.type_as(bbox_pred) # (1, 81, 1, 1, 1), 27 points
         bbox_pred_grad_mul = (1 - gradient_mul) * bbox_pred.detach() + gradient_mul * bbox_pred
         # map to the feature map scale
         bbox_pred_grad_mul = bbox_pred_grad_mul / stride
@@ -336,16 +335,16 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
 
         Args:
             cls_scores (list[Tensor]): Box iou-aware scores for each scale
-                level, each is a 4D-tensor, the channel number is
+                level, each is a 5D-tensor, the channel number is
                 num_points * num_classes.
             bbox_preds (list[Tensor]): Box offsets for each
-                scale level, each is a 4D-tensor, the channel number is
-                num_points * 4.
+                scale level, each is a 5D-tensor, the channel number is
+                num_points * 6.
             bbox_preds_refine (list[Tensor]): Refined Box offsets for
                 each scale level, each is a 4D-tensor, the channel
-                number is num_points * 4.
+                number is num_points * 6.
             gt_bboxes (list[Tensor]): Ground truth bboxes for each image with
-                shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
+                shape (num_gts, 6) in [tl_x, tl_y, tl_z, br_x, br_y, br_z] format.
             gt_labels (list[Tensor]): class indices corresponding to each box
             img_metas (list[dict]): Meta information of each image, e.g.,
                 image size, scaling factor, etc.
@@ -357,9 +356,15 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
             dict[str, Tensor]: A dictionary of loss components.
         """
         assert len(cls_scores) == len(bbox_preds) == len(bbox_preds_refine)
-        featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
+        featmap_sizes = [featmap.size()[2:] for featmap in cls_scores]
         all_level_points = self.get_points(featmap_sizes, bbox_preds[0].dtype,
                                            bbox_preds[0].device)
+
+        # if self.verbose: 
+        #     print_tensor(f'\n[AnchorPoint] dim0 coord range', all_level_points[0][:, 0])
+        #     print_tensor(f'[AnchorPoint] dim1 coord range', all_level_points[0][:, 1])
+        #     print_tensor(f'[AnchorPoint] dim2 coord range', all_level_points[0][:, 2])
+
         labels, label_weights, bbox_targets, bbox_weights = self.get_targets(
             cls_scores, all_level_points, gt_bboxes, gt_labels, img_metas,
             gt_bboxes_ignore)
@@ -429,6 +434,14 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
         bbox_avg_factor_rf = reduce_mean(
             bbox_weights_rf.sum()).clamp_(min=1).item()
 
+        if self.verbose: 
+            print_tensor('[VFHead] pos target distance', pos_bbox_targets)
+            print_tensor('[VFHead] pos preds distance', pos_bbox_preds)
+            print_tensor('[VFHead] pos target bbox', pos_decoded_target_preds)
+            print_tensor('[VFHead] pos preds bbox', pos_decoded_bbox_preds)
+            print_tensor('[VFHead] IOU initial', iou_targets_ini)
+            print_tensor('[VFHead] IOU refine', iou_targets_rf)
+
         if num_pos > 0:
             loss_bbox = self.loss_bbox(
                 pos_decoded_bbox_preds,
@@ -465,6 +478,12 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
                 weight=label_weights,
                 avg_factor=num_pos_avg_per_gpu)
 
+        if self.verbose: 
+            print_tensor(f'[VFLoss] USEVF-{self.use_vfl} cls score', flatten_cls_scores)
+            print_tensor('[VFLoss] cls label target', flatten_labels)
+            print_tensor(f'[VFLoss] cls iou target', cls_iou_targets)
+            print(f'[VFLoss] cls loss {loss_cls} bbox loss {loss_bbox}')
+            # print_tensor('[VFloss] label weight', label_weights)
         return dict(
             loss_cls=loss_cls,
             loss_bbox=loss_bbox,
@@ -508,7 +527,7 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
         assert len(cls_scores) == len(bbox_preds) == len(bbox_preds_refine)
         num_levels = len(cls_scores)
 
-        featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
+        featmap_sizes = [featmap.size()[2:] for featmap in cls_scores]
         mlvl_points = self.get_points(featmap_sizes, bbox_preds[0].dtype,
                                       bbox_preds[0].device)
         result_list = []
@@ -615,15 +634,15 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
         w_range = torch.arange(0, w * stride, stride, dtype=dtype, device=device)
         h_range = torch.arange(0, h * stride, stride, dtype=dtype, device=device)
         d_range = torch.arange(0, d * stride, stride, dtype=dtype, device=device)
-        hh, ww, dd = torch.meshgrid(h_range, w_range, d_range)
+        hh, ww, dd = torch.meshgrid([h_range, w_range, d_range])
         # to be compatible with anchor points in ATSS
         if self.use_atss:
-            points = torch.stack(
-                (ww.reshape(-1), hh.reshape(-1), dd.reshape(-1)), dim=-1) + \
+            points = torch.stack( # TODO: here the order of ww and hh is incompatible with that of hw
+                (hh.reshape(-1), ww.reshape(-1), dd.reshape(-1)), dim=-1) + \
                      stride * self.anchor_center_offset
         else:
             points = torch.stack(
-                (ww.reshape(-1), hh.reshape(-1), dd.reshape(-1)), dim=-1) + \
+                (hh.reshape(-1), ww.reshape(-1), dd.reshape(-1)), dim=-1) + \
                     stride // 2
         return points
 
@@ -706,27 +725,27 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
 
         Args:
             cls_scores (list[Tensor]): Box iou-aware scores for each scale
-                level with shape (N, num_points * num_classes, H, W).
+                level with shape (N, num_points * num_classes, H, W, D).
             mlvl_points (list[Tensor]): Points of each fpn level, each has
-                shape (num_points, 2).
+                shape (num_points, 3).
             gt_bboxes (list[Tensor]): Ground truth bboxes of each image,
-                each has shape (num_gt, 4).
+                each has shape (num_gt, 6).
             gt_labels (list[Tensor]): Ground truth labels of each box,
                 each has shape (num_gt,).
             img_metas (list[dict]): Meta information of each image, e.g.,
                 image size, scaling factor, etc.
             gt_bboxes_ignore (None | Tensor): Ground truth bboxes to be
-                ignored, shape (num_ignored_gts, 4). Default: None.
+                ignored, shape (num_ignored_gts, 6). Default: None.
 
         Returns:
             tuple:
                 labels_list (list[Tensor]): Labels of each level.
                 label_weights (Tensor): Label weights of all levels.
                 bbox_targets_list (list[Tensor]): Regression targets of each
-                    level, (l, t, r, b).
+                    level, (top, left, anterior, bottom, right, poterior).
                 bbox_weights (Tensor): Bbox weights of all levels.
         """
-        featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
+        featmap_sizes = [featmap.size()[2:] for featmap in cls_scores]
         assert len(featmap_sizes) == self.anchor_generator.num_levels
 
         device = cls_scores[0].device
@@ -743,10 +762,11 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
             gt_bboxes_ignore_list=gt_bboxes_ignore,
             gt_labels_list=gt_labels,
             label_channels=label_channels,
+            cls_scores_list=cls_scores, 
             unmap_outputs=True)
         if cls_reg_targets is None:
             return None
-
+        # Check if anchor position is equivalent to point position
         (anchor_list, labels_list, label_weights_list, bbox_targets_list,
          bbox_weights_list, num_total_pos, num_total_neg) = cls_reg_targets
 
@@ -755,7 +775,8 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
         ]
 
         num_imgs = len(img_metas)
-        # transform bbox_targets (x1, y1, x2, y2) into (l, t, r, b) format
+
+        # transform bbox_targets (h1, w1, d1, h2, w2, d2) into (t, l, a, b, r, p) format
         bbox_targets_list = self.transform_bbox_targets(
             bbox_targets_list, mlvl_points, num_imgs)
 
@@ -771,7 +792,7 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
         return labels_list, label_weights, bbox_targets_list, bbox_weights
 
     def transform_bbox_targets(self, decoded_bboxes, mlvl_points, num_imgs):
-        """Transform bbox_targets (x1, y1, z1, x2, y2, z2) into (l, t, upper, r, b, lower) format.
+        """Transform bbox_targets (x1, y1, z1, x2, y2, z2) into (l, t, anteiror, r, b, posterior) format.
 
         Args:
             decoded_bboxes (list[Tensor]): Regression targets of each level,
@@ -782,7 +803,7 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
 
         Returns:
             bbox_targets (list[Tensor]): Regression targets of each level in
-                the form of (l, t, upper, r, b, lower).
+                the form of (l, t, anteiror, r, b, posterior).
         """
         # TODO: Re-implemented in Class PointCoder
         assert len(decoded_bboxes) == len(mlvl_points)

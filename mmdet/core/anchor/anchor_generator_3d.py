@@ -289,13 +289,15 @@ class AnchorGenerator3D:
 
         base_anchors = self.base_anchors[level_idx].to(device)
         feat_h, feat_w, feat_d = featmap_size
-        stride_w, stride_h, stride_d = self.strides[level_idx]
-        shift_x = torch.arange(0, feat_w, device=device) * stride_w
-        shift_y = torch.arange(0, feat_h, device=device) * stride_h
-        shift_z = torch.arange(0, feat_d, device=device) * stride_d
+        stride_h, stride_w, stride_d = self.strides[level_idx]
 
-        shift_xx, shift_yy, shift_zz = self._meshgrid(shift_x, shift_y, shift_z)
-        shifts = torch.stack([shift_xx, shift_yy, shift_zz, shift_xx, shift_yy, shift_zz], dim=-1)
+        shift_h = torch.arange(0, feat_h, device=device) * stride_h
+        shift_w = torch.arange(0, feat_w, device=device) * stride_w
+        shift_d = torch.arange(0, feat_d, device=device) * stride_d
+
+        shift_hh, shift_ww, shift_dd = self._meshgrid(shift_h, shift_w, shift_d)
+        # TODO: here the order of shift_x/feat_w and shift_y/feat_h is incompatible with that of feat_h and feat_w
+        shifts = torch.stack([shift_hh, shift_ww, shift_dd, shift_hh, shift_ww, shift_dd], dim=-1)
         shifts = shifts.type_as(base_anchors)
         # first feat_w elements correspond to the first row of shifts
         # add A anchors (1, A, 6) to K shifts (K, 1, 6) to get
