@@ -31,7 +31,7 @@ from .single_stage import SingleStageDetector
 from .sparse_rcnn import SparseRCNN
 from .trident_faster_rcnn import TridentFasterRCNN
 from .two_stage import TwoStageDetector
-from .vfnet import VFNet
+from .vfnet import VFNet, VFNet3D
 from .yolact import YOLACT
 from .yolo import YOLOV3
 from .yolof import YOLOF
@@ -48,5 +48,5 @@ __all__ = [
     'DeformableDETR', 'AutoAssign', 'YOLOF', 'CenterNet', 'YOLOX',
     'TwoStagePanopticSegmentor', 'PanopticFPN', 
 
-    'RetinaNet3D', 'SingleStageDetector3D'
+    'RetinaNet3D', 'SingleStageDetector3D', 'VFNet3D'
 ]

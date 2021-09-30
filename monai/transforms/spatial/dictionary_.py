@@ -412,7 +412,7 @@ class SpacingTTAd(MapTransform):
         new_pixdim = d['img_meta_dict'].get('new_pixdim', None)
         # print('Check new pixdim', new_pixdim)
         if new_pixdim is None: return d
-        self.spacing_transform = Spacing(new_pixdim, diagonal=self.diagonal)
+        self.spacing_transform = Spacing(new_pixdim, diagonal=self.diagonal, dtype = np.float32)
 
         for idx, key in enumerate(self.keys):
             meta_data = d[f"{key}_{self.meta_key_postfix}"]

@@ -65,8 +65,8 @@ total_samples = 160 #// draw_step #9842
 sample_per_gpu = 3# bs2 >> 24.5 G  # 
 train_sample_rate = 1.0
 val_sample_rate = 0.30
-key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 
-                            'roi_fp':'_ins2cls.json'}
+key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 
+              'roi_fp':'_ins2cls.json'}
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
     workers_per_gpu= 6, 
