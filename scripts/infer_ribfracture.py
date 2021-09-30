@@ -170,7 +170,6 @@ def main(cfg,
         segroi_by_case.append(seg_roi_infos)
         gtroi_by_case.append(gt_det_infos)
         pcount += 1
-        break
 
     per_case_fp = osp.join(nii_save_dir, f'aug_inference_{fold_ix_str}.csv')
     result_tb = pd.DataFrame(result_by_case)
@@ -458,8 +457,10 @@ if __name__ == '__main__':
     mkdir(nii_save_dir)
 
     if cfg.eval_final:
-        det_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix='det_roi_infos.json')
-        seg_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix='seg_roi_infos.json')
+        det_suffix, seg_suffix = 'det_roi_infos.json', 'seg_roi_infos.json'
+        if cfg.fp16: det_suffix, seg_suffix = f'fp16_{det_suffix}', f'fp16_{seg_suffix}'
+        det_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix=det_suffix)
+        seg_froc = FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix=seg_suffix)
         
         print(f'[{cfg.model_name}] Detection FROC \n', det_froc)
         print(f'[{cfg.model_name}] Segmentation FROC \n', seg_froc)
