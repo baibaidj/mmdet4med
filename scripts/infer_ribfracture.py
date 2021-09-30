@@ -176,7 +176,7 @@ def main(cfg,
         segroi_by_case.append(seg_roi_infos)
         gtroi_by_case.append(gt_det_infos)
         pcount += 1
-        break
+        # break
 
     per_case_fp = osp.join(nii_save_dir, f'aug_inference_{fold_ix_str}.csv')
     result_tb = pd.DataFrame(result_by_case)
@@ -396,8 +396,8 @@ def sample_list2run(pid2niifp_map, run_pid_ixs = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii', 
-                                  'label': '_instance.nii', 
+                    key2suffix = {'image': '_image.nii.gz', 
+                                  'label': '_instance.nii.gz', 
                                   'roi':'_ins2cls.json'}):
     """
 

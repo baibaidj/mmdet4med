@@ -64,7 +64,8 @@ evaluation=dict(interval=2, start=4,
 # CUDA_VISIBLE_DEVICES=0 python tools/test_med.py \
 # configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn.py \
 # work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth --eval recall  969798
-
+# recall@1@0.1: 0.1538, recall@2@0.1: 0.2747, recall@4@0.1: 0.4341, recall@8@0.1: 0.6319, recall@50@0.1: 0.7747
+# 
 
 #  sw_batch_size = 1, overlap = 0.25, runtime = 19.1s
 #  sw_batch_size = 2, overlap = 0.25, runtime = 16.7s

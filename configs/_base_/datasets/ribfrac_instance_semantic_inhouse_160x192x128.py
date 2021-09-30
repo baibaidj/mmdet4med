@@ -99,7 +99,7 @@ gpu_aug_pipelines = [
         # # data in torch tensor, not necessarily on gpu
         dict(type = 'Rand3DElasticGPUd', keys=keys[:core_key_num],
             sigma_range=(9, 13), # larger sigma mean smoother offset with smaller values
-            magnitude_range=(64, 384), # s=8, (-0.008, 0.006) * 256 > (2.04, 1.53)
+            magnitude_range=(64, 256), # s=8, (-0.008, 0.006) * 256 > (2.04, 1.53)
             spatial_size=patch_size, 
             rotate_range=[15] * 3, #rotate_angle * np.pi / 180.0
             translate_range = [8] * 3, 
