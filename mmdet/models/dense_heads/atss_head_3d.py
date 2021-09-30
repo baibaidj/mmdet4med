@@ -27,7 +27,7 @@ class ATSSHead3D(AnchorHead3D):
                  num_classes,
                  in_channels,
                  stacked_convs=4,
-                 conv_cfg=None,
+                 conv_cfg=dict(type='Conv3d'),
                  norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
                  loss_centerness=dict(
                      type='CrossEntropyLoss',

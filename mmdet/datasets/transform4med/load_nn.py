@@ -24,15 +24,32 @@ from itertools import repeat
 from multiprocessing.pool import Pool
 from collections import OrderedDict
 from pathlib import Path
-from typing import Sequence, Any, Tuple, Union
+from typing import Sequence, Any, Tuple, Union, List
 from zipfile import BadZipfile
 
 import numpy as np
 import SimpleITK as sitk
 from loguru import logger
 
-from nndet.io.paths import subfiles, Pathlike
 
+Pathlike = Union[Path, str]
+
+def subfiles(dir_path: Path, identifier: str, join: bool) -> List[str]:
+    """
+    Get all paths
+
+    Args:
+        dir_path: path to directory
+        join: return dir_path+file_name instead of file_name
+        identifier: regular expression to select files
+
+    Returns:
+        List[str]: found paths/file names
+    """
+    paths = list(map(str, list(Path(dir_path).glob(identifier))))
+    if not join:
+        paths = [p.rsplit(os.path.sep, 1)[-1] for p in paths]
+    return paths
 
 __all__ = ["load_case_cropped", "load_case_from_list",
            "load_properties_of_cropped", "npy_dataset",

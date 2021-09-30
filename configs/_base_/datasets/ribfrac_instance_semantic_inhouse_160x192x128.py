@@ -65,8 +65,8 @@ total_samples = 160 #// draw_step #9842
 sample_per_gpu = 3# bs2 >> 24.5 G  # 
 train_sample_rate = 1.0
 val_sample_rate = 0.30
-key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 
-                            'roi_fp':'_ins2cls.json'}
+key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 
+              'roi_fp':'_ins2cls.json'}
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
     workers_per_gpu= 6, 
@@ -99,7 +99,7 @@ gpu_aug_pipelines = [
         # # data in torch tensor, not necessarily on gpu
         dict(type = 'Rand3DElasticGPUd', keys=keys[:core_key_num],
             sigma_range=(9, 13), # larger sigma mean smoother offset with smaller values
-            magnitude_range=(64, 384), # s=8, (-0.008, 0.006) * 256 > (2.04, 1.53)
+            magnitude_range=(64, 256), # s=8, (-0.008, 0.006) * 256 > (2.04, 1.53)
             spatial_size=patch_size, 
             rotate_range=[15] * 3, #rotate_angle * np.pi / 180.0
             translate_range = [8] * 3, 

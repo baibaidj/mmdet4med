@@ -304,6 +304,7 @@ class ResNet3dIso(nn.Module):
                  zero_init_residual=True,
                  stem_stride_1 = 2,
                  stem_stride_2 = 1, 
+                 stem_channel_div = 1,
                  non_local=(0, 0, 0, 0, 0),
                  non_local_cfg=dict(),
                  verbose = False, 
@@ -349,7 +350,8 @@ class ResNet3dIso(nn.Module):
         # self.is_stem_down = is_stem_down
 
 
-        self._make_stem_layer(in_channels, stem_channels, stem_stride_1, stem_stride_2)
+        self._make_stem_layer(in_channels, stem_channels, stem_stride_1, stem_stride_2, 
+                                stem_channel_div = stem_channel_div)
 
         self.res_layers = []    
         global_block_ix = 0
@@ -464,14 +466,15 @@ class ResNet3dIso(nn.Module):
         """nn.Module: the normalization layer named "norm1" """
         return getattr(self, self.norm1_name)
 
-    def _make_stem_layer(self, in_channels, stem_channels, stem_stride_1 = 1, stem_stride_2 = 1):
+    def _make_stem_layer(self, in_channels, stem_channels, stem_stride_1 = 1, stem_stride_2 = 1, 
+                        stem_channel_div = 1):
         """Make stem layer for ResNet."""
         if self.deep_stem:
             self.stem = nn.Sequential(
                 build_conv_layer(
                     self.conv_cfg,
                     in_channels,
-                    stem_channels, # 
+                    stem_channels // stem_channel_div, # 
                     kernel_size=(3, 3, 3),
                     stride=[stem_stride_1] * 3,
                     padding=(1, 1, 1),
@@ -480,7 +483,7 @@ class ResNet3dIso(nn.Module):
                 nn.ReLU(inplace=True),
                 build_conv_layer(
                     self.conv_cfg,
-                    stem_channels,#
+                    stem_channels // stem_channel_div,#
                     stem_channels ,#// 2
                     kernel_size=(3, 3, 3),
                     stride= [stem_stride_2] * 3,
