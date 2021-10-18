@@ -19,7 +19,7 @@ model = dict(backbone = dict(verbose = False ),
                              ))
 
 find_unused_parameters=True
-load_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls/latest.pth'
+load_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls_cv22/latest.pth'
 resume_from =  None #'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls/latest.pth' 
 
 # optimizer
@@ -49,7 +49,7 @@ evaluation=dict(interval=4, start=4, metric='mAP',
 
 
 # CUDA_VISIBLE_DEVICES=2 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls_cv22.py 
-# CUDA_VISIBLE_DEVICES=0,2,4 PORT=29034 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls.py 3 --gpus 3 #--no-validate
+# CUDA_VISIBLE_DEVICES=1,3 PORT=29022 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls_cv22.py 2 --gpus 2 #--no-validate
 
 
 # swa_training = True

@@ -77,7 +77,7 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=16),
+            loss_weight=8.0),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=0.33), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
@@ -105,7 +105,7 @@ model = dict(
         # max_iters = 4e5,
         loss_decode =dict(
                     type='ComboLossMed', loss_weight=(1.0 * 0.4, 0.66 * 0.4), 
-                    num_classes = num_classes + 1, class_weight = (0.33, 1.5, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
+                    num_classes = num_classes + 1, class_weight = (0.33, 1.25, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
             ),

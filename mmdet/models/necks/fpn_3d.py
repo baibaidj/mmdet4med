@@ -78,7 +78,9 @@ class FPN3D(BaseModule):
                  upsample_cfg=dict(type='deconv3d', mode=None, 
                                     kernel_size = (2,2,2), stride = (2,2,2) ),
                  init_cfg=dict(
-                     type='Xavier', layer='Conv3d', distribution='uniform')):
+                     type='Xavier', layer='Conv3d', distribution='uniform'), 
+                 is_double_chn = True,     
+                ):
         super(FPN3D, self).__init__(init_cfg)
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
@@ -109,9 +111,9 @@ class FPN3D(BaseModule):
         elif add_extra_convs:  # True
             self.add_extra_convs = 'on_input'
 
-        self.out_channels = self.compute_output_channels()
-        self.up_ops = self.build_upsample_layers()
-        print(f'[FPN3D] input channels {self.in_channels} out channels {self.out_channels}')
+        self.out_channels = self.compute_output_channels(is_double_chn)
+        self.up_ops = self.build_upsample_layers(conv_cfg)
+        print(f'[FPN3D] input channels {self.in_channels} out channels {self.out_channels} upmode {self.upsample_mode}')
         self.lateral_convs = nn.ModuleList()
         self.fpn_convs = nn.ModuleList()
         self.verbose = verbose
@@ -158,7 +160,7 @@ class FPN3D(BaseModule):
                     inplace=False)
                 self.fpn_convs.append(extra_fpn_conv)
 
-    def compute_output_channels(self) -> List[int]:
+    def compute_output_channels(self, is_double_chn = True) -> List[int]:
         """
         Compute number of output channels
         for upper most two levels, the channels can stay the same as the encoder featmap. 
@@ -168,27 +170,29 @@ class FPN3D(BaseModule):
         out_channels = [self.fixed_out_channels] * self.num_ins
 
         if self.start_level is not None: #2345
-            ouput_levels = list(range(self.num_ins)) # encoder outputing levels
+            ouput_levels = list(range(self.num_ins)) # encoder outputing levels, 01234
             # filter for levels above decoder levels
             ouput_levels = [ol for ol in ouput_levels if ol < self.start_level]
             assert max(ouput_levels) < self.start_level, "Can not decrease channels below decoder level"
             for ol in ouput_levels[::-1]: # 1, 0 
-                oc = max(self.min_out_channels, self.in_channels[ol]*2)
+                oc = max(self.min_out_channels, self.in_channels[ol]* (2 if is_double_chn else 1 ))
                 out_channels[ol] = oc
         return out_channels
 
-    def build_upsample_layers(self):
+    def build_upsample_layers(self, conv_cfg):
         up_ops = nn.ModuleList()
         for i in range(0, self.backbone_end_level):
             if i == 0:
                 up_ops.append(None)
             else:
                 if self.upsample_mode is not None:
-                    up = nn.Upsample(scale_factor=2, mode= self.upsample_mode)
+                    up = nn.Upsample(scale_factor=2, mode= self.upsample_mode, align_corners=True)
                     if not (self.out_channels[i] == self.out_channels[i - 1]):
                         _conv = ConvModule(self.out_channels[i],
                                             self.out_channels[i - 1], 
-                                            1, norm_cfg = None, act_cfg=None)
+                                            1, conv_cfg=conv_cfg, 
+                                            norm_cfg = None, 
+                                            act_cfg=None)
                         up = nn.Sequential(up, _conv)
                 else:
                     up = nn.Sequential(build_upsample_layer(
