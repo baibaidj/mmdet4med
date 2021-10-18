@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/retina_vfnet_r34_4l16c_atssnoc_160x192x128_3cls.py',
+    '../_base_/models/retina_vfnet_r34_4l16c_atssnoc_160x192x128_3cls_3level.py',
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
     # '../ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
     # '../_base_/swa.py',
@@ -7,9 +7,9 @@ _base_ = [
 
 key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 'roi_fp':'_ins2cls.json'}
 data = dict(samples_per_gpu = 2, workers_per_gpu= 6, 
-            train=dict(sample_rate = 1.0, json_filename = 'dataset_0928_0-2.json', split='train', key2suffix = key2suffix), 
-            val=dict(sample_rate = 0.1, json_filename = 'dataset_0928_0-2.json', split='test', key2suffix = key2suffix), 
-            test= dict(sample_rate = 0.1, json_filename = 'dataset_0928_0-2.json', split='test', key2suffix = key2suffix))
+            train=dict(sample_rate = 1.0, json_filename = 'dataset_0928.json', split='train', key2suffix = key2suffix), 
+            val=dict(sample_rate = 0.5, json_filename = 'dataset_0928.json', split='test', key2suffix = key2suffix), 
+            test= dict(sample_rate = 0.1, json_filename = 'dataset_0928.json', split='test', key2suffix = key2suffix))
             
 model = dict(backbone = dict(verbose = False), 
             seg_head = dict(verbose = False),
@@ -20,8 +20,8 @@ model = dict(backbone = dict(verbose = False),
                              ))
 
 find_unused_parameters=True
-load_from = None #'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls/best_mAP_epoch_12_round2.pth'
-resume_from =  'work_dirs/retina_vfnet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc/latest.pth' 
+load_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls/best_mAP_epoch_16.pth'
+resume_from =  None # 'work_dirs/retina_vfnet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc/latest.pth' 
 
 # optimizer
 optimizer = dict(#type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001, 
@@ -48,7 +48,7 @@ evaluation=dict(interval=4, start=8, metric='mAP',
                 iou_thr=[0.1], proposal_nums=(1, 2, 4, 8, 50))
 
 
-# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_vfnet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc.py 
+# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_vfnet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_3level.py 
 # CUDA_VISIBLE_DEVICES=0,2,4 PORT=29034 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls.py 3 --gpus 3 #--no-validate
 
 

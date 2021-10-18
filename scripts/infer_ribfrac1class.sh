@@ -84,5 +84,4 @@ CUDA_VISIBLE_DEVICES=$gpuix python3 scripts/infer_ribfracture.py \
 # bash scripts/infer_ribfrac1class.sh 0 2
 # python -m line_profiler 
 
-# python tools/model_converters/publish_model.py /data/dejuns/ribfrac/model_save/v2.2.4/networks_frac/epoch_30_best.pth \
-# /data/dejuns/ribfrac/model_save/v2.2.4/networks_frac/fracture_det_ft.pth
+# python tools/model_converters/publish_model.py /mnt/data4t/dejuns/ribfrac/model_save/v2.3.1/best_mAP_epoch_16.pth /mnt/data4t/dejuns/ribfrac/model_save/v2.3.1/fracture_det_3cls.pth

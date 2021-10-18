@@ -1,7 +1,7 @@
 _base_ = [
-    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128.py',
+    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128_3cls.py',
 ]
-num_classes = 1 # this is an RPN 
+num_classes = 3 # this is an RPN 
 # model settings
 conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
@@ -15,10 +15,11 @@ model = dict(
         type='ResNet3dIso',
         deep_stem = True,
         avg_down=True,
-        depth='183d', # 18.3G 
+        depth='343d', # 18.3G 
         in_channels=1,
         stem_stride_1 = 1,
         stem_stride_2 = 1, 
+        stem_channel_div = 1, 
         stem_channels= stem_channels, # 32 
         base_channels= stem_channels * 2, # 64 
         num_stages=4,
@@ -26,7 +27,7 @@ model = dict(
         dilations=(1, 1, 1, 1),
         out_indices=(1, 2, 3, 4, 5), # 0 is input image 
         conv_cfg=conv_cfg,
-        norm_cfg=norm_cfg,  # TODO: replace ReLU with Swish
+        norm_cfg=norm_cfg,
         style='pytorch',
         # non_local=((0, 0), (0, 0), (0, 0), (0, 0)),
         # non_local_cfg=dict(
@@ -45,46 +46,43 @@ model = dict(
         add_extra_convs=False,
         num_outs=5),
     bbox_head=dict(
-        type='ATSSHead3DNOC', #verbose = True, 
+        type='VFNetHead3D', #verbose = True, 
         num_classes=num_classes,
         in_channels=fpn_channel,
-        stacked_convs=4,
+        stacked_convs=3,
         start_level = 2, 
         feat_channels=fpn_channel,
         conv_cfg = conv_cfg, 
         norm_cfg = norm4head, 
+        #NOTE: stride == base_size the len of stride should be identical to fpn levels
+        strides=(4, 8, 16),
         anchor_generator=dict( 
             type='AnchorGenerator3D', #verbose = True, 
             octave_base_scale=2,
-            scales_per_octave=2, 
-            ratios=[1.0],
-            strides=[4, 8, 16]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
-        bbox_coder=dict(
-            type='DeltaXYWHBBoxCoder3D',
-            target_means=[.0, .0, .0, .0, 0., 0.],
-            target_stds=[0.1, 0.1, 0.1, 0.2, 0.2, 0.2], 
-            clip_border=False),
+            scales_per_octave=1, 
+            ratios=[1.0], center_offset=0.0,
+            strides=(4, 8, 16)),
+        # bbox_coder=dict(
+        #     type='DeltaXYWHBBoxCoder3D',
+        #     target_means=[.0, .0, .0, .0, 0., 0.],
+        #     target_stds=[0.1, 0.1, 0.1, 0.2, 0.2, 0.2], 
+        #     clip_border=False),
+        center_sampling=False,
+        dcn_on_last_conv=False,
+        use_atss=True,
+        use_vfl=True, 
         loss_cls=dict(
-            type='FocalLoss',
-            use_sigmoid=True,
-            gamma=2.0,
-            alpha=0.25, 
-            loss_weight=8.0),
-        use_vfl=False, 
-        loss_cls_vfl=dict(
             type='VarifocalLoss',
             use_sigmoid=True,
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=16),
-        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.33), 
-        # loss_centerness=dict(
-        #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
+            loss_weight=2),
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=1.0),
+        loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=1.0)
         ), 
-
     seg_head = dict(
-        type='FCNHead3D', 
+        type='FCNHead3D', # verbose = True, 
         in_channels= stem_channels * 4,
         in_index=1,
         channels= stem_channels,
@@ -93,7 +91,7 @@ model = dict(
         num_convs=1,
         concat_input=False,
         dropout_ratio=0.1,
-        num_classes=num_classes,
+        num_classes=num_classes + 1,
         conv_cfg = conv_cfg, 
         norm_cfg=norm4head,
         align_corners=False,
@@ -104,26 +102,25 @@ model = dict(
         # start_iters = 1,
         # max_iters = 4e5,
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.5, 0.66 * 0.5), 
-                    num_classes = num_classes, 
-                    class_weight = (0.33, 1.0),  verbose = False,   #(0.33, 1.0)
-                    dice_cfg = dict(ignore_0 = True, verbose = False) #, act = 'sigmoid'
+                    type='ComboLossMed', loss_weight=(1.0 * 0.3, 0.66 * 0.3), 
+                    num_classes = num_classes + 1, class_weight = (0.33, 1.5, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
+                    dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
             ),
     # convert instance mask to bbox 
-    mask2bbox_cfg = [dict(type = 'FindInstances', verbose = False, 
+    mask2bbox_cfg = [dict(type = 'FindInstances', #verbose = True, 
                         instance_key="seg",
                         save_key="present_instances"), 
-                    dict(type = 'Instances2Boxes', verbose = False, 
+                    dict(type = 'Instances2Boxes', #verbose = True, 
                         instance_key="seg",
                         map_key="inst2cls_map", 
                         box_key="gt_bboxes",
                         class_key="gt_labels", move_jitter = 2, 
                         present_instances="present_instances"),
-                    dict(type = 'Instances2SemanticSeg', verbose = False, 
+                    dict(type = 'Instances2SemanticSeg', #verbose = True, 
                         instance_key = 'seg',
                         map_key="inst2cls_map",
-                        seg_key = 'seg',
+                        seg_key = 'seg', add_background = True, 
                         present_instances="present_instances"), 
                     # dict(type = 'SaveImaged', keys = ('img', 'seg'), 
                         # output_dir = f'work_dirs/retinanet3d_4l8c_vnet_1x_ribfrac_1cls/debug', 
@@ -151,8 +148,8 @@ model = dict(
         nms_pre=200,
         # nms_pre_tiles = 1000, 
         min_bbox_size=2,
-        score_thr=0.3,
-        nms=dict(type='nms', iou_threshold=0.05), # 
+        score_thr=0.15,
+        nms=dict(type='nms', iou_threshold=0.1), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=32, 
         mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 2,

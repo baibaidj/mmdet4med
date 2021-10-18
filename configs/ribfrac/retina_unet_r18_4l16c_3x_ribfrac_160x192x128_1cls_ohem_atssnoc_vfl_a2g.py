@@ -4,9 +4,12 @@ _base_ = [
     # '../_base_/swa.py',
 ]
 
-data = dict(train=dict(sample_rate = 1.0), 
-            val=dict(sample_rate = 1.0), 
-            test= dict(sample_rate = 0.1))
+key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 'roi_fp':'_ins2cls.json'}
+data = dict(samples_per_gpu = 3, workers_per_gpu= 6, 
+            train=dict(sample_rate = 1.0, json_filename = 'dataset_0928.json', split='train', key2suffix = key2suffix), 
+            val=dict(sample_rate = 1.0, json_filename = 'dataset_0928.json', split='test', key2suffix = key2suffix), 
+            test= dict(sample_rate = 0.1, json_filename = 'dataset_0928.json', split='test', key2suffix = key2suffix))
+            
             
 model = dict(backbone = dict(verbose = False ), 
             seg_head = dict(verbose = False),
@@ -16,12 +19,12 @@ model = dict(backbone = dict(verbose = False ),
                              ))
 
 find_unused_parameters=True
-load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_ft/best_recall@50@0.1_epoch_38.pth'
+load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_ft/best_recall@8@0.1_epoch_20.pth'
 resume_from = None #'work_dirs/retina_unet_r34_4l8c_3x_ribfrac_160x192x128_1cls_ohem_atss_rf/latest.pth' 
 
 # optimizer
 optimizer = dict(#type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001, 
-                _delete_ = True, type='AdamW', lr=0.0001, weight_decay=0.0001
+                _delete_ = True, type='AdamW', lr=0.0002, weight_decay=0.0001
         ) 
 optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 32, norm_type = 2)) # 31G
 fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0, 
@@ -34,7 +37,7 @@ lr_config = dict(_delete_=True, policy='poly', power=0.99, min_lr=5e-5, by_epoch
 runner = dict(type='EpochBasedRunner', max_epochs=32)
 checkpoint_config = dict(interval=1, max_keep_ckpts = 4)
 # yapf:disable
-log_config = dict(interval=10, hooks=[
+log_config = dict(interval=30, hooks=[
                 dict(type='TextLoggerHook'), 
                 # dict(type='TensorboardLoggerHook')
                 ])
@@ -59,7 +62,7 @@ evaluation=dict(interval=2, start=4,
 # # swa_optimizer_config
 # swa_optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 8, norm_type = 2)) # 31G
 # swa_checkpoint_config = dict(interval=4, filename_tmpl='swa_epoch_{}.pth', max_keep_ckpts = 4)
-# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_ft.py 
+# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_a2g.py 
 # CUDA_VISIBLE_DEVICES=0,2,4 PORT=29034 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_swa.py 3 --gpus 3 #--no-validate
 # CUDA_VISIBLE_DEVICES=0 python tools/test_med.py \
 # configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn.py \

@@ -252,6 +252,8 @@ def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_sav
                     **det_result, **seg_result, **dice_by_cls}
     return case_result, det_roi_infos, seg_roi_infos, gt_det_infos
 
+safe_nx7_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 7))
+safe_nx6_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 6))
 
 def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json'):
     detroi_by_case = [] 
@@ -269,12 +271,6 @@ def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json
             gt_det_infos = load2json(roi_fp)
         else:
             print(f'[FROC] gt det fp {roi_fp} not exist, please check')
-
-        # if len(gt_det_infos) == 0 and isinstance(seg_gt_fp, (str, Path)) and osp.exists(seg_gt_fp):
-        #     gt_roi_mask, af_mat = IO4Nii.read(seg_gt_fp, axis_order= None, verbose = False, dtype=np.uint8)
-        #     print_tensor('\tGTmask', gt_roi_mask)
-        #     gt_det_infos = roi_info_mask(gt_roi_mask)
-
         # print(f'{cid} {gt_fp} {det_fp}')
         det_roi_infos = load2json(det_fp)
         detroi_by_case.append(det_roi_infos)
@@ -282,8 +278,6 @@ def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json
     
     print(f'[ScanPred] {suffix} files ', len(detroi_by_case))
     print('[ScanPred] gt label files ', len(gtroi_by_case))
-    safe_nx7_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 7))
-    safe_nx6_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 6))
 
     gt_bboxes = [safe_nx6_array([roi['bbox'] for roi in rois]) for i, rois in enumerate(gtroi_by_case)]
     pred_bbox_nx7 = [safe_nx7_array([roi['bbox'] + [roi['prob']] for roi in rois]) for i, rois in enumerate(detroi_by_case)]
@@ -463,7 +457,7 @@ def load_list_detdj(data_folder:str,  mode = 'test ',
 
 
 def load_list_scan(data_rt = '/data/dejuns/lung_nodule/test_case/check100',
-                     label_rt = None, 
+                     label_rt = None, extract_roi_info = True, 
                       image_suffix = '_image.nii.gz',
                       label_suffix = '_fracture.nii.gz', 
                       ):
@@ -483,7 +477,7 @@ def load_list_scan(data_rt = '/data/dejuns/lung_nodule/test_case/check100',
             pid2niifp_map[pid]['label'] = label_rt/f
             roi_fn = f.replace(label_suffix, '_ins2cls.json')
             roi_fp = label_rt/roi_fn
-            if not osp.exists(roi_fp):
+            if not osp.exists(roi_fp) and extract_roi_info:
                 print(f'[ScanList] {roi_fp}  not exist so generate')
                 gt_roi_mask, af_mat = IO4Nii.read(label_rt/f, axis_order= None, verbose = False, dtype=np.uint8)
                 print_tensor('\tGTmask', gt_roi_mask)
