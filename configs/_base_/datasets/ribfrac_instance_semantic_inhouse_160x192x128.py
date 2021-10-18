@@ -12,7 +12,7 @@ keys = ('img', 'seg') #, seg='instance_seg'
 dtypes = ('float', 'int',) # , 'float', 
 interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
-ext_patch_size = (200, 240, 180) # avoid artifacts such as boarder reflection
+ext_patch_size = (200, 232, 168) # avoid artifacts such as boarder reflection
 patch_size = (160, 192, 128)  # [160 192 112] # xyz
 label_map = {1: 0, 2:0, 3:0, 4:0}
 train_pipeline = [

@@ -77,7 +77,7 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=2),
+            loss_weight=2.0),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=1.0),
         loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=1.0)
         ), 
@@ -137,7 +137,7 @@ model = dict(
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=128, pool_size = 32,
+                num=64, pool_size = 32,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),
