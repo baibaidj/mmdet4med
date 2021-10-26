@@ -157,10 +157,17 @@ def main(cfg,
         cid_infos['image_3d'] = img_3d
         cid_infos['affine'] = affine_matrix_i
         timer = Timer() 
+        # NOTE: make the target spacings adpative to the affine_matrix 
+        origin_spacing = [abs(affine_matrix_i[a, a]) for a in range(3)]
+        target_spacings = find_target_spacing(origin_spacing)
+        if isinstance(target_spacings, (tuple, list)): target_spacings = [target_spacings]
+        print(f'origin spacing {origin_spacing} target spacint {target_spacings}')
+
         det_results, seg_results = inference_detector4med(model, img_3d, 
                                                         affine = affine_matrix_i,
                                                         rescale = True,
-                                                        need_probs = True)
+                                                        need_probs = True, 
+                                                        target_spacings=target_spacings)
         seg_results = seg_results.numpy()                                            
         torch.cuda.empty_cache()
         if cfg.verbose: print_tensor('\tseg logits', seg_results)
@@ -183,6 +190,42 @@ def main(cfg,
     result_tb.to_csv(per_case_fp, index = False)
     print(result_tb.describe())
     return per_case_fp
+
+
+def find_target_spacing(spacing_xyz, 
+                        target_spacing_scheme = {0: (0.7, 0.85), 1 : (0.7, 0.85), 2 : (0.94, 1.26)}):
+
+    def is_value_within(v, range_):
+        assert len(range_) == 2, f'range can only contain two elements but got {range_}'
+        # if not isinstance(range_, (tuple, list)):
+        #     range_ = [range_] * 2
+        is_within = (v >= range_[0]) and (v <= range_[1])
+        # print('[IS_Within]', v, range_, is_within)
+        return is_within
+
+    def find_cloest_boundary(v, range_):
+        assert len(range_) == 2, f'range can only contain two elements but got {range_}'
+        # if not isinstance(range_, (tuple, list)):
+        #     range_ = [range_] * 2
+        if is_value_within(v, range_):
+            return v
+        else: return sum(range_)/2
+
+    if target_spacing_scheme is None:  
+        target_spacing_inner = [[abs(s), abs(s)] for i, s in enumerate(spacing_xyz)]
+    else: target_spacing_inner = target_spacing_scheme
+    is_spacings_within = [is_value_within(abs(spacing_xyz[i]), target_spacing_inner[i]) 
+                                                             for i in range(3)]
+
+    # is_new_exist = os.path.exists(new_img_path)
+    if all(is_spacings_within): 
+        target_spacing = None
+    else:
+        target_spacing = tuple([find_cloest_boundary(abs(spacing_xyz[i]), 
+                                    target_spacing_inner[i]) for i in range(3)])
+    return target_spacing
+
+
 
 def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_save_dir, 
                                     seg_prob_thresh = 0.5, label_map = None):
@@ -417,8 +460,8 @@ def sample_list2run(pid2niifp_map, run_pid_ixs = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii.gz', 
-                                  'label': '_instance.nii.gz', 
+                    key2suffix = {'image': '_image.nii', 
+                                  'label': '_instance.nii', 
                                   'roi':'_ins2cls.json'}):
     """
 

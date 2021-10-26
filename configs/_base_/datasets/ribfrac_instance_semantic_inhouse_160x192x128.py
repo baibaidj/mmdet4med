@@ -42,7 +42,7 @@ test_pipeline = [
             flip_direction= ['diagonal'],
             transforms=[
                 dict(type = 'AddChanneld', keys= test_keys), 
-                dict(type = 'SpacingTTAd', keys = test_keys, pixdim = None),
+                dict(type = 'SpacingTTAd', keys = test_keys, pixdim = None, mode = ('bilinear',)),
                 dict(type = 'SpatialPadd_', keys= test_keys, spatial_size= patch_size, mode='reflect', method = 'end'), 
                 dict(type = 'FlipTTAd_', keys = test_keys),  
                 dict(type = 'CastToTyped_', keys = 'img',  dtype= ('float', )),

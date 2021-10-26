@@ -9,21 +9,19 @@ from monai.data.utils import compute_importance_map
 from ...utils.resize import resize_3d, print_tensor
 import copy, pdb
 
-hasnan = lambda t: torch.isnan(t).any()
 
 class BboxSegEnsembler1Case(object):
 
-    def __init__(self, image_size, patch_size, num_classes = 2, test_cfg = {}, device = 'cpu', 
-                seg_in_index = 0) -> None:
+    def __init__(self, image_size, patch_size, num_classes = 2, test_cfg = {}, 
+                 device = 'cpu', has_seg = True) -> None:
         self.image_size = image_size
         self.patch_size = patch_size
         self.num_classes = num_classes
         self.device = device
         self.test_cfg = test_cfg
-        # self.seg_output_stride = max(seg_in_index + 1, 1)
-        # self.seg_output_size = [int(a/self.seg_output_stride) for a in self.image_size]
-        self.reset_seg_output()
-        self.reset_seg_countmap()
+        if has_seg:
+            self.reset_seg_output()
+            self.reset_seg_countmap()
         self.reset_det_storage()
 
     def initial_tile_weight_map(self, *args, **kwargs):
@@ -67,22 +65,18 @@ class BboxSegEnsembler1Case(object):
                                         mode='trilinear', 
                                         align_corners=False, 
                                         warning=False)[0]
-        # print_tensor(f'[BuildTile] seg_logit_tile', seg_logit_tile)
             # print_tensor('[TileSeg] resize ', seg_logit_tile)
-            # pdb.set_trace()
+
         self.seg_output_4d[slice_tile] = seg_logit_tile * self.tile_weight_map_3d[None, ...]
         self.seg_countmap_4d[slice_tile] += self.tile_weight_map_3d[None,  ...]
         # print_tensor(f'[BuildTile] segout', self.seg_output_4d)
         # print_tensor(f'[BuildTile] seg count', self.seg_countmap_4d)
-        # pdb.set_trace()
-
+        
     def update_seg_output_batch(self, seg_logit_tiles, slice_tiles):
         """
         Args:
             seg_logit_tiles (5d_tensor): bchwd, b for number of windows
             slice_tiles ([type]): slice for the b windows in the original image space
-
-        # 
         preds_final = preds.new_full((bs, cs, resh, resw, resd), -16)
         preds_final[:, 0] = 16  # default [logit] 1hot vector for all pixels are (16, -16, ...)
         """
@@ -148,12 +142,14 @@ class BboxSegEnsembler1Case(object):
         preprocess pipeline: resize, padding, flip
         """
 
-        this_bboxes, this_label = det_result # (bboxes_nx7, labels_nx1)
-
+        this_bboxes_raw, this_label = det_result # (bboxes_nx7, labels_nx1)
+        this_bboxes = this_bboxes_raw.clone().detach()
         img1info = img_meta['img_meta_dict']
         origin_shape = img1info['spatial_shape']
         shape_post_resize = img1info.get('shape_post_resize', origin_shape)
         shape_post_pad = img1info.get('padshape', shape_post_resize) # pad to end
+        # raw_right = sanity_check_bbox(this_bboxes_raw)
+        # print(f'\n[PostDet] ori {origin_shape} resize{shape_post_resize} pad{shape_post_pad} boxright {raw_right}')
 
         # 1. accounting for flip
         flip = img1info.get('flip', False)
@@ -165,8 +161,15 @@ class BboxSegEnsembler1Case(object):
 
         if flip and (flip_dims is not None): 
             for fdim in flip_dims:
-                this_bboxes[:, [fdim, fdim + 3]] = ready_img_shape[fdim] - this_bboxes[:, [fdim, fdim + 3]]
+                # when flipping the bbox, large become small and small large, 
+                # then their position should also change accordingly, small to front and large to the end
+                this_bboxes[:, [fdim, fdim + 3]] = ready_img_shape[fdim] - this_bboxes_raw[:, [fdim + 3, fdim]]
 
+        # flip_right = sanity_check_bbox(this_bboxes)
+        # if not flip_right:
+        #     pdb.set_trace()
+        #     flip_roi_mask = roi_sanity_mask(this_bboxes)
+        #     raw_roi_mask = roi_sanity_mask(this_bboxes_raw)
         # 2, accounting for padding     
         this_bboxes[:, :6] = clip_boxes_to_image(this_bboxes[:, :6], shape_post_pad, is_xyz=True)
 
@@ -219,6 +222,15 @@ class BboxSegEnsembler1Case(object):
                                         warning=False)
         # print_tensor('[SlideIn] postprocess seg', this_seg_5d)
         return this_seg_5d
+
+roi_sanity_mask = lambda x : ((x[:, [3, 4, 5]]  - x[:, [0, 1, 2]]) < 1).sum(dim = 1).bool()
+
+def sanity_check_bbox(bbox_nx7):
+    assert len(bbox_nx7.shape) == 2, f'bbox dim should be 2 but got {bbox_nx7.shape}'
+    if bbox_nx7.shape[0] < 1: return True
+    sanity_nx1 = roi_sanity_mask(bbox_nx7)
+    # pdb.set_trace()
+    return not sanity_nx1.any().item()
 
 
 def postprocess_detect_results(det_tuple, img_shape, test_cfg, verbose = False):
