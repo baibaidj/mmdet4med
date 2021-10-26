@@ -28,6 +28,7 @@ from .retina_head import RetinaHead, RetinaHead3D
 from .retina_sepbn_head import RetinaSepBNHead
 from .rpn_head import RPNHead
 from .sabl_retina_head import SABLRetinaHead
+from .solo_head import DecoupledSOLOHead, DecoupledSOLOLightHead, SOLOHead
 from .ssd_head import SSDHead
 from .vfnet_head import VFNetHead
 from .yolact_head import YOLACTHead, YOLACTProtonet, YOLACTSegmHead
@@ -49,6 +50,8 @@ __all__ = [
     'SABLRetinaHead', 'CentripetalHead', 'VFNetHead', 'StageCascadeRPNHead',
     'CascadeRPNHead', 'EmbeddingRPNHead', 'LDHead', 'CascadeRPNHead',
     'AutoAssignHead', 'DETRHead', 'YOLOFHead', 'DeformableDETRHead',
-    'CenterNetHead', 'YOLOXHead', 
+    'SOLOHead', 'DecoupledSOLOHead', 'CenterNetHead', 'YOLOXHead',
+    'DecoupledSOLOLightHead', 
+
     'RetinaHead3D', 'ATSSHead3D', 'ATSSHead3DNOC', 'VFNetHead3D'
 ]
