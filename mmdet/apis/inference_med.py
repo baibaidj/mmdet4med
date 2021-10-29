@@ -40,7 +40,8 @@ class LoadImageMonai:
 
 
 def inference_detector4med(model, img, affine = None, rescale = True,
-                          need_probs = True, guide_mask = None):
+                           need_probs = True, guide_mask = None, 
+                            target_spacings = None):
     """Inference image(s) with the segmentor.
 
     Args:
@@ -58,10 +59,9 @@ def inference_detector4med(model, img, affine = None, rescale = True,
     cfg = copy.deepcopy(model.cfg)
     device = next(model.parameters()).device  # model device
     # build the data pipeline
-    # TODO: make the target spacings adpative to the affine_matrix 
-    origin_spacing = [abs(affine[a, a]) for a in range(3)]
-    if img.shape[-1] > 500 and origin_spacing[0] > 0.82:
-        cfg.data.test.pipeline[1].target_spacings = None
+    # NOTE: make the target spacings adpative to the affine_matrix 
+    if isinstance(target_spacings, (list, tuple)): # make the target spacings adpative to the affine_matrix 
+        cfg.data.test.pipeline[1].target_spacings = target_spacings
 
     test_pipeline = [LoadImageMonai()] + cfg.data.test.pipeline[1:]
     test_pipeline = Compose(test_pipeline)

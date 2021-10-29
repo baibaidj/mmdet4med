@@ -38,24 +38,24 @@ test_pipeline = [
             # label_mapping = label_mapping,
             # value4outlier = 1,
             target_spacings = None, 
-            flip=False,
+            flip=True,
             flip_direction= ['diagonal'],
             transforms=[
                 dict(type = 'AddChanneld', keys= test_keys), 
-                dict(type = 'SpacingTTAd', keys = test_keys, pixdim = None),
+                dict(type = 'SpacingTTAd', keys = test_keys, pixdim = None, mode = ('bilinear', )),
                 dict(type = 'SpatialPadd_', keys= test_keys, spatial_size= patch_size, mode='reflect', method = 'end'), 
                 dict(type = 'FlipTTAd_', keys = test_keys),  
-                dict(type = 'CastToTyped_', keys = 'img',  dtype= ('float', )),
-                dict(type = 'ToTensord', keys = 'img'), 
+                dict(type = 'CastToTyped_', keys = ('img', ),  dtype= ('float', )),
+                dict(type = 'ToTensord', keys = ('img', )), 
                 dict(type = 'NormalizeIntensityGPUd', keys='img',
                             subtrahend=norm_param['mean'],
                             divisor=norm_param['std'],
                             percentile_99_5=norm_param['percentile_99_5'],
                             percentile_00_5=norm_param['percentile_00_5']
                             ),
-                dict(type= 'FormatShapeMonai', keys=['img'], use_datacontainer = False,
+                dict(type= 'FormatShapeMonai', keys=('img', ), use_datacontainer = False,
                                              channels = in_channel),
-                dict(type='Collect', keys=['img'], meta_keys = ('img_meta_dict', ))
+                dict(type='Collect', keys=('img', ), meta_keys = ('img_meta_dict', ))
                 ], 
             )
 ]
