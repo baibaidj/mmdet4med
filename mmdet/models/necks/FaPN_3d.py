@@ -171,7 +171,7 @@ class FaPN3D(BaseModule):
         """
         out_channels = [self.fixed_out_channels] * self.num_ins
 
-        if self.start_level is not None: #2345
+        if isinstance(self.start_level, int) and self.start_level > 0 : #2345
             ouput_levels = list(range(self.num_ins)) # encoder outputing levels, 01234
             # filter for levels above decoder levels
             ouput_levels = [ol for ol in ouput_levels if ol < self.start_level]
@@ -220,6 +220,7 @@ class FaPN3D(BaseModule):
         """Forward function."""
         assert len(inputs) == len(self.in_channels)
 
+        # pdb.set_trace()
         # build laterals
         laterals = [
             lateral_conv(inputs[i])
@@ -288,11 +289,10 @@ class FeatureSelectionModule(nn.Module):
                                     in_chan, 
                                     kernel_size, 
                                     conv_cfg=conv_cfg, 
-                                    norm_cfg = norm_cfg, 
+                                    norm_cfg = None, 
                                     act_cfg = act_cfg, 
                                     bias=False,)
         self.sigmoid = nn.Sigmoid()
-        # self.conv = Conv2d(in_chan, out_chan, kernel_size=1, bias=False, norm=get_norm('', out_chan))
         self.conv =  ConvModule(in_chan, 
                                 out_chan, 
                                 kernel_size, 

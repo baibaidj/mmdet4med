@@ -6,7 +6,7 @@ from .accuracy import accuracy
 from .mean_dice import metric_in_cfsmat_1by1, cfsmat4mask_batched
 from collections import OrderedDict
 from prettytable import PrettyTable
-from ..utils.misc import print_tensor
+from ..utils import print_tensor
 import pdb
 
 

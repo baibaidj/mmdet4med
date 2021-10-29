@@ -18,9 +18,10 @@ model = dict(
                     use_vfl = True), 
             )
 
+cudnn_benchmark = True # Autotuner runs a short benchmark and selects the kernel with the best performance on a given hardware for a given input size.
 find_unused_parameters=True
-load_from = 'work_dirs/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_tpn2b1l3c/best_mAP_epoch_22.pth' #'work_dirs/densecl_r18_4l16c_allct_bone_160x192x128_100eps/latest.pth'
-resume_from = None # 'work_dirs/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_tpn2b1l3c/latest.pth' 
+load_from = 'work_dirs/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn/best_mAP_epoch_4.pth' #'work_dirs/densecl_r18_4l16c_allct_bone_160x192x128_100eps/latest.pth'
+resume_from = None # 'work_dirs/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn/latest.pth' 
 
 # optimizer
 optimizer = dict(
@@ -51,7 +52,7 @@ evaluation=dict(interval=4, start=0, metric='mAP',
                 iou_thr=[0.1], proposal_nums=(1, 2, 4, 8, 50))
 
 # CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn.py 
-# CUDA_VISIBLE_DEVICES=0,2,4 PORT=29034 bash ./tools/dist_train.sh configs/ribfrac/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn.py 3 --gpus 3 #--no-validate
+# CUDA_VISIBLE_DEVICES=0,2,4 PORT=29034 bash ./tools/dist_train.sh configs/ribfrac/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn.py 3 --gpus 3 --no-validate
 # CUDA_VISIBLE_DEVICES=0 python tools/test_med.py \
 # configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn.py \
 # work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth --eval recall  969798

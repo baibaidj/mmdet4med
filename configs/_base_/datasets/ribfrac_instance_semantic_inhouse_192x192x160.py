@@ -12,8 +12,8 @@ keys = ('img', 'seg') #, seg='instance_seg'
 dtypes = ('float', 'int',) # , 'float', 
 interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
-ext_patch_size = (200, 232, 168) # avoid artifacts such as boarder reflection
-patch_size = (160, 160, 128)  # [160 192 112] # xyz
+ext_patch_size = (240, 240, 216) # avoid artifacts such as boarder reflection
+patch_size = (192, 192, 160)  # [160 192 112] # xyz
 label_map = {1: 0, 2:0, 3:0, 4:0}
 train_pipeline = [
     dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), label_map = label_map),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani

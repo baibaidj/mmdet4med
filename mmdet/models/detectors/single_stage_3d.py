@@ -272,6 +272,7 @@ class SingleStageDetector3D(BaseDetector3D):
                     m['img_shape'] = None #Shaper.patch_shape
                     m['scale_factor'] = [1 for _ in range(Shaper.spatial_dim * 2)]
                 window_data = torch.cat([inputs[win_slice] for win_slice in tiles_slicer]).to(device)
+                # print_tensor(f'[SlideInfer] window {six} data', window_data)
                 det_results, seg_results = self.simple_test_tile(window_data, img_meta_tiles)  # batched patch segmentation
                 # if self.verbose and six % 30 ==0 :  #self.verbose and  six % 30 ==0 
                 #     print_tensor(f'\n[SliceInfer] seg results batch{bix} win{six}', seg_results)

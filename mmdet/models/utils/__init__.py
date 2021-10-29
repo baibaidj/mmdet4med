@@ -17,6 +17,7 @@ from .transformer import (DetrTransformerDecoder, DetrTransformerDecoderLayer,
                           DynamicConv, PatchEmbed, Transformer, nchw_to_nlc,
                           nlc_to_nchw)
 
+from . transformer3d import (PatchEmbed3D, nchwd_to_nlc, nlc_to_nchwd)
 
 print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 chn2last_order = lambda x: tuple([0, *[a + 2 for a in range(x)],  1])
@@ -32,5 +33,5 @@ __all__ = [
     'adaptive_avg_pool2d', 'AdaptiveAvgPool2d', 'PatchEmbed', 'nchw_to_nlc',
     'nlc_to_nchw', 'pvt_convert', 
 
-    'ResLayer3D', 'ResLayerIso'
+    'ResLayer3D', 'ResLayerIso', 'PatchEmbed3D', 'nlc_to_nchwd', 'nchwd_to_nlc'
 ]

@@ -5,51 +5,43 @@ num_classes = 1 # this is an RPN
 # model settings
 conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
-norm_cfg = dict(type='IN3d', requires_grad=True) 
+norm4body = dict(type='IN3d', requires_grad=True) 
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
 stem_channels = 16
 fpn_channel = stem_channels * (2**3)
 model = dict(
     type='RetinaNet3D',
     backbone=dict(
-        type='ResNet3dIso',
-        deep_stem = True,
-        avg_down=True,
-        depth='183d', # 18.3G 
+        type='PyramidVisionTransformer3DV2',
+        pretrain_img_size={{ _base_.patch_size }},
         in_channels=1,
-        stem_stride_1 = 1,
-        stem_stride_2 = 1, 
-        stem_channels= stem_channels, # 32 
-        base_channels= stem_channels * 2, # 64 
+        embed_dims= stem_channels * 2,
         num_stages=4,
-        strides=(2, 2, 2, 2), # 64, 128, 256, 320
-        dilations=(1, 1, 1, 1),
-        out_indices=(1, 2, 3, 4, 5), # 0 is input image 
-        conv_cfg=conv_cfg,
-        norm_cfg=norm_cfg,  # 
-        style='pytorch',
-        # non_local=((0, 0), (0, 0), (0, 0), (0, 0)),
-        # non_local_cfg=dict(
-        #     conv_cfg = conv_cfg,
-        #     norm_cfg=norm_cfg,
-        #     out_projection = True,
-        #     reduction=8)
+        num_layers=[2, 2, 2, 2],
+        num_heads=[1, 2, 4, 8],
+        patch_sizes=[7, 3, 3, 3],
+        paddings= [3, 1, 1, 1],  #[2, 1, 1, 1],
+        sr_ratios=[4, 2, 2, 1],
+        strides=(4, 2, 2, 2), # 32 64 128 256
+        out_indices=(0, 1, 2, 3), # 0 is input image 
+        mlp_ratios=[4, 4, 2, 2],
+        # norm_cfg=dict(type='LN', eps=1e-6) , 
         ),
     neck=dict(
         type='FaPN3D',
-        in_channels=[stem_channels * (2**c) for c in range(5)], 
+        in_channels=[stem_channels * 2 * (2**c) for c in range(4)], 
         fixed_out_channels = fpn_channel,
-        start_level=2,
+        start_level=0,
         conv_cfg = conv_cfg, 
-        norm_cfg = norm_cfg, 
+        norm_cfg = norm4body, 
         add_extra_convs=False,
-        num_outs=5),
+        num_outs=4),
     bbox_head=dict(
         type='ATSSHead3DNOC', #verbose = True, 
         num_classes=num_classes,
         in_channels=fpn_channel,
         stacked_convs=4,
-        start_level = 2, 
+        start_level = 0, 
         feat_channels=fpn_channel,
         conv_cfg = conv_cfg, 
         norm_cfg = norm4head, 
@@ -58,7 +50,7 @@ model = dict(
             octave_base_scale=2,
             scales_per_octave=2, 
             ratios=[1.0],
-            strides=[4, 8, 16]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
+            strides=[4, 8, 16, 32]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder3D',
             target_means=[.0, .0, .0, .0, 0., 0.],
@@ -77,16 +69,16 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=4.0),
-        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.2), 
+            loss_weight=8.0),
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.4), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
         ), 
 
     seg_head = dict(
         type='FCNHead3D', 
-        in_channels= stem_channels * 4,
-        in_index=1,
+        in_channels= fpn_channel,
+        in_index=0,
         channels= stem_channels,
         # input_transform='resize_concat',
         kernel_size=1,
@@ -104,7 +96,7 @@ model = dict(
         # start_iters = 1,
         # max_iters = 4e5,
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2), 
+                    type='ComboLossMed', loss_weight=(1.0 * 0.4, 0.66 * 0.4), 
                     num_classes = num_classes + 1, 
                     class_weight = (0.33, 1.0),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) #, act = 'sigmoid'
