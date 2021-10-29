@@ -26,7 +26,7 @@ model = dict(
         dilations=(1, 1, 1, 1),
         out_indices=(1, 2, 3, 4, 5), # 0 is input image 
         conv_cfg=conv_cfg,
-        norm_cfg=norm_cfg,  # TODO: replace ReLU with Swish
+        norm_cfg=norm_cfg,  # 
         style='pytorch',
         # non_local=((0, 0), (0, 0), (0, 0), (0, 0)),
         # non_local_cfg=dict(
@@ -36,19 +36,19 @@ model = dict(
         #     reduction=8)
         ),
     neck=dict(
-        type='TPN3D',
+        type='FaPN3D',
         in_channels=[stem_channels * (2**c) for c in range(5)], 
         fixed_out_channels = fpn_channel,
         start_level=2,
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
-        num_outs=5, num_bottleneck = 2, num_tpn = 2),
+        num_outs=5),
     bbox_head=dict(
         type='ATSSHead3DNOC', #verbose = True, 
         num_classes=num_classes,
         in_channels=fpn_channel,
-        stacked_convs=3,
+        stacked_convs=4,
         start_level = 2, 
         feat_channels=fpn_channel,
         conv_cfg = conv_cfg, 
@@ -77,8 +77,8 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=8.0),
-        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.5), 
+            loss_weight=4.0),
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.2), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
         ), 
@@ -104,7 +104,7 @@ model = dict(
         # start_iters = 1,
         # max_iters = 4e5,
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.4, 0.66 * 0.4), 
+                    type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2), 
                     num_classes = num_classes + 1, 
                     class_weight = (0.33, 1.0),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) #, act = 'sigmoid'
@@ -151,7 +151,7 @@ model = dict(
         nms_pre=200,
         # nms_pre_tiles = 1000, 
         min_bbox_size=2,
-        score_thr=0.25,
+        score_thr=0.3,
         nms=dict(type='nms', iou_threshold=0.05), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=64, 

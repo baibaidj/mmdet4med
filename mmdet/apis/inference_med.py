@@ -94,6 +94,60 @@ def inference_detector4med(model, img, affine = None, rescale = True,
     return det_results, seg_results
 
 
+async def async_inference_detector4med(model, img, affine = None, rescale = True,
+                                        need_probs = True, guide_mask = None, 
+                                        target_spacings = None):
+    """Async inference image(s) with the detector.
+
+    Args:
+        model (nn.Module): The loaded detector.
+        img (str | ndarray): Either image files or loaded images.
+
+    Returns:
+        Awaitable detection results.
+    """
+    # assert isinstance(need_feature_index, (type(None), int))
+    cfg = copy.deepcopy(model.cfg)
+    device = next(model.parameters()).device  # model device
+    # build the data pipeline
+    # NOTE: make the target spacings adpative to the affine_matrix 
+    if isinstance(target_spacings, (list, tuple)): # make the target spacings adpative to the affine_matrix 
+        cfg.data.test.pipeline[1].target_spacings = target_spacings
+
+    test_pipeline = [LoadImageMonai()] + cfg.data.test.pipeline[1:]
+    test_pipeline = Compose(test_pipeline)
+
+    # prepare data
+    if not isinstance(img, (tuple, list)):
+        img = [img]
+    num_samples = len(img)
+    data = []
+    for img_i in img:
+        this_data = dict(img=img_i, affine = affine, guide_mask = guide_mask)
+        this_data = test_pipeline(this_data)
+        data.append(this_data)
+    
+    data = collate(data, samples_per_gpu=num_samples)
+    # pdb.set_trace()
+    if next(model.parameters()).is_cuda:
+        # scatter to specified GPU
+        data = scatter(data, [device])[0]
+    else:
+        data['img_metas'] = [i.data[0] for i in data['img_metas']]
+
+    # forward the model
+    # We don't restore `torch.is_grad_enabled()` value during concurrent
+    # inference since execution can overlap
+    torch.set_grad_enabled(False)
+    # see models/segmentors/base.py 108, forward method
+    det_results, seg_results = await model.aforward_test(return_loss=False, 
+                                                        rescale=rescale, 
+                                                        need_probs = need_probs, 
+                                                        **data)
+
+    return det_results, seg_results
+
+
 denormalize = lambda x: 2.0 * x - 1.0
 # object_ratio_func = lambda x: x.sum()/np.prod(x.shape) * 100
 

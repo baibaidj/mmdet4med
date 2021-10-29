@@ -1,6 +1,6 @@
 _base_ = [
     '../ribfrac/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
-    # '../_base_/models/retina_unet_repvgg_b0sd_atssnoc_160x192x128.py',
+    # '../_base_/models_med/retina_unet_repvgg_b0sd_atssnoc_160x192x128.py',
     # '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py', 
      '../_base_/swa.py'
 ]

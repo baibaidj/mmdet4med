@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_1anchor.py',
+    '../_base_/models_med/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_1anchor.py',
     # '../_base_/datasets/ribfrac_instance_semantic.py',
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
 ]
