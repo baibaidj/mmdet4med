@@ -13,20 +13,19 @@ data = dict(samples_per_gpu = 2, workers_per_gpu= 6,
 model = dict(
             bbox_head = dict(
                     anchor_generator = dict(verbose = False), 
-                #     stacked_convs=3, 
                     verbose = False, 
                     use_vfl = True), 
             )
 
-cudnn_benchmark = True # Autotuner runs a short benchmark and selects the kernel with the best performance on a given hardware for a given input size.
+# cudnn_benchmark = True # Autotuner runs a short benchmark and selects the kernel with the best performance on a given hardware for a given input size.
 find_unused_parameters=True
-load_from = 'work_dirs/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn/best_mAP_epoch_4.pth' #'work_dirs/densecl_r18_4l16c_allct_bone_160x192x128_100eps/latest.pth'
+load_from = 'work_dirs/densecl_r18_4l16c_allct_bone_160x192x128_100eps/epoch_last_round1.pth'
 resume_from = None # 'work_dirs/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn/latest.pth' 
 
 # optimizer
 optimizer = dict(
                 # type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001, 
-                _delete_ = True, type='AdamW', lr=1e-4, weight_decay=0.0001
+                _delete_ = True, type='AdamW', lr=5e-5, weight_decay=0.0001
         ) 
 optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 32, norm_type = 2)) # 31G
 # fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0, 
@@ -35,7 +34,7 @@ optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 32, norm_ty
 lr_config = dict(_delete_=True, 
                 # policy='poly', power=0.99, min_lr=1e-5, 
                 policy='CosineAnnealing',  min_lr=1e-5,
-                 by_epoch=False, warmup='linear', warmup_iters=500
+                 by_epoch=False, warmup='linear', warmup_iters=1000
                  )
 
 runner = dict(type='EpochBasedRunner', max_epochs=32)
@@ -52,7 +51,7 @@ evaluation=dict(interval=4, start=0, metric='mAP',
                 iou_thr=[0.1], proposal_nums=(1, 2, 4, 8, 50))
 
 # CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn.py 
-# CUDA_VISIBLE_DEVICES=0,2,4 PORT=29034 bash ./tools/dist_train.sh configs/ribfrac/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn.py 3 --gpus 3 --no-validate
+# CUDA_VISIBLE_DEVICES=0,2,4 PORT=29234 bash ./tools/dist_train.sh configs/ribfrac/retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn.py 3 --gpus 3 --no-validate
 # CUDA_VISIBLE_DEVICES=0 python tools/test_med.py \
 # configs/ribfrac/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn.py \
 # work_dirs/retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn/latest.pth --eval recall  969798

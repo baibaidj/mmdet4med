@@ -29,12 +29,12 @@ numfold=$2
 # model_name=retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls
 # weightfile=latest.pth
 
-# model_name=retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_tpn3b1l3c
+# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_14anchor
+# weightfile=best_recall@8@0.1_epoch_26.pth
+# model_name=retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn
 # weightfile=latest.pth
 model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn
-weightfile=best_mAP_epoch_8.pth
-# model_name=retina_vfnet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_3level
-# weightfile=best_mAP_epoch_22.pth
+weightfile=best_mAP_epoch_28.pth
 
 work_dirs=/home/dejuns/git/mmdet4med/work_dirs 
 # data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_Keya

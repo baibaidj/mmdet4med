@@ -78,8 +78,8 @@ model = dict(
             gamma=2.0, 
             iou_weighted=True,
             loss_weight=1.0),
-        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.4),
-        loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=0.4)
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.6),
+        loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=0.6)
         ), 
     seg_head = dict(
         type='FCNHead3D', # verbose = True, 
@@ -102,7 +102,7 @@ model = dict(
         # start_iters = 1,
         # max_iters = 4e5,
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2), 
+                    type='ComboLossMed', loss_weight=(1.0 * 0.3, 0.66 * 0.3), 
                     num_classes = num_classes + 1, class_weight = (0.33, 1),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
@@ -152,8 +152,8 @@ model = dict(
         nms=dict(type='nms', iou_threshold=0.1), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=64, 
-        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 2,
-        blend_mode = 'gaussian' , overlap=0.333, sigma_scale = 0.125, # 'gaussian or constant
+        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 3,
+        blend_mode = 'gaussian' , overlap=0.4, sigma_scale = 0.125, # 'gaussian or constant
         padding_mode='constant' )
 )
 
