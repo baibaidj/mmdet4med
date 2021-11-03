@@ -38,6 +38,7 @@ class Load1CaseDet:
         self.verbose = verbose
         self.semantic2binary = semantic2binary
         self.label_map = label_map
+        self.valid_class = list(label_map.keys())
         # self.axis_reorder = axis_reorder
 
     def __call__(self, data):
@@ -69,10 +70,10 @@ class Load1CaseDet:
         data[self.meta_key]['filename_or_obj'] = img_fp
         if 'roi' in data.keys():
             label_convert = lambda cls: self.label_map.get(cls, 0)
-            ins2cls_map = {roi['instance']: label_convert(roi['class']) for roi in data['roi']}
+            ins2cls_map = {roi['instance']: label_convert(roi['class']) for roi in data['roi'] 
+                                            if roi['class'] in self.valid_class}
             # print(f'[LoadDet] label_map {self.label_map} ins2cls map', ins2cls_map)
             data[self.meta_key]['inst2cls_map'] = ins2cls_map
-            
         return data
 
 coin_func = lambda : random.random() > 0.5

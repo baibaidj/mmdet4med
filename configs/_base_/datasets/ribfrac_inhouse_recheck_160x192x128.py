@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'RibFractureDet'
-img_dir = 'data/Task113_RibFrac_Keya'
+img_dir = 'data/Task113_RibFrac_KYRe'
 in_channel=  1
 norm_param = {
     "mean": 330, "std": 562.5, "median": 221,
@@ -35,7 +35,6 @@ test_keys = ('img', )
 test_pipeline = [
         dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map), 
         dict(type='MultiScaleFlipAug3D',
-            # label_mapping = label_mapping,
             # value4outlier = 1,
             target_spacings = None, 
             flip=True,
@@ -116,6 +115,6 @@ gpu_aug_pipelines = [
                     ),
         dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.05), 
         # dict(type = 'SaveImaged', keys = keys[:core_key_num], 
-        #     output_dir = f'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn/debug', 
+        #     output_dir = f'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_swa/debug', 
         #     resample = False, save_batch = True, on_gpu = True),    
         ]

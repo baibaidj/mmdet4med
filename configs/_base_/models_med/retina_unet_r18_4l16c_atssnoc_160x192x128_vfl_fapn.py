@@ -48,11 +48,7 @@ model = dict(
         type='ATSSHead3DNOC', #verbose = True, 
         num_classes=num_classes,
         in_channels=fpn_channel,
-<<<<<<< HEAD:configs/_base_/models/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_tpn.py
-        stacked_convs=3,
-=======
         stacked_convs=4,
->>>>>>> 970ca27f23db0b8c8a6f91fa1f447f5d492480f4:configs/_base_/models_med/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_fapn.py
         start_level = 2, 
         feat_channels=fpn_channel,
         conv_cfg = conv_cfg, 
@@ -81,13 +77,8 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-<<<<<<< HEAD:configs/_base_/models/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_tpn.py
-            loss_weight=8.0),
-        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.5), 
-=======
             loss_weight=4.0),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=0.2), 
->>>>>>> 970ca27f23db0b8c8a6f91fa1f447f5d492480f4:configs/_base_/models_med/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_fapn.py
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
         ), 
@@ -122,7 +113,8 @@ model = dict(
     # convert instance mask to bbox 
     mask2bbox_cfg = [dict(type = 'FindInstances', verbose = False, 
                         instance_key="seg",
-                        save_key="present_instances"), 
+                        save_key="present_instances", 
+                        map_key="inst2cls_map", ), 
                     dict(type = 'Instances2Boxes', verbose = False, 
                         instance_key="seg",
                         map_key="inst2cls_map", 
@@ -160,11 +152,7 @@ model = dict(
         nms_pre=200,
         # nms_pre_tiles = 1000, 
         min_bbox_size=2,
-<<<<<<< HEAD:configs/_base_/models/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_tpn.py
-        score_thr=0.25,
-=======
         score_thr=0.3,
->>>>>>> 970ca27f23db0b8c8a6f91fa1f447f5d492480f4:configs/_base_/models_med/retina_unet_r18_4l16c_atssnoc_160x192x128_vfl_fapn.py
         nms=dict(type='nms', iou_threshold=0.05), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=64, 

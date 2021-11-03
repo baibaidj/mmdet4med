@@ -31,16 +31,20 @@ class FindInstances(AbstractTransform):
     """
     
     finding the label value of instances in each sample (batch dimension)
-
     """
 
-    def __init__(self, instance_key: str = 'gt_instance_seg', save_key: str = "present_instances", 
-                 meta_key = 'img_meta_dict', verbose = False, **kwargs):
+    def __init__(self, 
+                instance_key: str = 'gt_instance_seg', 
+                save_key: str = "present_instances", 
+                meta_key = 'img_meta_dict', 
+                map_key = 'inst2cls_map', 
+                verbose = False, **kwargs):
         super().__init__(grad=False)
         self.instance_key = instance_key # target
         self.save_key = save_key
         self.verbose = verbose
         self.meta_key = meta_key
+        self.map_key = map_key
 
     def forward(self, data) -> dict:
         """ input data is a dict """
@@ -54,6 +58,13 @@ class FindInstances(AbstractTransform):
             if tmp.max() > 64:
                 print(f'[Instance] {tmp} exceed 64; case info is \n', data[self.meta_key][bix])
             tmp = tmp[tmp > 0]
+            # inst2class may not contain instanceix found in the actual mask.
+            if isinstance(self.map_key, str):
+                inst2class_map = data[self.meta_key][bix][self.map_key]
+                valid_instances = list(inst2class_map)
+                valid_tmp_mask = [i for i, a in enumerate(tmp) if a.item() in valid_instances]
+                tmp = tmp[valid_tmp_mask]
+
             present_instances.append(tmp)
         data[self.save_key] = present_instances
         return data
@@ -105,7 +116,7 @@ class Instances2Boxes(AbstractTransform):
         for batch_idx, instance_element in enumerate(data[self.instance_key].split(1)):
 
             _present_instances = data[self.present_instances][batch_idx] if self.present_instances is not None else None
-            _boxes, instance_idx = instances_to_boxes(instance_element, 
+            _boxes_nx6, instance_idx = instances_to_boxes(instance_element, 
                                                       instance_element.ndim - 2, 
                                                       instances=_present_instances, 
                                                       jitter_base=self.move_jitter)
@@ -121,11 +132,11 @@ class Instances2Boxes(AbstractTransform):
                 _classes = torch.tensor([0 for on in instance_idx], device = instance_element.device)
                 pid = data[self.meta_key][batch_idx]['filename_or_obj'].split(os.sep)[-1]
                 print_tensor(f'[Inst2Box] key error pid {pid} sample tensor', instance_element )
-            _classes = _classes.to(device=_boxes.device) # class start from 0
+            _classes = _classes.to(device=_boxes_nx6.device) # class start from 0
             # if self.just1cls is not None: _classes = self.just1cls
             if self.verbose: print_tensor(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
                                     + f'ins {instance_idx}  cls {_classes}, instmask', instance_element)
-            data[self.box_key].append(_boxes)
+            data[self.box_key].append(_boxes_nx6)
             data[self.class_key].append(_classes)
         return data
 

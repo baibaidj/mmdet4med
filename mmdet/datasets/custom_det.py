@@ -123,6 +123,7 @@ class CustomDatasetDet(Dataset):
         self.json_filename  = json_filename
         self.fn_spliter = fn_spliter
         self.label_map = label_map
+        self.valid_class = list(label_map.keys())
         self.oversample_classes = oversample_classes
 
         # load annotations
@@ -238,6 +239,7 @@ class CustomDatasetDet(Dataset):
                 _ = [print('\t', k, v)  for roi in rois for k, v in roi.items()]
             if rois:
                 for roi in rois:
+                    # if roi['class'] not in self.valid_class: continue
                     if is_oversample and roi['class'] in self.oversample_classes:
                          instance_cache.append((cix, roi['instance']))
                     instance_cache.append((cix, roi['instance']))
@@ -318,18 +320,19 @@ class CustomDatasetDet(Dataset):
             mask_fp, roi_fp = Path(img_info['seg_fp']), img_info['roi_fp']
             subdir = str(mask_fp.stem) #view2axis[self.view_channel]
             # 1. load seg mask 
-            img_full, af_mat = IO4Nii.read(mask_fp, verbose=False, axis_order= None, dtype=np.uint8)
+            mask_vol, af_mat = IO4Nii.read(mask_fp, verbose=False, axis_order= None, dtype=np.uint8)
             # 2. load property, image meta dict
             roi_info_list = load_json(roi_fp)
             if len(roi_info_list) ==0 : 
                 bbox_nx6 = np.zeros((0, 6))
                 label_nx1 = np.zeros((0, 1))
-                gt_seg_map = img_full
+                gt_seg_map = mask_vol
             else:
+                roi_info_list = [r for r in roi_info_list if r['class'] in self.valid_class]
                 label_convert = lambda cls: self.label_map.get(cls, 0)
                 bbox_nx6 = np.array([roi['bbox'] for roi in roi_info_list])
                 label_nx1 = np.array([label_convert(roi['class']) for roi in roi_info_list])
-                gt_seg_map = ins2cls4seg(img_full, roi_info_list, self.label_map)
+                gt_seg_map = ins2cls4seg(mask_vol, roi_info_list, self.label_map)
 
             # pdb.set_trace()
             anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})

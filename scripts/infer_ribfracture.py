@@ -460,8 +460,8 @@ def sample_list2run(pid2niifp_map, run_pid_ixs = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii', 
-                                  'label': '_instance.nii', 
+                    key2suffix = {'image': '_image.nii.gz', 
+                                  'label': '_instance.nii.gz', 
                                   'roi':'_ins2cls.json'}):
     """
 
