@@ -38,7 +38,7 @@ test_pipeline = [
             # label_mapping = label_mapping,
             # value4outlier = 1,
             target_spacings = None, 
-            flip=False,
+            flip=True,
             flip_direction= ['diagonal'],
             transforms=[
                 dict(type = 'AddChanneld', keys= test_keys), 

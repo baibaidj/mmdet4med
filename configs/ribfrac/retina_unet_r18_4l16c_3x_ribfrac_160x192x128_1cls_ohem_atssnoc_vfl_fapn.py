@@ -21,15 +21,15 @@ model = dict(
 
 find_unused_parameters=True
 load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn/latest.pth'
-resume_from = None # 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl/latest.pth' 
+resume_from = None #'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn/latest.pth' 
 
 # optimizer
 optimizer = dict(#type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001, 
                 _delete_ = True, type='AdamW', lr=0.0001, weight_decay=0.0001
         ) 
 optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 32, norm_type = 2)) # 31G
-# fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0, 
-#             backoff_factor=0.5, growth_interval=2000, enabled=True)) #30G
+fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0, 
+            backoff_factor=0.5, growth_interval=2000, enabled=True)) #30G
 # learning policy
 lr_config = dict(_delete_=True, policy='poly', power=0.99, min_lr=1e-5, by_epoch=False,
                  warmup='linear', warmup_iters=500

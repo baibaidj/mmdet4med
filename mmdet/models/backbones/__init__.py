@@ -18,6 +18,7 @@ from .trident_resnet import TridentResNet
 from .resnet_3d_iso import ResNet3dIso
 from .repvgg import RepVGG
 from .pvt_3d import PyramidVisionTransformer3DV2
+from .swin_3d import SwinTransformer3D
 
 # https://github.com/rwightman/pytorch-image-models/
 __all__ = [
@@ -25,5 +26,6 @@ __all__ = [
     'MobileNetV2', 'Res2Net', 'HourglassNet', 'DetectoRS_ResNet',
     'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 'CSPDarknet',
     'SwinTransformer', 'PyramidVisionTransformer', 'PyramidVisionTransformerV2', 
-    'ResNet3dIso', 'RepVGG', 'PyramidVisionTransformer3DV2'
+    'ResNet3dIso', 'RepVGG', 'PyramidVisionTransformer3DV2', 
+    'SwinTransformer3D'
 ]

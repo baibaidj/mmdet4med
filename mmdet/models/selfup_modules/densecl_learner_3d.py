@@ -56,14 +56,14 @@ class DenseCL3D(BaseLearner3D):
         self.gpu_pipelines = Compose(gpu_aug_pipelines)
                                    
 
-    def init_weights(self, pretrained=None):
-        if pretrained is not None:
-            warnings.warn('load model from: {}'.format(pretrained), logger='root')
-        self.encoder_q[0].init_weights(pretrained=pretrained)
-        self.encoder_q[1].init_weights() # DenseCLNeck3D #init_linear='kaiming'
-        for param_q, param_k in zip(self.encoder_q.parameters(),
-                                    self.encoder_k.parameters()):
-            param_k.data.copy_(param_q.data)
+    # def init_weights(self, pretrained=None):
+    #     if pretrained is not None:
+    #         warnings.warn('load model from: {}'.format(pretrained), logger='root')
+        # self.encoder_q[0].init_weights(pretrained=pretrained)
+        # self.encoder_q[1].init_weights() # DenseCLNeck3D #init_linear='kaiming'
+        # for param_q, param_k in zip(self.encoder_q.parameters(),
+        #                             self.encoder_k.parameters()): 
+        #     param_k.data.copy_(param_q.data)
 
     @torch.no_grad()
     def _momentum_update_key_encoder(self):

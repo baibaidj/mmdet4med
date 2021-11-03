@@ -37,7 +37,7 @@ lr_config = dict(_delete_=True, policy='poly', power=0.99, min_lr=1e-5, by_epoch
 runner = dict(type='EpochBasedRunner', max_epochs=32)
 checkpoint_config = dict(interval=1, max_keep_ckpts = 4)
 # yapf:disable
-log_config = dict(interval=10, hooks=[
+log_config = dict(interval=30, hooks=[
                 dict(type='TextLoggerHook'), 
                 # dict(type='TensorboardLoggerHook')
                 ])

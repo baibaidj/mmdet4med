@@ -248,28 +248,44 @@ class VFNetHead3D(ATSSHead3DNOC, FCOSHead3D):
 
         # predict the bbox_pred of different level
         reg_feat_init = self.vfnet_reg_conv(reg_feat)
-        if self.bbox_norm_type == 'reg_denom':
-            bbox_pred = scale(self.vfnet_reg(reg_feat_init)).float().exp() * reg_denom
-        elif self.bbox_norm_type == 'stride':
-            bbox_pred = scale(self.vfnet_reg(reg_feat_init)).float().exp() * stride
-        else:
-            raise NotImplementedError
+        bbox_pred_raw = scale(self.vfnet_reg(reg_feat_init))
+        
+        # print_tensor('\nclsfeat', cls_feat)
+        # print_tensor('regfeat', reg_feat)
+        # print_tensor('regfeat init', reg_feat_init)
+        # print_tensor('bbox pred raw', bbox_pred_raw)
+        # pdb.set_trace()
 
-        # compute star deformable convolution offsets
-        # converting dcn_offset to reg_feat.dtype thus VFNet can be
-        # trained with FP16
-        dcn_offset = self.star_dcn_offset(bbox_pred, self.gradient_mul,
-                                          stride).to(reg_feat.dtype)
+        with torch.cuda.amp.autocast(enabled = False):
+            if self.bbox_norm_type == 'reg_denom':
+                bbox_pred = bbox_pred_raw.float().exp() * reg_denom
+            elif self.bbox_norm_type == 'stride':
+                bbox_pred = bbox_pred_raw.float().exp() * stride
+            else:
+                raise NotImplementedError
 
-        # refine the bbox_pred
-        reg_feat = self.relu(self.vfnet_reg_refine_dconv(reg_feat, dcn_offset))
-        bbox_pred_refine = scale_refine(self.vfnet_reg_refine(reg_feat)).float().exp()
+            # print_tensor('bbox_pred', bbox_pred)
+            # compute star deformable convolution offsets
+            # converting dcn_offset to reg_feat.dtype thus VFNet can be
+            # trained with FP16
+            dcn_offset = self.star_dcn_offset(bbox_pred, self.gradient_mul,
+                                            stride).to(bbox_pred.dtype)
+            # print_tensor('dcn offset', dcn_offset)
+            # refine the bbox_pred
+            reg_feat_fp32 = reg_feat.float()
+            reg_feat_fp32 = self.relu(self.vfnet_reg_refine_dconv(reg_feat_fp32, dcn_offset))
+            bbox_pred_refine = scale_refine(self.vfnet_reg_refine(reg_feat_fp32)).float().exp()
+            # predict the iou-aware cls score
+            cls_feat = self.vfnet_cls_dconv(cls_feat.float(), dcn_offset)
+        
+        # print_tensor('bbox pred refine', bbox_pred_refine)
+        # print_tensor('bbox_pred raw', bbox_pred_raw)
+
         bbox_pred_refine = bbox_pred_refine * bbox_pred.detach()
+        cls_score = self.vfnet_cls(self.relu(cls_feat))
 
-        # predict the iou-aware cls score
-        cls_feat = self.relu(self.vfnet_cls_dconv(cls_feat, dcn_offset))
-        cls_score = self.vfnet_cls(cls_feat)
-
+        # print_tensor('cls feat refine', cls_feat)
+        # print_tensor('cls score', cls_score)
         return cls_score, bbox_pred, bbox_pred_refine
 
     def star_dcn_offset(self, bbox_pred, gradient_mul, stride):
