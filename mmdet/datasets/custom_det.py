@@ -131,6 +131,7 @@ class CustomDatasetDet(Dataset):
         self.img_infos = self._sample_img_data(self.img_infos, self.sample_rate)
         self.instance_cache = None if self.test_mode else self.build_instance_list()
         print('[Dataset] contains %d cases, of which %d used for training' %(len(self.img_infos), len(self)) )
+        print(f'[Dataset] valid class : {self.valid_class}')
         self._set_group_flag()
         # print(self.img_infos)
 
@@ -323,26 +324,29 @@ class CustomDatasetDet(Dataset):
             mask_vol, af_mat = IO4Nii.read(mask_fp, verbose=False, axis_order= None, dtype=np.uint8)
             # 2. load property, image meta dict
             roi_info_list = load_json(roi_fp)
+            # pdb.set_trace()
             if len(roi_info_list) ==0 : 
+                valid_roi_ixs = []
                 bbox_nx6 = np.zeros((0, 6))
-                label_nx1 = np.zeros((0, 1))
+                label_nx1 = np.zeros((0, ))
                 gt_seg_map = mask_vol
             else:
-                roi_info_list = [r for r in roi_info_list if r['class'] in self.valid_class]
+                valid_roi_ixs = [i for i, r in enumerate(roi_info_list) if r['class'] in self.valid_class]
                 label_convert = lambda cls: self.label_map.get(cls, 0)
-                bbox_nx6 = np.array([roi['bbox'] for roi in roi_info_list])
-                label_nx1 = np.array([label_convert(roi['class']) for roi in roi_info_list])
-                gt_seg_map = ins2cls4seg(mask_vol, roi_info_list, self.label_map)
+                bbox_nx6 = np.array([roi['bbox'] for roi in roi_info_list])[valid_roi_ixs, :]
+                label_nx1 = np.array([label_convert(roi['class']) for roi in roi_info_list])[valid_roi_ixs]
+                gt_seg_map = ins2cls4seg(mask_vol, roi_info_list, self.label_map, verbose=False)
+                # pdb.set_trace()
 
             # pdb.set_trace()
             anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})
             anno_by_pids[subdir]['gt_seg'] = gt_seg_map
             anno_by_pids[subdir]['bboxes'] = bbox_nx6
             anno_by_pids[subdir]['labels'] = label_nx1
-            if i < 2: 
+            if i < 3: 
                 print_tensor(f'\n[GT] {subdir} ', gt_seg_map) #
                 print('[GT] af matrix\n', af_mat)
-                print('[GT] bboxes info', roi_info_list)
+                print(f'[GT] validix {valid_roi_ixs} class info {label_nx1} bboxes info\n', bbox_nx6)
 
         self.anno_by_pids = anno_by_pids
         return anno_by_pids
@@ -426,7 +430,7 @@ def ins2cls4seg(instance_mask, roi_info_list, label_map = {}, verbose = False):
     for roi in roi_info_list:
         ins_id, ins_cls = roi['instance'], roi['class']
         ins_mask = instance_mask == ins_id
-        target_cls = label_map.get(ins_cls, 0) + 1
+        target_cls = label_map.get(ins_cls, -1) + 1
         if verbose: print(f'[Ins2Cls4Seg] map {label_map} ins{ins_id} cls{ins_cls} target{target_cls}')
         semantic_mask[ins_mask] = target_cls
     return semantic_mask
