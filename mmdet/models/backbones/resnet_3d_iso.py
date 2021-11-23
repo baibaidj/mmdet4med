@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import (build_conv_layer, build_norm_layer, build_plugin_layer,
                       constant_init, kaiming_init)
-from mmcv.runner import load_checkpoint
+from mmcv.runner import load_checkpoint, BaseModule
 from mmcv.utils.parrots_wrapper import _BatchNorm
 from torch.nn.modules.utils import _ntuple
 
@@ -203,7 +203,7 @@ class BottleneckP3D(nn.Module):
 #  deeper, output all skips, enable dilation, pseudo3d
 
 @BACKBONES.register_module()
-class ResNet3dIso(nn.Module):
+class ResNet3dIso(BaseModule):
     """ResNet3D backbone.
 
     Args:
@@ -308,8 +308,9 @@ class ResNet3dIso(nn.Module):
                  non_local=(0, 0, 0, 0, 0),
                  non_local_cfg=dict(),
                  verbose = False, 
+                 init_cfg = None,
                  ):
-        super(ResNet3dIso, self).__init__()
+        super(ResNet3dIso, self).__init__(init_cfg=init_cfg)
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
         self.depth = depth

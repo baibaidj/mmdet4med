@@ -44,7 +44,7 @@ class FindInstances(AbstractTransform):
         self.save_key = save_key
         self.verbose = verbose
         self.meta_key = meta_key
-        self.map_key = map_key
+        self.map_key = map_key 
 
     def forward(self, data) -> dict:
         """ input data is a dict """
@@ -53,7 +53,7 @@ class FindInstances(AbstractTransform):
         # print(f'[meta_key] len' , len(data[self.meta_key]))
         # 1 means how many channels per chunk, split dim is defaulted to 0
         for bix, instance_element in enumerate(data[self.instance_key].split(1)):
-            if self.verbose: print_tensor(f'[FindIn]', instance_element)
+            if self.verbose: print_tensor(f'\n[FindIns] {bix}', instance_element)
             tmp = instance_element.to(dtype=torch.int).unique(sorted=True)
             if tmp.max() > 64:
                 print(f'[Instance] {tmp} exceed 64; case info is \n', data[self.meta_key][bix])
@@ -63,8 +63,8 @@ class FindInstances(AbstractTransform):
                 inst2class_map = data[self.meta_key][bix][self.map_key]
                 valid_instances = list(inst2class_map)
                 valid_tmp_mask = [i for i, a in enumerate(tmp) if a.item() in valid_instances]
+                if self.verbose: print(f'[FindInst] {bix} raw {tmp} validix {valid_tmp_mask}')
                 tmp = tmp[valid_tmp_mask]
-
             present_instances.append(tmp)
         data[self.save_key] = present_instances
         return data

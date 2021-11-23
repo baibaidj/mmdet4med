@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'RibFractureDet'
-img_dir = 'data/Task113_RibFrac_Keya'
+img_dir = 'data/Task113_RibFrac_KYRe' # 'data/Task113_RibFrac_Keya'
 in_channel=  1
 norm_param = {
     "mean": 330, "std": 562.5, "median": 221,

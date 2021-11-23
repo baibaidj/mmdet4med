@@ -240,7 +240,7 @@ class CustomDatasetDet(Dataset):
                 _ = [print('\t', k, v)  for roi in rois for k, v in roi.items()]
             if rois:
                 for roi in rois:
-                    # if roi['class'] not in self.valid_class: continue
+                    if roi['class'] not in self.valid_class: continue
                     if is_oversample and roi['class'] in self.oversample_classes:
                          instance_cache.append((cix, roi['instance']))
                     instance_cache.append((cix, roi['instance']))
@@ -338,8 +338,7 @@ class CustomDatasetDet(Dataset):
                 gt_seg_map = ins2cls4seg(mask_vol, roi_info_list, self.label_map, verbose=False)
                 # pdb.set_trace()
 
-            # pdb.set_trace()
-            anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})
+            anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None}) 
             anno_by_pids[subdir]['gt_seg'] = gt_seg_map
             anno_by_pids[subdir]['bboxes'] = bbox_nx6
             anno_by_pids[subdir]['labels'] = label_nx1

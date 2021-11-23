@@ -3,38 +3,19 @@ export PYTHONPATH=':'
 gpuix=$1 #${PORT:-29500}
 numfold=$2
 
-# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_swa
-# weightfile=latest
-# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1anchor
-# weightfile=best_recall@8@0.1_epoch_32.pth
-
-# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc
-# weightfile=latest.pth
 
 # model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl
 # weightfile=best_recall@8@0.1_epoch_24.pth
 
-# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa
-# weightfile=best_recall@8@0.1_epoch_8.pth
-
-# model_name=retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_swa
-# weightfile=best_recall@50@0.1_epoch_10.pth
 
 # model_name=retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1anchor
 # weightfile=best_recall@8@0.1_epoch_18.pth # 2 anchors
 
-# model_name=retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_adamw
-# weightfile=best_recall@8@0.1_epoch_24.pth # 14 anchors
+# model_name=retina_vfnet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_refine
+# weightfile=best_mAP_epoch_32.pth
 
-# model_name=retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_3cls
-# weightfile=latest.pth
-
-# model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_14anchor
-# weightfile=best_recall@8@0.1_epoch_26.pth
-# model_name=retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn
-# weightfile=latest.pth
-model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn
-weightfile=best_mAP_epoch_28.pth
+model_name=retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl
+weightfile=best_mAP_epoch_16.pth
 
 work_dirs=/home/dejuns/git/mmdet4med/work_dirs 
 # data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_Keya
@@ -42,11 +23,8 @@ work_dirs=/home/dejuns/git/mmdet4med/work_dirs
 # split=test
 # setname=ky46
 
-data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_Keya
-# data_rt=/mnt/data4t/dejuns/ribfrac/raw_rename
-# label_rt=''
-# data_rt=/data/dejuns/ribfrac/validation/image
-# label_rt=/data/dejuns/ribfrac/validation/gt
+data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_KYRe
+
 split=test
 setname=kyt30o40
 
@@ -56,13 +34,12 @@ foldix=${FOLDIX:-0}
 # for (( foldix = 0; foldix < $numfold; foldix++ )) # $numfold
 # do {
 #     sleeptime=$(( 1*foldix + 0 ))
-#     # gpuix=$foldix
-#     echo GPU$gpuix-Foldix$foldix/$numfold-WaitStart$sleeptime
+#     gpuix_exe=$(( gpuix + $foldix))
+#     echo GPU$gpuix_exe-Foldix$foldix/$numfold-WaitStart$sleeptime
 #     if [[ $foldix -gt 0 ]]; then # run in parralel but not start together
 #         sleep $sleeptime
 #     fi
-#     echo GPU$gpuix #kernprof -l -v
-#     CUDA_VISIBLE_DEVICES=$gpuix python3 scripts/infer_ribfracture.py \
+#     CUDA_VISIBLE_DEVICES=$gpuix_exe python3 scripts/infer_ribfracture.py \
 #     --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
 #     --model $model_name --not-ky-style --weight-file $weightfile \
 #     --split $split --dataset-name $setname --gpu-ix 0 \
@@ -71,12 +48,12 @@ foldix=${FOLDIX:-0}
 # done
 # wait
 
-# CUDA_VISIBLE_DEVICES=$gpuix python3 scripts/infer_ribfracture.py \
-#     --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
-#     --model $model_name --not-ky-style --weight-file $weightfile \
-#     --split $split --dataset-name $setname --gpu-ix 0 \
-#     --fold-ix $foldix --num-fold 1 --verbose --fp16 --eval-final #
+CUDA_VISIBLE_DEVICES=$gpuix python3 scripts/infer_ribfracture.py \
+    --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
+    --model $model_name --not-ky-style --weight-file $weightfile \
+    --split $split --dataset-name $setname --gpu-ix 0 \
+    --fold-ix $foldix --num-fold 1 --verbose --fp16 --eval-final #
 
-# bash scripts/infer_ribfrac1class.sh 0 2
+# bash scripts/infer_ribfrac1class.sh 0 3
 
-python tools/model_converters/publish_model.py $work_dirs/$model_name/${weightfile} $work_dirs/$model_name/publish.pth
+# python tools/model_converters/publish_model.py $work_dirs/$model_name/${weightfile} $work_dirs/$model_name/publish.pth
