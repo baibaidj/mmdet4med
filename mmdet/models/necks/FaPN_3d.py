@@ -306,7 +306,8 @@ class FeatureSelectionModule(nn.Module):
             self.avg_pool  = nn.AdaptiveAvgPool3d((1, 1))
 
     def forward(self, x):
-        atten = self.sigmoid(self.conv_atten((self.avg_pool(x))))
+        with torch.cuda.amp.autocast(enabled = False):
+            atten = self.sigmoid(self.conv_atten((self.avg_pool(x.float()))))
         feat = torch.mul(x, atten)
         x = x + feat
         feat = self.conv(x)

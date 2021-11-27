@@ -116,6 +116,7 @@ def main():
     else:
         cfg.gpu_ids = range(1) if args.gpus is None else range(args.gpus)
 
+    # torch.autograd.set_detect_anomaly(True)
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
         distributed = False

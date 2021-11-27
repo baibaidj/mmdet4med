@@ -5,14 +5,14 @@ from torch.utils.data import Dataset
 
 from .builder import DATASETS
 from .pipelines import Compose
-import torch, json
+import torch, json, pdb, os
 from pathlib import Path
 
-import torch, pdb, os
+import pandas as pd
 from mmdet.datasets.transform4med.io4med import IO4Nii
 
 # from monai.data.image_reader import NibabelReader
-from .transform4med.io4med import print_tensor, random, convert_label
+from .transform4med.io4med import print_tensor
 from .transform4med.load_nn import load_json, load_pickle
 from mmdet.core.evaluation.metric_custom import *
 from mmdet.core.evaluation import eval_map_3d, eval_recalls_3d
@@ -31,7 +31,7 @@ def add_series_chunk_safe(fn):
 
 
 @DATASETS.register_module()
-class CustomDatasetDet(Dataset):
+class CustomDatasetPair(Dataset):
     """Custom dataset for instance segmentation.
 
     An example of file structure is as followed.
@@ -93,10 +93,7 @@ class CustomDatasetDet(Dataset):
                  sample_rate = 1.0,
                  file_extension = 'nii',
                  verbose = False,
-                 key2suffix ={'img_fp': '_image.nii', 
-                                'seg_fp': '_instance.nii', 
-                                'roi_fp':'_ins2cls.json'},
-                 keys = ('img', 'seg'),
+                 keys = ('mimg', 'fimg'), #, 'mseg', 'fseg'
                  exclude_pids = None,
                  json_filename = 'dataset.json',
                  fn_spliter = ['_', 1],
@@ -104,7 +101,6 @@ class CustomDatasetDet(Dataset):
                  oversample_classes = None, 
                  ):
 
-        self.key2suffix = key2suffix
         self.pipeline = Compose(pipeline)
         self.img_dir = img_dir if data_root is None else osp.join(data_root, img_dir)
         # self.img_suffix = img_suffix
@@ -119,16 +115,15 @@ class CustomDatasetDet(Dataset):
         self.keys = keys
         self.verbose = verbose
         self.exclude_pids = exclude_pids
-        self.json_filename  = json_filename
+        self.case_fns_csv  = json_filename
         self.fn_spliter = fn_spliter
         self.label_map = label_map
-        self.valid_class = list(label_map.keys())
+
         self.oversample_classes = oversample_classes
 
         # load annotations
-        self.img_infos = self._img_list2dataset(self.img_dir, mode = self.split, key2suffix = key2suffix)
+        self.img_infos = self._img_list2dataset(self.img_dir, mode = self.split, need_keys = keys)
         self.img_infos = self._sample_img_data(self.img_infos, self.sample_rate)
-        self.instance_cache = None if self.test_mode else self.build_instance_list()
         print('[Dataset] contains %d cases, of which %d used for training' %(len(self.img_infos), len(self)) )
         print(f'[Dataset] valid class : {self.valid_class}')
         self._set_group_flag()
@@ -144,49 +139,34 @@ class CustomDatasetDet(Dataset):
 
     def __len__(self):
         """Total number of samples of data."""
-        if self.test_mode: return len(self.img_infos)
-        else: return len(self.instance_cache)
+        return len(self.img_infos)
 
-    def _img_list2dataset(self, data_folder:str, mode = 'train ', 
-                        key2suffix = {'img_fp': '_image.nii', 
-                                      'seg_fp': '_instance.nii', 
-                                       'roi_fp':'_ins2cls.json'}):
+    def _img_list2dataset(self, data_folder : str, need_keys = ('mimg', 'fimg'), mode = 'train', ):
         """
 
-        img_fp = f"{c}_image.nii"
-            np.ndarray
-        seg_fp = f"{c}_instance.npy"
-            np.ndarray
-        roi_fp = "{c}_ins2cls.json"
+        mimg, mseg: moving
+        fimg, fseg: fixed
 
-        rois: list[dict(), dict(), ...]
-        one_dict: {'instance' : int, start from 1
-                    'bbox': list(int), e.g. (x1, y1, z1, x2, y2, z2)
-                    'class': int, start from 1 
-                    'center' : list(int), (x, y, z)
-                    'spine_boudnary': list(int), (x, y)
-                    }
         return 
-            file_list : [{'image' : img_path, 'label' : label_path}, ...]
+            file_list : [{'mimg' : path2moving, 'fimg' : path2fixed}, ...]
         """
         file_list = list(), list()
         # a = [print(self.map_key(k)) for k in keys]
-        js_fp = os.path.join(data_folder, self.json_filename)
-        if not osp.exists(js_fp): return file_list
-        with open(js_fp, 'r') as load_f:
-            load_dict = json.load(load_f)
-        case_fns = load_dict['training'] if mode == 'train' else load_dict['test']
-
+        csv_fp = os.path.join(data_folder, self.case_fns_csv)
+        if not osp.exists(csv_fp): return file_list
+        
+        case_fns_tb = pd.read_csv(csv_fp)
+    
         pid2pathpairs = []
-        for ix, part_fn in enumerate(case_fns):
-            cid = part_fn.split(os.sep)[-1]
+        for ix, case_info in case_fns_tb.iterrows():
+            cid = case_info['pid']
             if self.verbose and ix < 2: print('Check cid', cid)
             if self.exclude_pids and (cid in self.exclude_pids): 
                 print('Exclude ', cid)
                 continue
             this_holder = {'cid': cid}
-            for k, suffix in key2suffix.items(): 
-                this_holder[k] = osp.join(data_folder, part_fn + suffix)
+            for k in need_keys: 
+                this_holder[k] = osp.join(data_folder, case_info[k])
                 if self.verbose and ix < 2: print(f'\t{k}', this_holder[k])
             pid2pathpairs.append(this_holder)
         pathpairs_orderd = sorted(pid2pathpairs, key = lambda x: x['cid']) # TODO: debug

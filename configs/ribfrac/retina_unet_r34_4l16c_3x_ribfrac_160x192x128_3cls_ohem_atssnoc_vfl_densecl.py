@@ -7,18 +7,18 @@ _base_ = [
 
 img_dir = 'data/Task113_RibFrac_KYRe'
 key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 'roi_fp':'_ins2cls.json'}
-data = dict(samples_per_gpu = 2, workers_per_gpu= 6, 
+data = dict(samples_per_gpu = 3, workers_per_gpu= 9, 
             train=dict(sample_rate = 1.0, json_filename = 'dataset_1105_0-4.json', img_dir=img_dir, key2suffix = key2suffix), 
             val=dict(sample_rate = 0.5, json_filename = 'dataset_1105_0-4.json', img_dir=img_dir, key2suffix = key2suffix), 
             test= dict(sample_rate = 0.1, json_filename = 'dataset_1105_0-4.json',img_dir=img_dir, key2suffix = key2suffix))
 
-densecl_cp = 'work_dirs/densecl_r34_4l16c_ct5k_bone_160x192x128_100eps/latest.pth'
+# densecl_cp = 'work_dirs/densecl_r34_4l16c_ct5k_bone_160x192x128_100eps/latest.pth'
 model = dict(
-        backbone = dict(init_cfg=dict(
-                        type='Pretrained', prefix='backbone.', 
-                        checkpoint=densecl_cp), 
-            verbose = False ), 
-        neck = dict(type = 'FaPN3D'), 
+        # backbone = dict(init_cfg=dict(
+        #                 type='Pretrained', prefix='backbone.', 
+        #                 checkpoint=densecl_cp), 
+        #                 verbose = False ), 
+        # neck = dict(type = 'FaPN3D'), 
         seg_head = dict(verbose = False),
         bbox_head = dict(verbose = False, use_vfl = True, 
                         anchor_generator = dict(verbose = False), 
@@ -26,8 +26,8 @@ model = dict(
                             ))
 
 find_unused_parameters=True
-load_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_fapn_cv40_densecl/latest.pth'
-resume_from =  None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_fapn_cv40_densecl/latest.pth' 
+load_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_densecl/latest.pth'
+resume_from =  None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_densecl/latest.pth' 
 
 # optimizer
 optimizer = dict(#type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001, 
@@ -56,7 +56,7 @@ evaluation=dict(interval=4, start=0, metric='mAP',
                 iou_thr=[0.2, 0.3], proposal_nums=(1, 2, 4, 8, 50))
 
 
-# CUDA_VISIBLE_DEVICES=5 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_fapn_cv40_densecl.py 
-# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29340 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_fapn_cv40_densecl.py 3 --gpus 3 #--no-validate
+# CUDA_VISIBLE_DEVICES=4 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_densecl.py 
+# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29340 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_densecl.py 3 --gpus 3 #--no-validate
 
 # 32 epochs: mAP 0.2337

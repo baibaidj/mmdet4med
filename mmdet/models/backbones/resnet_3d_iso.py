@@ -310,6 +310,7 @@ class ResNet3dIso(BaseModule):
                  verbose = False, 
                  init_cfg = None,
                  ):
+        # print('[ResNet3dIso] init cfg', init_cfg)
         super(ResNet3dIso, self).__init__(init_cfg=init_cfg)
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
@@ -540,37 +541,37 @@ class ResNet3dIso(BaseModule):
             for param in m.parameters():
                 param.requires_grad = False
 
-    def init_weights(self, pretrained=None):
-        """Initialize the weights in backbone.
+    # def init_weights(self, pretrained=None):
+    #     """Initialize the weights in backbone.
 
-        Args:
-            pretrained (str, optional): Path to pre-trained weights.
-                Defaults to None.
-        """
-        if isinstance(pretrained, str):
-            logger = get_root_logger()
-            load_checkpoint(self, pretrained, strict=False, logger=logger)
-        elif pretrained is None:
-            for m in self.modules():
-                if isinstance(m, nn.Conv3d):
-                    kaiming_init(m)
-                elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
-                    constant_init(m, 1)
+    #     Args:
+    #         pretrained (str, optional): Path to pre-trained weights.
+    #             Defaults to None.
+    #     """
+    #     if isinstance(pretrained, str):
+    #         logger = get_root_logger()
+    #         load_checkpoint(self, pretrained, strict=False, logger=logger)
+    #     elif pretrained is None:
+    #         for m in self.modules():
+    #             if isinstance(m, nn.Conv3d):
+    #                 kaiming_init(m)
+    #             elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
+    #                 constant_init(m, 1)
 
-            if self.dcn is not None:
-                for m in self.modules():
-                    if isinstance(m, Bottleneck) and hasattr(
-                            m, 'conv3_offset'):
-                        constant_init(m.conv3_offset, 0)
+    #         if self.dcn is not None:
+    #             for m in self.modules():
+    #                 if isinstance(m, Bottleneck) and hasattr(
+    #                         m, 'conv3_offset'):
+    #                     constant_init(m.conv3_offset, 0)
 
-            if self.zero_init_residual:
-                for m in self.modules():
-                    if isinstance(m, Bottleneck):
-                        constant_init(m.norm3, 0)
-                    elif isinstance(m, BasicBlock):
-                        constant_init(m.norm2, 0)
-        else:
-            raise TypeError('pretrained must be a str or None')
+    #         if self.zero_init_residual:
+    #             for m in self.modules():
+    #                 if isinstance(m, Bottleneck):
+    #                     constant_init(m.norm3, 0)
+    #                 elif isinstance(m, BasicBlock):
+    #                     constant_init(m.norm2, 0)
+    #     else:
+    #         raise TypeError('pretrained must be a str or None')
 
     def forward(self, x):
         """Forward function.

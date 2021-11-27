@@ -3,7 +3,7 @@ from abc import ABCMeta, abstractmethod
 import torch
 import torch.nn as nn
 from mmcv.cnn import normal_init
-from mmcv.runner import auto_fp16, force_fp32
+from mmcv.runner import auto_fp16, force_fp32, BaseModule
 
 from ...core import build_pixel_sampler
 from ...utils.resize import resize
@@ -11,7 +11,7 @@ from ..builder import build_loss
 from ..losses import accuracy
 
 
-class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
+class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
     """Base class for BaseDecodeHead.
 
     Args:

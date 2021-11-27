@@ -38,7 +38,7 @@ test_pipeline = [
         dict(type='MultiScaleFlipAug3D',
             # label_mapping = label_mapping,
             target_spacings = None, 
-            flip=True,
+            flip = False,
             flip_direction= ['diagonal'],
             transforms=[
                 dict(type = 'AddChanneld', keys= test_keys), 
