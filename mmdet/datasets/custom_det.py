@@ -240,7 +240,7 @@ class CustomDatasetDet(Dataset):
                 _ = [print('\t', k, v)  for roi in rois for k, v in roi.items()]
             if rois:
                 for roi in rois:
-                    # if roi['class'] not in self.valid_class: continue
+                    if roi['class'] not in self.valid_class: continue
                     if is_oversample and roi['class'] in self.oversample_classes:
                          instance_cache.append((cix, roi['instance']))
                     instance_cache.append((cix, roi['instance']))

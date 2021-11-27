@@ -1,7 +1,7 @@
 _base_ = [
-    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128_3cls.py',
+    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128.py',
 ]
-num_classes = 3 # this is an RPN 
+num_classes = 1 # this is an RPN 
 # model settings
 conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
@@ -105,7 +105,7 @@ model = dict(
         # max_iters = 4e5,
         loss_decode =dict(
                     type='ComboLossMed', loss_weight=(1.0 * 0.4, 0.66 * 0.4), 
-                    num_classes = num_classes + 1, class_weight = (0.33, 1.25, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
+                    num_classes = num_classes + 1, class_weight = (0.4, 1.25),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
             ),

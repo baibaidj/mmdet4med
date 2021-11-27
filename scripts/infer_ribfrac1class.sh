@@ -33,8 +33,8 @@ numfold=$2
 # weightfile=best_recall@8@0.1_epoch_26.pth
 # model_name=retina_vfnet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_fapn
 # weightfile=latest.pth
-model_name=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn
-weightfile=best_mAP_epoch_28.pth
+model_name=retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl
+weightfile=best_mAP_epoch_16.pth #best_mAP_epoch_28.pth
 
 work_dirs=/home/dejuns/git/mmdet4med/work_dirs 
 # data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_Keya
@@ -42,13 +42,13 @@ work_dirs=/home/dejuns/git/mmdet4med/work_dirs
 # split=test
 # setname=ky46
 
-data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_Keya
+data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_KYRe
 # data_rt=/mnt/data4t/dejuns/ribfrac/raw_rename
 # label_rt=''
 # data_rt=/data/dejuns/ribfrac/validation/image
 # label_rt=/data/dejuns/ribfrac/validation/gt
 split=test
-setname=kyt30o40
+setname=kyt30o33
 
 gpuix=${gpuix:-0}
 numfold=${numfold:-3}
