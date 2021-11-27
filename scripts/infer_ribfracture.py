@@ -296,7 +296,10 @@ def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_sav
     return case_result, det_roi_infos, seg_roi_infos, gt_det_infos
 
 
-def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json'):
+def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json', 
+                        label_map = {1: 0, 2:0, 3:1, 4:2}):
+    valid_class = list(label_map.keys())
+
     detroi_by_case = [] 
     gtroi_by_case = []
 
@@ -326,11 +329,12 @@ def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json
     print(f'[ScanPred] {suffix} files ', len(detroi_by_case))
     print('[ScanPred] gt label files ', len(gtroi_by_case))
     safe_nx7_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 7))
-    safe_nx6_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 6))
-
-    gt_bboxes = [safe_nx6_array([roi['bbox'] for roi in rois]) for i, rois in enumerate(gtroi_by_case)]
-    pred_bbox_nx7 = [safe_nx7_array([roi['bbox'] + [roi['prob']] for roi in rois]) for i, rois in enumerate(detroi_by_case)]
-    result_dict, fig = calculate_FROC_by_center(gt_bboxes, pred_bbox_nx7, 
+    # safe_nx6_array = lambda x : np.array(x) if len(x) > 0 else np.zeros((0, 6))
+    gt_bboxes_nx7 = [safe_nx7_array([roi['bbox'] + [roi['class']] for roi in rois if roi['class'] in valid_class]) 
+                                for i, rois in enumerate(gtroi_by_case)]
+    pred_bbox_nx7 = [safe_nx7_array([roi['bbox'] + [roi['prob']] for roi in rois]) 
+                                    for i, rois in enumerate(detroi_by_case)]
+    result_dict, fig = calculate_FROC_by_center(gt_bboxes_nx7, pred_bbox_nx7, 
                                                 luna_output_format=True, plt_figure=True)
     if fig is not None: fig.savefig(osp.join(nii_save_dir, suffix.replace('.json', '_FROC.pdf')))
     return result_dict
@@ -460,8 +464,8 @@ def sample_list2run(pid2niifp_map, run_pid_ixs = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii.gz', 
-                                  'label': '_instance.nii.gz', 
+                    key2suffix = {'image': '_image.nii', 
+                                  'label': '_instance.nii', 
                                   'roi':'_ins2cls.json'}):
     """
 

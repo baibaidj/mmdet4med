@@ -4,12 +4,10 @@ import torch, pdb, copy
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base3d import BaseDetector3D
 from ...datasets.pipelines import Compose
-from ..utils import print_tensor
-from ...utils.resize import resize_3d
 
 from mmdet.models.semantic_heads import FCNHead3D
 from mmdet.core.post_processing.bbox_nms import batched_nms_3d
-from mmdet.utils.resize import list_dict2dict_list
+from mmdet.utils.resize import list_dict2dict_list, resize_3d, print_tensor
 from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 
 from monai.data.utils import dense_patch_slices
@@ -20,7 +18,7 @@ from typing import Any, Callable, List, Sequence, Tuple, Union
 get_meta_dict  = lambda img_meta: img_meta[0]['img_meta_dict'] if isinstance(img_meta, (list, tuple)) else img_meta['img_meta_dict']
 
 @DETECTORS.register_module()
-class SingleStageDetector3D(BaseDetector3D): 
+class SingleStageDetector3D(BaseDetector3D):  
     """Base class for single-stage detectors.
 
     Single-stage detectors directly and densely predict bounding boxes on the

@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'RibFractureDet3cls'
-img_dir = 'data/Task113_RibFrac_Keya'
+img_dir = 'data/Task113_RibFrac_KYRe' #'data/Task113_RibFrac_Keya'
 in_channel=  1
 norm_param = {
     "mean": 330, "std": 562.5, "median": 221,
@@ -14,7 +14,7 @@ interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
 ext_patch_size = (212, 240, 176) # avoid artifacts such as boarder reflection
 patch_size = (160, 192, 128)  # [160 192 112] # xyz
-label_map = {1: 0, 2:0, 3:1, 4:2}
+label_map = {1: 0, 2:0, 3:1, 4:2, 7:2}
 
 train_pipeline = [
     dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'),  label_map = label_map),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
@@ -38,7 +38,7 @@ test_pipeline = [
         dict(type='MultiScaleFlipAug3D',
             # label_mapping = label_mapping,
             target_spacings = None, 
-            flip=True,
+            flip = False,
             flip_direction= ['diagonal'],
             transforms=[
                 dict(type = 'AddChanneld', keys= test_keys), 

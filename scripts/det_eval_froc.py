@@ -6,8 +6,6 @@ from scipy import interpolate
 
 import torch
 
-import cfg
-from utils import get_split_dataset
 
 
 def check_bbox_inside(pred_bbox, gt_bboxes):

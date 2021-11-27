@@ -81,7 +81,7 @@ def point2bbox_hitmap(pred_point_nx3, gt_bbox_kx2x3):
     return pred2gt_nxk
 
 
-def check_center_inside(pred_bbox_v6, gt_nx6):
+def check_center_inside(pred_bbox_v6, gt_nx6, is_strict = True):
     """
 
     Args:
@@ -96,9 +96,13 @@ def check_center_inside(pred_bbox_v6, gt_nx6):
     gt_point_kx3 = gt_bbox_kx2x3.mean(axis = 1)
     
     pred2gt_1xk = point2bbox_hitmap(pred_point_1x3, gt_bbox_kx2x3)
-    gt2pred_kx1 = point2bbox_hitmap(gt_point_kx3, pred_bbox_1x2x3)
 
-    pred2gt_hitlist = np.stack([pred2gt_1xk[0], gt2pred_kx1[:, 0]], axis = 1).max(axis = 1)
+    if is_strict: 
+        pred2gt_hitlist = pred2gt_1xk[0]
+    else:
+        gt2pred_kx1 = point2bbox_hitmap(gt_point_kx3, pred_bbox_1x2x3)
+        pred2gt_hitlist = np.stack([pred2gt_1xk[0], gt2pred_kx1[:, 0]], axis = 1).max(axis = 1)
+    
     inside_tag = [int(a) for a in pred2gt_hitlist]
     # pdb.set_trace()
     return inside_tag
@@ -136,7 +140,7 @@ def calculate_FROC_by_center(gt_by_case, pred_by_case, luna_output_format=True, 
     # pdb.set_trace()
     for i in tqdm(range(len(pred_bbox_nx7))):
         # pdb.set_trace()
-        inside = check_center_inside(pred_bbox_nx7[i][:6], gt_nx6=gt_by_case[img_idxs[i]])
+        inside = check_center_inside(pred_bbox_nx7[i][:6], gt_nx6=gt_by_case[img_idxs[i]][:, :6] )
         # print(f'Prob {i} ', centers_cat[i], gt_boxes[img_idxs[i]], inside)
         if 1 not in inside:
             nMiss += 1

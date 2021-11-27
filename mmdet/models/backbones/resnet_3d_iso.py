@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as cp
 from mmcv.cnn import (build_conv_layer, build_norm_layer, build_plugin_layer,
                       constant_init, kaiming_init)
-from mmcv.runner import load_checkpoint
+from mmcv.runner import load_checkpoint, BaseModule
 from mmcv.utils.parrots_wrapper import _BatchNorm
 from torch.nn.modules.utils import _ntuple
 
@@ -203,7 +203,7 @@ class BottleneckP3D(nn.Module):
 #  deeper, output all skips, enable dilation, pseudo3d
 
 @BACKBONES.register_module()
-class ResNet3dIso(nn.Module):
+class ResNet3dIso(BaseModule):
     """ResNet3D backbone.
 
     Args:
@@ -308,8 +308,10 @@ class ResNet3dIso(nn.Module):
                  non_local=(0, 0, 0, 0, 0),
                  non_local_cfg=dict(),
                  verbose = False, 
+                 init_cfg = None,
                  ):
-        super(ResNet3dIso, self).__init__()
+        # print('[ResNet3dIso] init cfg', init_cfg)
+        super(ResNet3dIso, self).__init__(init_cfg=init_cfg)
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
         self.depth = depth
@@ -539,37 +541,37 @@ class ResNet3dIso(nn.Module):
             for param in m.parameters():
                 param.requires_grad = False
 
-    def init_weights(self, pretrained=None):
-        """Initialize the weights in backbone.
+    # def init_weights(self, pretrained=None):
+    #     """Initialize the weights in backbone.
 
-        Args:
-            pretrained (str, optional): Path to pre-trained weights.
-                Defaults to None.
-        """
-        if isinstance(pretrained, str):
-            logger = get_root_logger()
-            load_checkpoint(self, pretrained, strict=False, logger=logger)
-        elif pretrained is None:
-            for m in self.modules():
-                if isinstance(m, nn.Conv3d):
-                    kaiming_init(m)
-                elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
-                    constant_init(m, 1)
+    #     Args:
+    #         pretrained (str, optional): Path to pre-trained weights.
+    #             Defaults to None.
+    #     """
+    #     if isinstance(pretrained, str):
+    #         logger = get_root_logger()
+    #         load_checkpoint(self, pretrained, strict=False, logger=logger)
+    #     elif pretrained is None:
+    #         for m in self.modules():
+    #             if isinstance(m, nn.Conv3d):
+    #                 kaiming_init(m)
+    #             elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
+    #                 constant_init(m, 1)
 
-            if self.dcn is not None:
-                for m in self.modules():
-                    if isinstance(m, Bottleneck) and hasattr(
-                            m, 'conv3_offset'):
-                        constant_init(m.conv3_offset, 0)
+    #         if self.dcn is not None:
+    #             for m in self.modules():
+    #                 if isinstance(m, Bottleneck) and hasattr(
+    #                         m, 'conv3_offset'):
+    #                     constant_init(m.conv3_offset, 0)
 
-            if self.zero_init_residual:
-                for m in self.modules():
-                    if isinstance(m, Bottleneck):
-                        constant_init(m.norm3, 0)
-                    elif isinstance(m, BasicBlock):
-                        constant_init(m.norm2, 0)
-        else:
-            raise TypeError('pretrained must be a str or None')
+    #         if self.zero_init_residual:
+    #             for m in self.modules():
+    #                 if isinstance(m, Bottleneck):
+    #                     constant_init(m.norm3, 0)
+    #                 elif isinstance(m, BasicBlock):
+    #                     constant_init(m.norm2, 0)
+    #     else:
+    #         raise TypeError('pretrained must be a str or None')
 
     def forward(self, x):
         """Forward function.

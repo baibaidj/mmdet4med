@@ -53,7 +53,7 @@ class BaseDecodeHeadMed(BaseDecodeHead):
 
         self.num_classes = actual_num_classes
         self.is_3d = False if self.conv_cfg is None else (True if '3d' in self.conv_cfg.get('type', '').lower() else False)
-        self.get_shape = lambda x: x.shape[-3:] if self.is_3d else x.shape[-2:]
+        self.get_shape = lambda x: x.shape[2:]
         self.get_mode = lambda : 'trilinear' if self.is_3d else 'bilinear'
 
         self.channels = channels

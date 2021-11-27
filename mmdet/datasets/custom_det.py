@@ -102,7 +102,6 @@ class CustomDatasetDet(Dataset):
                  fn_spliter = ['_', 1],
                  label_map = {1: 0, 2:0, 3:0, 4:0},
                  oversample_classes = None, 
-                
                  ):
 
         self.key2suffix = key2suffix
@@ -338,8 +337,7 @@ class CustomDatasetDet(Dataset):
                 gt_seg_map = ins2cls4seg(mask_vol, roi_info_list, self.label_map, verbose=False)
                 # pdb.set_trace()
 
-            # pdb.set_trace()
-            anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None})
+            anno_by_pids.setdefault(subdir, {'gix':i, 'pix' :i, 'affine':af_mat, 'gt': None, 'ixs': None}) 
             anno_by_pids[subdir]['gt_seg'] = gt_seg_map
             anno_by_pids[subdir]['bboxes'] = bbox_nx6
             anno_by_pids[subdir]['labels'] = label_nx1

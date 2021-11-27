@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'RibFractureDet'
-img_dir = 'data/Task113_RibFrac_Keya'
+img_dir = 'data/Task113_RibFrac_KYRe' #'data/Task113_RibFrac_Keya'
 in_channel=  1
 norm_param = {
     "mean": 330, "std": 562.5, "median": 221,
@@ -33,7 +33,7 @@ train_pipeline = [
 ]
 test_keys = ('img', )
 test_pipeline = [
-        dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map), 
+        dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map),  
         dict(type='MultiScaleFlipAug3D',
             # label_mapping = label_mapping,
             target_spacings = None, 
