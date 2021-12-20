@@ -1,6 +1,6 @@
 import warnings
 
-import torch, pdb, copy
+import torch, ipdb, copy
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base3d import BaseDetector3D
 from ...datasets.pipelines import Compose
@@ -143,6 +143,9 @@ class SingleStageDetector3D(BaseDetector3D):
         img, gt_bboxes, gt_labels, gt_semantic_seg = self.update_img_metas(
                                             img, img_metas, seg)
         x = self.extract_feat(img)
+        # print_tensor('\n[Detector] input', img)
+        # print_tensor('[Detector] feat', x[-1])
+        # ipdb.set_trace()
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
         # print_tensor('[Detector] img', img)

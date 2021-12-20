@@ -1,10 +1,10 @@
 _base_ = [
-    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128_3cls.py',
+    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128.py',
 ]
-num_classes = 3 # this is an RPN 
+num_classes = 1 # this is an RPN 
 # model settings
 conv_cfg = dict(type = 'Conv3d')
-norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
+norm4head = dict(type='GN', num_groups=16, requires_grad=True) 
 norm_cfg = dict(type='IN3d', requires_grad=True) 
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
 stem_channels = 16
@@ -62,6 +62,11 @@ model = dict(
             scales_per_octave=1, 
             ratios=[1.0], center_offset=0.0,
             strides=(4, 8, 16)),
+        # bbox_coder=dict(
+        #     type='DeltaXYWHBBoxCoder3D',
+        #     target_means=[.0, .0, .0, .0, 0., 0.],
+        #     target_stds=[0.1, 0.1, 0.1, 0.2, 0.2, 0.2], 
+        #     clip_border=False),
         center_sampling=False,
         dcn_on_last_conv=False,
         use_atss=True,
@@ -72,9 +77,9 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=1.0),
-        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.5),
-        loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=0.5)
+            loss_weight=1.5),
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=1.0),
+        loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=1.0)
         ), 
     seg_head = dict(
         type='FCNHead3D', # verbose = True, 
@@ -98,13 +103,14 @@ model = dict(
         # max_iters = 4e5,
         loss_decode =dict(
                     type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2), 
-                    num_classes = num_classes + 1, class_weight = (0.33, 1.5, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
+                    num_classes = num_classes + 1, class_weight = (0.33, 1),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
             ),
     # convert instance mask to bbox 
     mask2bbox_cfg = [dict(type = 'FindInstances', #verbose = True, 
                         instance_key="seg",
+                        map_key="inst2cls_map", 
                         save_key="present_instances"), 
                     dict(type = 'Instances2Boxes', #verbose = True, 
                         instance_key="seg",
@@ -126,13 +132,13 @@ model = dict(
     train_cfg=dict(
         assigner=dict(
             type='ATSSAssigner3D', # could be replaced by ATSSAssigner
-            topk = 9, center_within = False, 
+            topk = 4, center_within = False, 
             ignore_iof_thr=-1, verbose = False,
             iou_calculator=dict(type='BboxOverlaps3D')
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=32, pool_size = 20,
+                num = 32, pool_size = 32,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),
@@ -147,7 +153,7 @@ model = dict(
         nms=dict(type='nms', iou_threshold=0.1), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=32, 
-        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 3,
+        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 8,
         blend_mode = 'gaussian' , overlap=0.4, sigma_scale = 0.125, # 'gaussian or constant
         padding_mode='constant' )
 )

@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'RibFractureDet'
-img_dir = 'data/Task113_RibFrac_KYRe'
+img_dir = 'data/Task113_RibFrac_KYRe' #'data/Task113_RibFrac_Keya'
 in_channel=  1
 norm_param = {
     "mean": 330, "std": 562.5, "median": 221,
@@ -12,9 +12,9 @@ keys = ('img', 'seg') #, seg='instance_seg'
 dtypes = ('float', 'int',) # , 'float', 
 interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
-ext_patch_size = (200, 232, 168) # avoid artifacts such as boarder reflection
+ext_patch_size = (212, 240, 176) # avoid artifacts such as boarder reflection
 patch_size = (160, 192, 128)  # [160 192 112] # xyz
-label_map = {1: 0, 2:0, 3:0, 4:0}
+label_map = {3:0}
 train_pipeline = [
     dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), label_map = label_map),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
     dict(type = 'AddChanneld', keys= keys), 
@@ -32,12 +32,13 @@ train_pipeline = [
     dict(type='Collect', keys=keys[:core_key_num], verbose = False, meta_keys = ('img_meta_dict', )),
 ]
 test_keys = ('img', )
-test_pipeline = [
-        dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map), 
+test_pipeline = [ 
+        dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map),  
         dict(type='MultiScaleFlipAug3D',
+            # label_mapping = label_mapping,
             # value4outlier = 1,
             target_spacings = None, 
-            flip=True,
+            flip = False,
             flip_direction= ['diagonal'],
             transforms=[
                 dict(type = 'AddChanneld', keys= test_keys), 
@@ -115,6 +116,6 @@ gpu_aug_pipelines = [
                     ),
         dict(type = 'RandGaussianNoised_', keys='img', prob=0.4, std=0.05), 
         # dict(type = 'SaveImaged', keys = keys[:core_key_num], 
-        #     output_dir = f'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_swa/debug', 
+        #     output_dir = f'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn/debug', 
         #     resample = False, save_batch = True, on_gpu = True),    
         ]

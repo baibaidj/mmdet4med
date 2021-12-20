@@ -39,6 +39,7 @@ from .yolox_head import YOLOXHead
 from .atss_head_3d import ATSSHead3D
 from .atss_head_3d_noc import ATSSHead3DNOC
 from .vfnet_head_3d import VFNetHead3D
+from .tood_head_3d import TOODHead3D
 
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
@@ -53,5 +54,5 @@ __all__ = [
     'SOLOHead', 'DecoupledSOLOHead', 'CenterNetHead', 'YOLOXHead',
     'DecoupledSOLOLightHead', 
 
-    'RetinaHead3D', 'ATSSHead3D', 'ATSSHead3DNOC', 'VFNetHead3D'
+    'RetinaHead3D', 'ATSSHead3D', 'ATSSHead3DNOC', 'VFNetHead3D', 'TOODHead3D'
 ]

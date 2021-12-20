@@ -1,6 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from .assigners import (AssignResult, BaseAssigner, CenterRegionAssigner,
-                        MaxIoUAssigner, RegionAssigner, ATSSAssigner3D)
+                        MaxIoUAssigner, RegionAssigner, ATSSAssigner3D, TaskAlignedAssigner3D)
 from .builder import build_assigner, build_bbox_coder, build_sampler
 from .coder import (BaseBBoxCoder, DeltaXYWHBBoxCoder, PseudoBBoxCoder,
                     TBLRBBoxCoder)
@@ -28,5 +28,5 @@ __all__ = [
     'bbox_rescale', 'bbox_cxcywh_to_xyxy', 'bbox_xyxy_to_cxcywh',
     'RegionAssigner', 'bbox_flip_3d', 'bbox_mapping_back_3d', 'bbox2result3d', 
     'HardNegPoolSampler', 'ATSSAssigner3D', 'BboxOverlaps3D', 'bbox_overlaps_3d', 
-    'distance2bbox3d', 'bbox2distance3d'
+    'distance2bbox3d', 'bbox2distance3d', 'TaskAlignedAssigner3D'
 ]

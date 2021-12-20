@@ -20,6 +20,7 @@ from .utils import reduce_loss, weight_reduce_loss, weighted_loss
 from .varifocal_loss import VarifocalLoss
 from .combo_loss import ComboLossMed
 from .iou_loss_3d import GIoULoss3D
+from .task_aligned_focal_loss import FocalLossWithProb, TaskAlignedFocalLoss
 
 __all__ = [
     'accuracy', 'Accuracy', 'cross_entropy', 'binary_cross_entropy',
@@ -32,5 +33,5 @@ __all__ = [
     'GaussianFocalLoss', 'QualityFocalLoss', 'DistributionFocalLoss',
     'VarifocalLoss', 'KnowledgeDistillationKLDivLoss', 'SeesawLoss', 'DiceLoss',
     
-    'ComboLossMed', 'GIoULoss3D'
+    'ComboLossMed', 'GIoULoss3D', 'FocalLossWithProb', 'TaskAlignedFocalLoss'
 ]

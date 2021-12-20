@@ -12,10 +12,11 @@ from .region_assigner import RegionAssigner
 from .sim_ota_assigner import SimOTAAssigner
 from .uniform_assigner import UniformAssigner
 from .atss_assigner_3d import ATSSAssigner3D
+from .task_aligned_assigner_3d import TaskAlignedAssigner3D
 
 __all__ = [
     'BaseAssigner', 'MaxIoUAssigner', 'ApproxMaxIoUAssigner', 'AssignResult',
     'PointAssigner', 'ATSSAssigner', 'CenterRegionAssigner', 'GridAssigner',
     'HungarianAssigner', 'RegionAssigner', 'UniformAssigner', 'SimOTAAssigner', 
-    'ATSSAssigner3D'
+    'ATSSAssigner3D', 'TaskAlignedAssigner3D'
 ]

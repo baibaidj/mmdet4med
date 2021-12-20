@@ -32,12 +32,12 @@ train_pipeline = [
     dict(type='Collect', keys=keys[:core_key_num], verbose = False, meta_keys = ('img_meta_dict', )),
 ]
 test_keys = ('img', )
-test_pipeline = [
+test_pipeline = [ 
         dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map),  
         dict(type='MultiScaleFlipAug3D',
             # label_mapping = label_mapping,
             target_spacings = None, 
-            flip=False,
+            flip = False,
             flip_direction= ['diagonal'],
             transforms=[
                 dict(type = 'AddChanneld', keys= test_keys), 

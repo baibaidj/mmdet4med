@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models_med/retina_unet_r34_4l16c_atssnoc_160x192x128_vfl_1cls.py',
+    '../_base_/models_med/retina_unet_r34_4l16c_atssnoc_160x192x128_vfl_3cls.py',
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
     # '../ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
     # '../_base_/swa.py',
@@ -38,20 +38,20 @@ resume_from =  None #'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cl
 
 # optimizer
 optimizer = dict(
-                type='SGD', lr=1e-3, momentum=0.9, weight_decay=0.0001, 
-                # _delete_ = True, type='AdamW', lr=1e-4, weight_decay=1e-4
+                # type='SGD', lr=1e-3, momentum=0.9, weight_decay=0.0001, 
+                _delete_ = True, type='AdamW', lr=1e-4, weight_decay=1e-4
         ) 
 optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 32, norm_type = 2)) # 31G
 fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0, 
             backoff_factor=0.5, growth_interval=2000, enabled=True)) #30G
 # learning policy
 lr_config = dict(_delete_=True, 
-                 # policy='poly', power=0.99, min_lr=1e-5, 
-                policy='CosineAnnealing',  min_lr=1e-5,
+                 policy='poly', power=0.99, min_lr=1e-5, 
+                # policy='CosineAnnealing',  min_lr=1e-5,
                  by_epoch=False, warmup='linear', warmup_iters=500
                  )
 
-runner = dict(type='EpochBasedRunner', max_epochs=16)
+runner = dict(type='EpochBasedRunner', max_epochs=32)
 checkpoint_config = dict(interval=4, max_keep_ckpts = 4)
 # yapf:disable
 log_config = dict(interval=20, hooks=[
@@ -65,6 +65,7 @@ evaluation=dict(interval=4, start=0, metric='mAP',
 
 
 # CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1130.py 
-# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29340 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1130.py 3 --gpus 3 #--no-validate
+# CUDA_VISIBLE_DEVICES=0,2,4 PORT=29340 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_1130.py 3 --gpus 3 #--no-validate
 
 # 32 epoch: 0.50@1 0.58@2 0.67@4 0.76@8 0.78@50
+# 

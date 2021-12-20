@@ -12,22 +12,27 @@ data = dict(samples_per_gpu = 2, workers_per_gpu= 6,
             val=dict(sample_rate = 0.5, json_filename = 'dataset_1105_0-4.json', img_dir=img_dir, key2suffix = key2suffix), 
             test= dict(sample_rate = 0.1, json_filename = 'dataset_1105_0-4.json',img_dir=img_dir, key2suffix = key2suffix))
 
-densecl_cp = 'work_dirs/densecl_r34_4l16c_ct5k_bone_160x192x128_100eps/latest.pth'
+# densecl_cp = 'work_dirs/densecl_r34_4l16c_ct5k_bone_160x192x128_100eps/latest.pth'
 model = dict(
-        backbone = dict(init_cfg=dict(
-                        type='Pretrained', prefix='backbone.', 
-                        checkpoint=densecl_cp), 
-            verbose = False ), 
+        # backbone = dict(init_cfg=dict(
+        #                 type='Pretrained', prefix='backbone.', 
+        #                 checkpoint=densecl_cp, map_location = 'cpu'), 
+        #     verbose = False ), 
         neck = dict(type = 'FaPN3D'), 
         seg_head = dict(verbose = False),
         bbox_head = dict(verbose = False, use_vfl = True, 
                         anchor_generator = dict(verbose = False), 
                         loss_cls = dict(verbose = False), 
-                            ))
+                            ),
+        train_cfg=dict(
+            assigner=dict(topk = 4, center_within = False, verbose = False), 
+            sampler=dict(num = 32, pool_size = 20, pos_fraction=0.4),
+            )                    
+        )
 
 find_unused_parameters=True
-load_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_fapn_cv40_densecl/latest.pth'
-resume_from =  None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_fapn_cv40_densecl/latest.pth' 
+load_from = None #'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_fapn_cv40_densecl/latest.pth'
+resume_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_vfl_fapn_cv40_densecl/latest.pth' 
 
 # optimizer
 optimizer = dict(#type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001, 

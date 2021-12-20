@@ -5,6 +5,7 @@ _base_ = [
     # '../_base_/swa.py',
 ]
 
+# give more weight to bbox learning than classification learning
 img_dir = 'data/Task113_RibFrac_KYRe'
 key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 'roi_fp':'_ins2cls.json'}
 data = dict(samples_per_gpu = 3, workers_per_gpu= 9, 
