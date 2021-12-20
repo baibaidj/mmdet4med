@@ -159,8 +159,7 @@ def main(cfg,
         timer = Timer() 
         # NOTE: make the target spacings adpative to the affine_matrix 
         origin_spacing = [abs(affine_matrix_i[a, a]) for a in range(3)]
-        target_spacings = find_target_spacing(origin_spacing)
-        if isinstance(target_spacings, (tuple, list)): target_spacings = [target_spacings]
+        target_spacings = find_target_spacing(origin_spacing, use_double_spacing=False)
         print(f'origin spacing {origin_spacing} target spacint {target_spacings}')
 
         det_results, seg_results = inference_detector4med(model, img_3d, 
@@ -193,7 +192,8 @@ def main(cfg,
 
 
 def find_target_spacing(spacing_xyz, 
-                        target_spacing_scheme = {0: (0.7, 0.85), 1 : (0.7, 0.85), 2 : (0.94, 1.26)}):
+                        target_spacing_scheme = {0: (0.725, 0.825), 1 : (0.725, 0.825), 2 : (0.94, 1.26)}, 
+                        use_double_spacing = False):
 
     def is_value_within(v, range_):
         assert len(range_) == 2, f'range can only contain two elements but got {range_}'
@@ -219,11 +219,13 @@ def find_target_spacing(spacing_xyz,
 
     # is_new_exist = os.path.exists(new_img_path)
     if all(is_spacings_within): 
-        target_spacing = None
+        target_spacings = [None]
     else:
         target_spacing = tuple([find_cloest_boundary(abs(spacing_xyz[i]), 
                                     target_spacing_inner[i]) for i in range(3)])
-    return target_spacing
+        target_spacings = [target_spacing] + ([None] if use_double_spacing else [])
+    return target_spacings
+
 
 
 
@@ -464,8 +466,8 @@ def sample_list2run(pid2niifp_map, run_pid_ixs = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii', 
-                                  'label': '_instance.nii', 
+                    key2suffix = {'image': '_image.nii.gz', 
+                                  'label': '_instance.nii.gz', 
                                   'roi':'_ins2cls.json'}):
     """
 
@@ -488,7 +490,9 @@ def load_list_detdj(data_folder:str,  mode = 'test ',
     file_list = list(), list()
     # a = [print(self.map_key(k)) for k in keys]
     js_fp = os.path.join(data_folder, json_filename)
-    if not osp.exists(js_fp): return file_list
+    if not osp.exists(js_fp):
+        print(f'[FileError] {js_fp} not exist') 
+        return file_list
     with open(js_fp, 'r') as load_f:
         load_dict = json.load(load_f)
     case_fns = load_dict['training'] if mode == 'train' else load_dict['test']

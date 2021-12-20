@@ -69,7 +69,7 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25, 
-            loss_weight=1.0),
+            loss_weight=16.0),
         use_vfl=False, 
         loss_cls_vfl=dict(
             type='VarifocalLoss',
@@ -78,7 +78,7 @@ model = dict(
             gamma=2.0,
             iou_weighted=True,
             loss_weight=8.0),
-        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.33), 
+        loss_bbox=dict(type='GIoULoss3D', loss_weight=0.4), 
         # loss_centerness=dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
         ), 
@@ -104,7 +104,7 @@ model = dict(
         # start_iters = 1,
         # max_iters = 4e5,
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.4, 0.66 * 0.4), 
+                    type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2), 
                     num_classes = num_classes + 1, class_weight = (0.4, 1.25),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
@@ -140,7 +140,7 @@ model = dict(
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=64, pool_size = 32,
+                num=32, pool_size = 32,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),
@@ -155,7 +155,7 @@ model = dict(
         nms=dict(type='nms', iou_threshold=0.1), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=32, 
-        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 4,
+        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 8,
         blend_mode = 'gaussian' , overlap=0.4, sigma_scale = 0.125, # 'gaussian or constant
         padding_mode='constant' )
 )
