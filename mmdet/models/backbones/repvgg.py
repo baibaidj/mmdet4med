@@ -6,7 +6,7 @@ from mmcv.cnn import (ConvModule, build_activation_layer,
                       constant_init, kaiming_init) 
 from mmcv.utils import _BatchNorm
 from torch.nn.modules.utils import _ntuple, _triple
-from mmcv.runner import load_checkpoint
+from mmcv.runner import BaseModule, load_checkpoint
 
 from ...utils import get_root_logger
 from ..builder import BACKBONES
@@ -32,7 +32,7 @@ class SEBlock(nn.Module):
         x = x.view(-1, self.input_channels, 1, 1, 1) # BHW, C,1,1
         return inputs * x
 
-class RepVGGBlock(nn.Module):
+class RepVGGBlock(BaseModule):
 
     def __init__(self, inplanes, planes, kernel_size=3, 
                  stride=1, padding=0, dilation=1, groups=1, 
@@ -41,8 +41,9 @@ class RepVGGBlock(nn.Module):
                  act_cfg=dict(type='ReLU'),
                  deploy=False, use_se=False, 
                  padding_mode='zeros',
+                 init_cfg = None
                  ):
-        super(RepVGGBlock, self).__init__()
+        super(RepVGGBlock, self).__init__(init_cfg=init_cfg)
         self.deploy = deploy
         self.groups = groups
         self.inplanes = inplanes
@@ -196,7 +197,7 @@ class RepVGGBlock(nn.Module):
             self.__delattr__('rbr_identity')
 
 @BACKBONES.register_module()
-class RepVGG(nn.Module):
+class RepVGG(BaseModule):
 
     optional_groupwise_layers = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26]
     g2_map = {l: 2 for l in optional_groupwise_layers}
@@ -240,8 +241,9 @@ class RepVGG(nn.Module):
                     norm_cfg=dict(type='BN3d', requires_grad=True),
                     act_cfg=None,
                     deploy=False, use_se=False, 
-                    verbose = False):
-        super(RepVGG, self).__init__()
+                    verbose = False, 
+                    init_cfg = None):
+        super(RepVGG, self).__init__(init_cfg = init_cfg)
 
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for RepVGG')
@@ -259,6 +261,7 @@ class RepVGG(nn.Module):
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
         self.verbose = verbose
+        self.fp16_enabled = False
 
         stage_blocks = self.arch_settings[depth]['stage_blocks']
         width_multiplier  = self.arch_settings[depth]['width_multiplier']
@@ -319,7 +322,7 @@ class RepVGG(nn.Module):
         # print('out indices', self.out_indices)
         return tuple([outs[i] for i in self.out_indices])
 
-    def init_weights(self, pretrained=None):
+    def init_weights_old(self, pretrained=None):
         """Initialize the weights in backbone.
 
         Args:

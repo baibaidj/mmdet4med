@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule, Scale
-from mmcv.runner import force_fp32, auto_fp16
+from mmcv.runner import force_fp32
 
 from mmdet.core import (anchor_inside_flags_3d, build_assigner, build_sampler,
-                        images_to_levels, multi_apply, multiclass_nms, bbox_overlaps_3d, 
+                        images_to_levels, multi_apply, bbox_overlaps_3d, 
                         reduce_mean, unmap, ATSSAssigner3D, HardNegPoolSampler)
 from ..builder import HEADS, build_loss
 from .anchor_head_3d import AnchorHead3D, chn2last_order, print_tensor
@@ -12,7 +12,7 @@ import pdb
 
 
 @HEADS.register_module()
-class ATSSHead3DNOC(AnchorHead3D): 
+class ATSSHead3DNOC(AnchorHead3D):  
     """Bridging the Gap Between Anchor-based and Anchor-free Detection via
     Adaptive Training Sample Selection. NoCenterness 
 
@@ -335,7 +335,7 @@ class ATSSHead3DNOC(AnchorHead3D):
                     unmap_outputs=True):
         """Get targets for ATSS head.
 
-        This method is almost the same as `AnchorHead.get_targets()`. Besides
+        This method is almost the same as `AnchorHead3D.get_targets()`. Besides
         returning the targets as the parent method does, it also returns the
         anchors as the first element of the returned tuple.
         """
@@ -441,8 +441,8 @@ class ATSSHead3DNOC(AnchorHead3D):
                     (num_neg,).
         """
         inside_flags = anchor_inside_flags_3d(flat_anchors, valid_flags,
-                                           img_meta['img_meta_dict']['patch_shape'][:self.spatial_dim], 
-                                           self.train_cfg.allowed_border)
+                            img_meta['img_meta_dict']['patch_shape'][:self.spatial_dim], 
+                            self.train_cfg.allowed_border)
         if not inside_flags.any():
             return (None, ) * 7
         # assign gt and sample anchors
@@ -454,13 +454,13 @@ class ATSSHead3DNOC(AnchorHead3D):
             print_tensor('\n[GetTarget] cls scores', cls_scores)
             print_tensor('[GetTarget] gt labels', gt_labels)
 
-        # pdb.set_trace()
         num_level_anchors_inside = self.get_num_level_anchors_inside(
             num_level_anchors, inside_flags)
         assign_result = self.assigner.assign(anchors, num_level_anchors_inside,
                                              gt_bboxes, gt_bboxes_ignore,
                                              gt_labels)
 
+        # pdb.set_trace()
         sampling_result = self.sampler.sample(assign_result, anchors,
                                               gt_bboxes, cls_scores = cls_scores) 
         num_valid_anchors = anchors.shape[0]

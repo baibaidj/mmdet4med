@@ -414,9 +414,9 @@ def parse_args():
                         help="if infer using fp16 mixed precision",
                         action='store_true'
                     )        
-    parser.add_argument('--run_pid_ixs',
+    parser.add_argument('--run_pids',
                     help="select pids to run",
-                    type=int,
+                    type=str,
                     nargs='+',
                     # type = list,
                 )      
@@ -437,11 +437,11 @@ def has_series_4digit(fp):
 pid_in_path_ky = lambda x : x.split(os.sep)[-1].split('.')[0]
 pid_in_path_rb = lambda x : x.split(os.sep)[-1].split('-')[0]  
 
-def sample_list2run(pid2niifp_map, run_pid_ixs = None,
+def sample_list2run(pid2niifp_map, run_pids = None,
                     num_fold = 4, fold_ix = None):
-    run_pids = list(pid2niifp_map)
-    run_pids = sorted(run_pids)#[:20]
-    total_pid = len(run_pids)
+    pid_pool = list(pid2niifp_map)
+    pid_pool = sorted(pid_pool)#[:20]
+    total_pid = len(pid_pool)
     print(f'Dataset contains {total_pid} pid in total')
     if fold_ix is not None:
         num_per_fold = int(np.ceil(total_pid / num_fold)) #+ (1 if total_pid % num_fold > 0 else 0)
@@ -450,15 +450,15 @@ def sample_list2run(pid2niifp_map, run_pid_ixs = None,
             end = (fold_ix + 1) * num_per_fold #if fold_ix != num_fold else total_pid
             if fold_ix == num_fold -1: end = total_pid
             print(f'[Fold{fold_ix}/{num_fold}]: start {start} end {end}')
-            run_pids = run_pids[start: end]
-        else: run_pids = []
+            pid_pool = pid_pool[start: end]
+        else: pid_pool = []
     # save_string_list(data_rt/'entire_sub_dir_list.txt', [str(v) for v in pid2niifp_map.values()])
     # [print(i, p) for i, p in enumerate(run_pids)]
     # print(f'Fold{fold_ix}/{num_fold}:  total pids {len(run_pids)}, first 2 {run_pids[:2]}, last 2 {run_pids[-2:]} \n')
-    run_pids = [run_pids[i] for i in run_pid_ixs] if bool(run_pid_ixs) else run_pids
-    print(f'Fold{fold_ix}/{num_fold}:  total pids {len(run_pids)}, first 2 {run_pids[:2]}, last 2 {run_pids[-2:]} \n')
+    this_run_pids = [p for p in run_pids if p in pid_pool] if bool(run_pids) else pid_pool
+    print(f'Fold{fold_ix}/{num_fold}:  total pids {len(this_run_pids)}, first 2 {this_run_pids[:2]}, last 2 {this_run_pids[-2:]} \n')
     
-    pid2niifp_map = {p:pid2niifp_map[p] for p in run_pids}
+    pid2niifp_map = {p:pid2niifp_map[p] for p in this_run_pids}
     return pid2niifp_map
 
 def load_list_detdj(data_folder:str,  mode = 'test ', 
@@ -549,14 +549,14 @@ if __name__ == '__main__':
     # print(cfg.model, cfg.run_pid_ixs)
     dataset_name = cfg.dataset_name
     # assert dataset_name in ('shiwei', 'keya', 'rfmix', 'testcase', 'ircad', 'swnew')
-    assert isinstance(cfg.run_pid_ixs, (type(None), list, tuple))
+    assert isinstance(cfg.run_pids, (type(None), list, tuple))
     if cfg.label_rt:
         pid2niifp_map = load_list_scan(cfg.data_rt, label_rt=cfg.label_rt)
     else:
         pid2niifp_map = load_list_detdj(cfg.data_rt, mode = cfg.split)
     
     if not cfg.eval_final:
-        pid2niifp_map = sample_list2run(pid2niifp_map, run_pid_ixs=cfg.run_pid_ixs, 
+        pid2niifp_map = sample_list2run(pid2niifp_map, run_pids=cfg.run_pids, 
                                                 num_fold=cfg.num_fold, 
                                                 fold_ix=cfg.fold_ix)
     fold_ix_str = f'{cfg.fold_ix}@{cfg.num_fold}'

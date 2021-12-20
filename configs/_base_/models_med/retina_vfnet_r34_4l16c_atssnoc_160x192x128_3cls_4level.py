@@ -1,7 +1,7 @@
 _base_ = [
-    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128.py',
+    '../datasets/ribfrac_instance_semantic_inhouse_160x192x128_3cls.py',
 ]
-num_classes = 1 # this is an RPN 
+num_classes = 3 # this is an RPN 
 # model settings
 conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
@@ -17,7 +17,7 @@ model = dict(
         avg_down=True,
         depth='343d', # 18.3G 
         in_channels=1,
-        stem_stride_1 = 1,
+        stem_stride_1 = 2,
         stem_stride_2 = 1, 
         stem_channel_div = 1, 
         stem_channels= stem_channels, # 32 
@@ -40,7 +40,7 @@ model = dict(
         type='FPN3D',
         in_channels=[stem_channels * (2**c) for c in range(5)], 
         fixed_out_channels = fpn_channel,
-        start_level=2,
+        start_level=1,
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
@@ -50,18 +50,18 @@ model = dict(
         num_classes=num_classes,
         in_channels=fpn_channel,
         stacked_convs=3,
-        start_level = 2, 
+        start_level = 1, 
         feat_channels=fpn_channel,
         conv_cfg = conv_cfg, 
         norm_cfg = norm4head, 
         #NOTE: stride == base_size the len of stride should be identical to fpn levels
-        strides=(4, 8, 16),
+        strides=(4, 8, 16, 32),
         anchor_generator=dict( 
             type='AnchorGenerator3D', #verbose = True, 
             octave_base_scale=2,
             scales_per_octave=1, 
             ratios=[1.0], center_offset=0.0,
-            strides=(4, 8, 16)),
+            strides=(4, 8, 16, 32)),
         # bbox_coder=dict(
         #     type='DeltaXYWHBBoxCoder3D',
         #     target_means=[.0, .0, .0, .0, 0., 0.],
@@ -77,14 +77,14 @@ model = dict(
             alpha=0.75,
             gamma=2.0,
             iou_weighted=True,
-            loss_weight=1.5),
+            loss_weight=2.0),
         loss_bbox=dict(type='GIoULoss3D', loss_weight=1.0),
         loss_bbox_refine=dict(type='GIoULoss3D', loss_weight=1.0)
         ), 
     seg_head = dict(
         type='FCNHead3D', # verbose = True, 
-        in_channels= stem_channels * 4,
-        in_index=1,
+        in_channels= stem_channels * 2,
+        in_index=0,
         channels= stem_channels,
         # input_transform='resize_concat',
         kernel_size=1,
@@ -103,7 +103,7 @@ model = dict(
         # max_iters = 4e5,
         loss_decode =dict(
                     type='ComboLossMed', loss_weight=(1.0 * 0.3, 0.66 * 0.3), 
-                    num_classes = num_classes + 1, class_weight = (0.33, 1),  verbose = False,   #(0.33, 1.0)
+                    num_classes = num_classes + 1, class_weight = (0.33, 1.5, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
                     dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
                     ),
             ),
@@ -148,7 +148,7 @@ model = dict(
         nms_pre=200,
         # nms_pre_tiles = 1000, 
         min_bbox_size=2,
-        score_thr=0.3,
+        score_thr=0.15,
         nms=dict(type='nms', iou_threshold=0.1), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=32, 

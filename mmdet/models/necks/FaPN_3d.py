@@ -171,11 +171,11 @@ class FaPN3D(BaseModule):
         """
         out_channels = [self.fixed_out_channels] * self.num_ins
 
-        if isinstance(self.start_level, int) and self.start_level > 0 : #2345
+        if self.start_level is not None: #2345
             ouput_levels = list(range(self.num_ins)) # encoder outputing levels, 01234
             # filter for levels above decoder levels
             ouput_levels = [ol for ol in ouput_levels if ol < self.start_level]
-            assert max(ouput_levels) < self.start_level, "Can not decrease channels below decoder level"
+            # assert max(ouput_levels) < self.start_level, "Can not decrease channels below decoder level"
             for ol in ouput_levels[::-1]: # 1, 0 
                 oc = max(self.min_out_channels, self.in_channels[ol]* (2 if is_double_chn else 1 ))
                 out_channels[ol] = oc
