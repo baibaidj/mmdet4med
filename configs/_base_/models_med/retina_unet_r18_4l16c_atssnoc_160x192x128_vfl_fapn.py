@@ -119,7 +119,7 @@ model = dict(
                         instance_key="seg",
                         map_key="inst2cls_map", 
                         box_key="gt_bboxes",
-                        class_key="gt_labels", move_jitter = 0, 
+                        class_key="gt_labels", move_jitter = 2, 
                         present_instances="present_instances"),
                     dict(type = 'Instances2SemanticSeg', verbose = False, 
                         instance_key = 'seg',
@@ -141,11 +141,11 @@ model = dict(
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=64, pool_size = 20,
+                num=32, pool_size = 20,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),
-        allowed_border=3,
+        allowed_border=2,
         pos_weight=1.0,
         debug=False),
     test_cfg=dict(

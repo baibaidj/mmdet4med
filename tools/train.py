@@ -166,6 +166,7 @@ def main():
         test_cfg=cfg.get('test_cfg'))
     # print('MODEL configuration', model)
     model.init_weights()
+    # torch.autograd.set_detect_anomaly(True)
 
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:

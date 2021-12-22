@@ -4,7 +4,7 @@ _base_ = [
 num_classes = 1 # this is an RPN 
 # model settings
 conv_cfg = dict(type = 'Conv3d')
-norm4head = dict(type='GN', num_groups=16, requires_grad=True) 
+norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
 norm_cfg = dict(type='IN3d', requires_grad=True) 
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
 stem_channels = 16
@@ -56,9 +56,9 @@ model = dict(
         anchor_type='anchor_based',
         anchor_generator=dict( 
             type='AnchorGenerator3D', #verbose = True, 
-            octave_base_scale=4,
+            octave_base_scale=2,
             scales_per_octave=1, 
-            ratios=[1.0],
+            ratios=[1.0], 
             strides=[4, 8, 16]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder3D',
@@ -69,7 +69,7 @@ model = dict(
             type='FocalLossWithProb',
             use_sigmoid=True,
             gamma=2.0,
-            alpha=0.25,
+            alpha=0.6,
             loss_weight=1.0),
         loss_cls=dict(
             type='TaskAlignedFocalLoss',
@@ -142,7 +142,7 @@ model = dict(
             ),
         sampler=dict(
                 type='HardNegPoolSampler',
-                num=32, pool_size = 32,
+                num=32, pool_size = 20,
                 pos_fraction=0.33,
                 neg_pos_ub=-1,
                 add_gt_as_proposals=False),

@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models_med/retina_unet_r34_4l16c_atssnoc_160x192x128_vfl_3cls.py',
+    '../_base_/models_med/retina_unet_r34_4l16c_atssnoc_160x192x128_vfl_1cls.py',
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
     # '../ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
     # '../_base_/swa.py',
@@ -41,7 +41,7 @@ lr_config = dict(_delete_=True,
 runner = dict(type='EpochBasedRunner', max_epochs=16)
 checkpoint_config = dict(interval=2, max_keep_ckpts = 4)
 # yapf:disable
-log_config = dict(interval=10, hooks=[
+log_config = dict(interval=50, hooks=[
                 dict(type='TextLoggerHook'), 
                 # dict(type='TensorboardLoggerHook')
                 ])

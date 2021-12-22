@@ -140,7 +140,7 @@ class SoftDiceLoss(nn.Module):
                 print_tensor('\t[Diceloss]union' , union)
             # union = torch.pow(input, 2).sum(dim=axes) + torch.pow(target, 2).sum(dim=axes)
             # TODO: may generate RuntimeError: Function 'DivBackward0' returned nan values in its 0th output.
-            dice_by_sample_class = (2.0 * intersection + (union == 0) * smooth) / ( intersection + union + smooth)  #* (union == 0)
+            dice_by_sample_class = (2.0 * intersection + smooth) / ( intersection + union + smooth)  #* (union == 0)
             if self.verbose: 
                 print('\t\t[DiceLoss] by sample by class', dice_by_sample_class[0])
 
@@ -151,7 +151,7 @@ class SoftDiceLoss(nn.Module):
         loss_ = torch.mean(mdice_loss_by_class[start_class:] * class_weight[start_class:], dim = 0)
         # print('nb_class %d;  start class %d' %(self.num_classes, start_class), mdice)
         if self.centerline_dice_weight > 0: loss_ = loss_ + cl_dice_loss
-
+        if torch.isnan(loss_) : loss_ = pred_prob.sum() * 0.0
         return loss_
 
 

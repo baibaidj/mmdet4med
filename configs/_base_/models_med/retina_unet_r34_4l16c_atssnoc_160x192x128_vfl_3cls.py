@@ -112,6 +112,7 @@ model = dict(
     # convert instance mask to bbox 
     mask2bbox_cfg = [dict(type = 'FindInstances', #verbose = True, 
                         instance_key="seg",
+                        map_key="inst2cls_map", 
                         save_key="present_instances"), 
                     dict(type = 'Instances2Boxes', #verbose = True, 
                         instance_key="seg",

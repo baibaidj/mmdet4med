@@ -36,7 +36,6 @@ test_pipeline = [
         dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map),  
         dict(type='MultiScaleFlipAug3D',
             # label_mapping = label_mapping,
-            # value4outlier = 1,
             target_spacings = None, 
             flip = False,
             flip_direction= ['diagonal'],

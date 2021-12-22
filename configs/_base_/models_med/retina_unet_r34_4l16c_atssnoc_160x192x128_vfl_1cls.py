@@ -151,7 +151,7 @@ model = dict(
         nms_pre=200,
         # nms_pre_tiles = 1000, 
         min_bbox_size=2,
-        score_thr=0.4,
+        score_thr=0.25,
         nms=dict(type='nms', iou_threshold=0.1), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=32, 

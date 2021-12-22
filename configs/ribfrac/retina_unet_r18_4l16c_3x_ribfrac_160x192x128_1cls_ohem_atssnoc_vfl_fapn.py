@@ -8,9 +8,9 @@ img_dir = 'data/Task113_RibFrac_KYRe'
 
 key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 'roi_fp':'_ins2cls.json'}
 data = dict(samples_per_gpu = 2, workers_per_gpu= 6, 
-            train=dict(sample_rate = 1.0, json_filename = 'dataset_1102.json', img_dir=img_dir, key2suffix = key2suffix), 
-            val=dict(sample_rate = 1.0, json_filename = 'dataset_1102.json', img_dir=img_dir, key2suffix = key2suffix), 
-            test= dict(sample_rate = 0.1, json_filename = 'dataset_1102.json',img_dir=img_dir, key2suffix = key2suffix))
+            train=dict(sample_rate = 1.0, json_filename = 'dataset_1105.json', img_dir=img_dir, key2suffix = key2suffix), 
+            val=dict(sample_rate = 1.0, json_filename = 'dataset_1105.json', img_dir=img_dir, key2suffix = key2suffix), 
+            test= dict(sample_rate = 0.1, json_filename = 'dataset_1105.json',img_dir=img_dir, key2suffix = key2suffix))
             
             
 model = dict(
@@ -22,21 +22,22 @@ model = dict(
             )
 
 find_unused_parameters=True
-load_from = None #'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn/latest.pth'
-resume_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn/latest.pth' 
+load_from = 'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn/latest.pth'
+resume_from = None #'work_dirs/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn/latest.pth' 
 
 # optimizer
-optimizer = dict(type='SGD', lr=1e-3, momentum=0.9, weight_decay=0.0001, 
-                # _delete_ = True, type='AdamW', lr=0.0001, weight_decay=0.0001
+optimizer = dict(
+                # type='SGD', lr=1e-3, momentum=0.9, weight_decay=0.0001, 
+                _delete_ = True, type='AdamW', lr=5e-5, weight_decay=0.0001
         ) 
-optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 32, norm_type = 2)) # 31G
-fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0, 
+optimizer_config = dict(_delete_ = True, grad_clip = dict(max_norm = 1.5, norm_type = 2)) # 31G
+fp16 = dict(loss_scale = dict(init_scale=2**11, growth_factor=2.0, 
             backoff_factor=0.5, growth_interval=2000, enabled=True)) #30G
 # learning policy
 lr_config = dict(_delete_=True, 
                 # policy='poly', power=0.99, min_lr=1e-5, 
                 policy='CosineAnnealing',  min_lr=1e-5,
-                 by_epoch=False, warmup='linear', warmup_iters=500
+                 by_epoch=False, warmup='linear', warmup_iters=1000
                  )
 
 runner = dict(type='EpochBasedRunner', max_epochs=16)

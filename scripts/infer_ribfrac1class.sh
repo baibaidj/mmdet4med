@@ -11,8 +11,8 @@ numfold=$2
 # model_name=retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1anchor
 # weightfile=best_recall@8@0.1_epoch_18.pth # 2 anchors
 
-# model_name=retina_vfnet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_refine
-# weightfile=best_mAP_epoch_32.pth
+model_name=retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_densecl
+weightfile=best_mAP_epoch_24.pth
 
 model_name=retina_unet_r34_4l16c_3x_buckle_160x192x128_1cls_ohem_atssnoc_1130
 weightfile=best_mAP_epoch_24.pth
@@ -31,22 +31,22 @@ setname=kyt30o40
 gpuix=${gpuix:-0}
 numfold=${numfold:-3}
 foldix=${FOLDIX:-0}
-# for (( foldix = 0; foldix < $numfold; foldix++ )) # $numfold
-# do {
-#     sleeptime=$(( 1*foldix + 0 ))
-#     gpuix_exe=$(( gpuix + $foldix))
-#     echo GPU$gpuix_exe-Foldix$foldix/$numfold-WaitStart$sleeptime
-#     if [[ $foldix -gt 0 ]]; then # run in parralel but not start together
-#         sleep $sleeptime
-#     fi
-#     CUDA_VISIBLE_DEVICES=$gpuix_exe python3 scripts/infer_ribfracture.py \
-#     --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
-#     --model $model_name --not-ky-style --weight-file $weightfile \
-#     --split $split --dataset-name $setname --gpu-ix 0 \
-#     --fold-ix $foldix --num-fold $numfold --verbose --fp16
-#     } &
-# done
-# wait
+for (( foldix = 0; foldix < $numfold; foldix++ )) # $numfold
+do {
+    sleeptime=$(( 1*foldix + 0 ))
+    gpuix_exe=$(( gpuix + $foldix))
+    echo GPU$gpuix_exe-Foldix$foldix/$numfold-WaitStart$sleeptime
+    if [[ $foldix -gt 0 ]]; then # run in parralel but not start together
+        sleep $sleeptime
+    fi
+    CUDA_VISIBLE_DEVICES=$gpuix_exe python3 scripts/infer_ribfracture.py \
+    --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
+    --model $model_name --not-ky-style --weight-file $weightfile \
+    --split $split --dataset-name $setname --gpu-ix 0 \
+    --fold-ix $foldix --num-fold $numfold --verbose --fp16
+    } &
+done
+wait
 
 # CUDA_VISIBLE_DEVICES=$gpuix python3 scripts/infer_ribfracture.py \
 #     --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
