@@ -76,7 +76,7 @@ data = dict(
         pipeline=train_pipeline,  label_map = label_map, 
         json_filename = 'dataset.json',
         key2suffix = key2suffix,
-        oversample_classes = (1, 2), 
+        # oversample_classes = (1, 2), 
         ),
     val=dict(
         type=dataset_type, img_dir=img_dir, 

@@ -29,13 +29,14 @@ model = dict(
         seg_head = dict(verbose = False, 
                     loss_decode =dict(loss_weight=(1.0 * 0.2, 0.66 * 0.2))),
         train_cfg=dict(
-            assigner=dict(topk = 4, center_within = False, verbose = False), 
+            assigner=dict(topk = 6, center_within = True, verbose = False), 
             sampler=dict(num = 32, pool_size = 20, pos_fraction=0.4),
-            )                    
+            ), 
+        test_cfg = dict(nms_pre=300, score_thr=0.45,  max_per_img=48),                   
         )
 
 find_unused_parameters=True
-load_from =  'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_1130/latest.pth'
+load_from =  'work_dirs/retina_unet_r34_4l16c_3x_buckle_160x192x128_1cls_ohem_atssnoc_1130/latest.pth'
 resume_from =  None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_1130/latest.pth' 
 
 # optimizer
@@ -50,13 +51,13 @@ fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0,
 lr_config = dict(_delete_=True, 
                  policy='poly', power=0.99, min_lr=1e-5, 
                 # policy='CosineAnnealing',  min_lr=1e-5,
-                 by_epoch=False, warmup='linear', warmup_iters=500
+                #  by_epoch=False, warmup='linear', warmup_iters=500
                  )
 
 runner = dict(type='EpochBasedRunner', max_epochs=32)
 checkpoint_config = dict(interval=4, max_keep_ckpts = 4)
 # yapf:disable
-log_config = dict(interval=40, hooks=[
+log_config = dict(interval=10, hooks=[
                 dict(type='TextLoggerHook'), 
                 # dict(type='TensorboardLoggerHook')
                 ])
@@ -66,7 +67,7 @@ evaluation=dict(interval=4, start=0, metric='mAP',
                 iou_thr=[0.2, 0.3])
 
 
-# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_buckle_160x192x128_1cls_ohem_atssnoc_1130.py 
+# CUDA_VISIBLE_DEVICES=5 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_buckle_160x192x128_1cls_ohem_atssnoc_1130.py 
 # CUDA_VISIBLE_DEVICES=1,3,5 PORT=29123 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_buckle_160x192x128_1cls_ohem_atssnoc_1130.py 3 --gpus 3 #--no-validate
 
 # 32 epoch: 0.50@1 0.58@2 0.67@4 0.76@8 0.78@50

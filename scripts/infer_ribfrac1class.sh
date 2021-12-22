@@ -14,8 +14,8 @@ numfold=$2
 # model_name=retina_vfnet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_refine
 # weightfile=best_mAP_epoch_32.pth
 
-model_name=retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1130
-weightfile=best_mAP_epoch_4.pth
+model_name=retina_unet_r34_4l16c_3x_buckle_160x192x128_1cls_ohem_atssnoc_1130
+weightfile=best_mAP_epoch_24.pth
 
 work_dirs=/home/dejuns/git/mmdet4med/work_dirs 
 # data_rt=/home/dejuns/git/mmdet4med/data/Task113_RibFrac_Keya
@@ -48,14 +48,14 @@ foldix=${FOLDIX:-0}
 # done
 # wait
 
-CUDA_VISIBLE_DEVICES=$gpuix python3 scripts/infer_ribfracture.py \
-    --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
-    --model $model_name --not-ky-style --weight-file $weightfile \
-    --split $split --dataset-name $setname --gpu-ix 0 \
-    --fold-ix $foldix --num-fold 1 --verbose --fp16  --run_pids '1648270-20201005'  #--eval-final #
+# CUDA_VISIBLE_DEVICES=$gpuix python3 scripts/infer_ribfracture.py \
+#     --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
+#     --model $model_name --not-ky-style --weight-file $weightfile \
+#     --split $split --dataset-name $setname --gpu-ix 0 \
+#     --fold-ix $foldix --num-fold 1 --verbose --fp16  --run_pids '1648270-20201005'  #--eval-final #
 
 # bash scripts/infer_ribfrac1class.sh 5 1
 
-# python tools/model_converters/publish_model.py $work_dirs/$model_name/${weightfile} $work_dirs/$model_name/publish.pth
+python tools/model_converters/publish_model.py $work_dirs/$model_name/${weightfile} $work_dirs/$model_name/publish.pth
 # python tools/model_converters/publish_model.py /mnt/data2/dejuns/ribfrac/model_save/v2.7.2/fracture_det_dj.pth /mnt/data2/dejuns/ribfrac/model_save/v2.7.2/fracture_det_dj_pub.pth
 # python tools/model_converters/publish_model.py /mnt/d4/saved/model_save/networks_frac/fracture_det_dj.pth /mnt/d4/saved/model_save/networks_frac/fracture_det_pub.pth
