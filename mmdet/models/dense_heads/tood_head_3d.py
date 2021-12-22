@@ -154,11 +154,11 @@ class TOODHead3D(AnchorHead3D):
         self.cls_prob_conv1 = nn.Conv3d(self.feat_channels * self.stacked_convs, self.feat_channels // 4, 1)
         self.cls_prob_conv2 = nn.Conv3d(self.feat_channels // 4, 1, 3, padding=1)
         self.reg_offset_conv1 = nn.Conv3d(self.feat_channels * self.stacked_convs, self.feat_channels // 4, 1)
-        self.reg_offset_conv2 = nn.Conv3d(self.feat_channels // 4, 6 * 3, 3, padding=1)
+        self.reg_offset_conv2 = nn.Conv3d(self.feat_channels // 4, self.num_anchors * 6 * 3, 3, padding=1)
 
         self.scales = nn.ModuleList([Scale(1.0) for _ in self.anchor_generator.strides])
 
-        self.dcn_bias = torch.zeros((6, ))
+        self.dcn_bias = torch.zeros((self.num_anchors * 6, ))
 
     def init_weights(self):
         """Initialize weights of the head."""
@@ -238,7 +238,7 @@ class TOODHead3D(AnchorHead3D):
         # print_tensor('[ToodHead] interative features', feat)
         # task decomposition with torch.cuda.amp.autocast(enabled=True):
         with torch.cuda.amp.autocast(enabled = False):
-            avg_feat = F.adaptive_avg_pool3d(feat.float(), (1, 1, 1))
+            avg_feat = F.adaptive_avg_pool3d(feat, (1, 1, 1))
         cls_feat = self.cls_decomp(feat, avg_feat)
         reg_feat = self.reg_decomp(feat, avg_feat)
 
@@ -256,14 +256,19 @@ class TOODHead3D(AnchorHead3D):
                                         ).reshape(b, h, w, d, 6).permute(0, 4, 1, 2, 3)  # (b, c, h, w, d)
         elif self.anchor_type == 'anchor_based':
             reg_dist = scale(self.tood_reg(reg_feat)).float()
+            # print_tensor(f'[THSF] anchor', anchor)
+            # print_tensor(f'[THSF] reg dist', reg_dist)
             reg_dist = reg_dist.permute(0, 2, 3, 4, 1).reshape(-1, 6)
-            reg_bbox = self.bbox_coder.decode(anchor, reg_dist).reshape(b, h, w, d, 6).permute(0, 4, 1, 2, 3) / stride[0]
+            # ipdb.set_trace()
+            reg_bbox = self.bbox_coder.decode(anchor, reg_dist).reshape( # NOTE: divided by stride
+                                b, h, w, d, 6 * self.num_anchors).permute(0, 4, 1, 2, 3) / stride[0]
         else:
             raise NotImplementedError
         reg_offset = F.relu(self.reg_offset_conv1(feat))
         reg_offset = self.reg_offset_conv2(reg_offset)
         bbox_pred = self.deform_sampling(reg_bbox.contiguous(), reg_offset.contiguous())
-
+        # print_tensor('bbox pred', bbox_pred)
+        # ipdb.set_trace()
         return cls_score, bbox_pred
 
     def get_anchor_list(self, featmap_sizes, num_imgs, device='cuda'):
@@ -289,8 +294,8 @@ class TOODHead3D(AnchorHead3D):
         """ Sampling the feature x according to offset.
 
         Args:
-            feat (Tensor): reg bbox Feature, b,6,h,w,d
-            offset (Tensor): Spatial offset for for feature sampliing, b,6*3,h,w,d
+            feat (Tensor): reg bbox Feature, b,num_anchor*6,h,w,d
+            offset (Tensor): Spatial offset for for feature sampliing, b,num_anchor*6*3,h,w,d
 
         args for deform_conv3d: (input, offset, weight, bias = False, 
                                 stride=1, padding=0, dilation=1, groups=1, 
@@ -354,10 +359,25 @@ class TOODHead3D(AnchorHead3D):
         bbox_pred = bbox_pred.permute(0, 2, 3, 4, 1).reshape(-1, 6)
         bbox_targets = bbox_targets.reshape(-1, 6)
         labels = labels.reshape(-1)
+        label_weights = label_weights.reshape(-1)
 
-        # classification loss
+        # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
+        bg_class_ind = self.num_classes
+        pos_inds = torch.nonzero((labels >= 0) & (labels < bg_class_ind)).squeeze(1)
+
+        # count_mask = label_weights > 0
+        # fg_mask = labels < bg_class_ind
+        # count_anchors = anchors[count_mask]
+        # print_tensor('[ToodLoss] anchors', anchors)
+        # print_tensor('[ToodLoss] cls_score', cls_score)
+        # print_tensor('[ToodLoss] bbox_pred', bbox_pred)
+        # print_tensor('[ToodLoss] bbox_targets', bbox_targets)
+        # print_tensor('[ToodLoss] labels', labels)
+        # print_tensor('[ToodLoss] label weights', label_weights)
+        # ipdb.set_trace()
+
+        # classification loss   
         if self.epoch < self.initial_epoch:
-            label_weights = label_weights.reshape(-1)
             loss_cls = self.initial_loss_cls(
                 cls_score, labels, label_weights, avg_factor=1.0)
         else:
@@ -365,10 +385,10 @@ class TOODHead3D(AnchorHead3D):
             loss_cls = self.loss_cls(
                 cls_score, labels, alignment_metrics, avg_factor=1.0)  # num_total_samples)
 
-        # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
-        bg_class_ind = self.num_classes
-        pos_inds = ((labels >= 0)
-                    & (labels < bg_class_ind)).nonzero().squeeze(1)
+        # num_pos_sample = len(pos_inds) 
+        # print(f'[THSL] stride {stride[0]} pos {len(pos_inds)} cls loss {loss_cls} align {alignment_metrics.sum()}')
+        # print_tensor(f'[THSL] cls prob', cls_score[pos_inds])
+        # print_tensor(f'[THSL] alignment metric', alignment_metrics)
 
         if len(pos_inds) > 0:
             pos_bbox_targets = bbox_targets[pos_inds]
@@ -376,8 +396,10 @@ class TOODHead3D(AnchorHead3D):
             pos_anchors = anchors[pos_inds]
 
             pos_decode_bbox_pred = pos_bbox_pred
-            pos_decode_bbox_targets = pos_bbox_targets / stride[0]
+            pos_decode_bbox_targets = pos_bbox_targets / stride[0] # NOTE: GT divided by stride
 
+            # print_tensor('bbox pred decode', pos_decode_bbox_pred)
+            # print_tensor('bbox gt decode', pos_decode_bbox_targets)
             # regression loss
             if self.epoch < self.initial_epoch:
                 pos_bbox_weight = self.centerness_target(
@@ -391,7 +413,7 @@ class TOODHead3D(AnchorHead3D):
                 avg_factor=1.0)
         else:
             loss_bbox = bbox_pred.sum() * 0
-            pos_bbox_weight = torch.tensor(0).cuda()
+            pos_bbox_weight = torch.tensor(0, device = bbox_pred.device)
 
         return loss_cls, loss_bbox, alignment_metrics.sum(), pos_bbox_weight.sum()
 
@@ -468,6 +490,8 @@ class TOODHead3D(AnchorHead3D):
         if cls_avg_factor < EPS:
             cls_avg_factor = 1
         losses_cls = list(map(lambda x: x / cls_avg_factor, losses_cls))
+
+        # print(f'[THloss] cls avg {cls_avg_factor}  loss {losses_cls}')
 
         bbox_avg_factor = sum(bbox_avg_factors)
         bbox_avg_factor = reduce_mean(bbox_avg_factor).item()
@@ -692,9 +716,9 @@ class TOODHead3D(AnchorHead3D):
             [cls_score.permute(0, 2, 3, 4, 1).reshape(num_imgs, -1, self.cls_out_channels) for cls_score in
              cls_scores], 1)
         all_bbox_preds = torch.cat(
-            [bbox_pred.permute(0, 2, 3, 4, 1).reshape(num_imgs, -1, 6) * stride[0] 
+            [bbox_pred.permute(0, 2, 3, 4, 1).reshape(num_imgs, -1, 6) * stride[0] # NOTE: times stride
                 for bbox_pred, stride in zip(bbox_preds, self.anchor_generator.strides)],
-            1)
+            dim = 1)
 
         # compute targets for each image
         if gt_bboxes_ignore_list is None:
@@ -735,6 +759,7 @@ class TOODHead3D(AnchorHead3D):
 
         if self.epoch < self.initial_epoch:
             norm_alignment_metrics_list = [bbox_weights[:, :, 0] for bbox_weights in bbox_weights_list]
+            # ipdb.set_trace()
         else:
             # for alignment metric
             all_norm_alignment_metrics = []
@@ -780,15 +805,15 @@ class TOODHead3D(AnchorHead3D):
 
         Args:
             flat_anchors (Tensor): Multi-level anchors of the image, which are
-                concatenated into a single tensor of shape (num_anchors ,4)
+                concatenated into a single tensor of shape (num_anchors, 6)
             valid_flags (Tensor): Multi level valid flags of the image,
                 which are concatenated into a single tensor of
                     shape (num_anchors,).
             num_level_anchors Tensor): Number of anchors of each scale level.
             gt_bboxes (Tensor): Ground truth bboxes of the image,
-                shape (num_gts, 4).
+                shape (num_gts, 6).
             gt_bboxes_ignore (Tensor): Ground truth bboxes to be
-                ignored, shape (num_ignored_gts, 4).
+                ignored, shape (num_ignored_gts, 6).
             gt_labels (Tensor): Ground truth labels of each box,
                 shape (num_gts,).
             img_meta (dict): Meta info of the image.
@@ -851,6 +876,7 @@ class TOODHead3D(AnchorHead3D):
 
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
+        # ipdb.set_trace()
         if len(pos_inds) > 0:
             # point-based
             pos_bbox_targets = sampling_result.pos_gt_bboxes

@@ -81,13 +81,13 @@ class TaskAlignedAssigner3D(BaseAssigner):
         # compute alignment metric between all bbox and gt
         overlaps_nxg = self.iou_calculator(decode_bboxes, gt_bboxes).detach()
         bbox_scores = scores[:, gt_labels].detach()
-        alignment_metrics = bbox_scores ** alpha * overlaps_nxg ** beta
+        alignment_metrics_nxg = bbox_scores ** alpha * overlaps_nxg ** beta
 
         # assign 0 by default
-        assigned_gt_inds = alignment_metrics.new_full((num_bboxes, ),
+        assigned_gt_inds = alignment_metrics_nxg.new_full((num_bboxes, ),
                                              0,
                                              dtype=torch.long)
-        assign_metrics = alignment_metrics.new_zeros((num_bboxes, ))
+        assign_metrics = alignment_metrics_nxg.new_zeros((num_bboxes, ))
 
         if num_gt == 0 or num_bboxes == 0:
             # No ground truth or boxes, return empty assignment
@@ -98,53 +98,42 @@ class TaskAlignedAssigner3D(BaseAssigner):
             if gt_labels is None:
                 assigned_labels = None
             else:
-                assigned_labels = alignment_metrics.new_full((num_bboxes, ),
+                assigned_labels = alignment_metrics_nxg.new_full((num_bboxes, ),
                                                     -1,
                                                     dtype=torch.long)
             return TaskAlignedAssignResult(
                 num_gt, assigned_gt_inds, max_overlaps_nx1, assign_metrics, labels=assigned_labels)
 
         # select top-k bbox as candidates for each gt
-        _, candidate_idxs = alignment_metrics.topk(
+        _, candidate_idxs = alignment_metrics_nxg.topk(
             self.topk, dim=0, largest=True)
-        candidate_metrics = alignment_metrics[candidate_idxs, torch.arange(num_gt)]
+        candidate_metrics = alignment_metrics_nxg[candidate_idxs, torch.arange(num_gt)]
         is_pos_klxg = candidate_metrics > 0
+
+        # if require positive sample located within center
+        bbox2point = lambda nx: nx.view(nx.shape[0], 2, -1).float().mean(dim = 1) 
+        anchors_points = bbox2point(anchors) # nx3
+        candidate_bboxes = anchors_points[candidate_idxs, :] # klxgx3
+        # calculate the left, top, right, bottom distance between positive
+        # bbox center and gt side
+        l_ = candidate_bboxes[:, :, 0] - gt_bboxes[:, 0][None, :]  # klxg - 1xg
+        t_ = candidate_bboxes[:, :, 1] - gt_bboxes[:, 1][None, :]  # klxg - 1xg
+        a_ = candidate_bboxes[:, :, 2] - gt_bboxes[:, 2][None, :]  # klxg - 1xg
+        r_ = gt_bboxes[:, 3][None, :] - candidate_bboxes[:, :, 0]  # 1xg - klxg
+        b_ = gt_bboxes[:, 4][None, :] - candidate_bboxes[:, :, 1]  # 1xg - klxg
+        p_ = gt_bboxes[:, 5][None, :] - candidate_bboxes[:, :, 2]  # 1xg - klxg
+        is_in_gts = torch.stack([l_, t_, a_, r_, b_, p_], dim=1).min(dim=1)[0] >= 0 
+        is_pos_klxg = is_pos_klxg & is_in_gts
 
         # limit the positive sample's center in gt
         for gt_idx in range(num_gt): candidate_idxs[:, gt_idx] += gt_idx * num_bboxes
         candidate_idxs = candidate_idxs.view(-1)
 
-        # if require positive sample located within center
-        # anchors_cx = (anchors[:, 0] + anchors[:, 2]) / 2.0
-        # anchors_cy = (anchors[:, 1] + anchors[:, 3]) / 2.0
-        # ep_anchors_cx = anchors_cx.view(1, -1).expand(
-        #     num_gt, num_bboxes).contiguous().view(-1)
-        # ep_anchors_cy = anchors_cy.view(1, -1).expand(
-        #     num_gt, num_bboxes).contiguous().view(-1)
-        bbox2point = lambda nx: nx.view(nx.shape[0], 2, -1).float().mean(dim = 1) 
-        anchors_points = bbox2point(anchors) # nx3
-        trans_center_dim = lambda p, dim: p[:, dim].view(1, -1).expand( # 1xn > kxn > kn
-                                        num_gt, num_bboxes).contiguous().view(-1)
-        ep_anchors_cx = trans_center_dim(anchors_points, 0)
-        ep_anchors_cy = trans_center_dim(anchors_points, 1)
-        ep_anchors_cz = trans_center_dim(anchors_points, 2)
-        # calculate the left, top, right, bottom distance between positive
-        # bbox center and gt side
-        l_ = ep_anchors_cx[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 0]
-        t_ = ep_anchors_cy[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 1]
-        a_ = ep_anchors_cz[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 2]
-        r_ = gt_bboxes[:, 3] - ep_anchors_cx[candidate_idxs].view(-1, num_gt)
-        b_ = gt_bboxes[:, 4] - ep_anchors_cy[candidate_idxs].view(-1, num_gt)
-        p_ = gt_bboxes[:, 5] - ep_anchors_cz[candidate_idxs].view(-1, num_gt)
-
-        is_in_gts = torch.stack([l_, t_, a_, r_, b_, p_], dim=1).min(dim=1)[0] > 0.01
-        is_pos_klxg = is_pos_klxg & is_in_gts
-
         # if an anchor box is assigned to multiple gts,
         # the one with the highest iou will be selected.
         overlaps_inf_gxn = torch.full_like(overlaps_nxg,
                                        -INF).t().contiguous().view(-1)
-        index = candidate_idxs.view(-1)[is_pos_klxg.view(-1)]
+        index = candidate_idxs[is_pos_klxg.view(-1)]
         overlaps_inf_gxn[index] = overlaps_nxg.t().contiguous().view(-1)[index]
         overlaps_inf_nxg = overlaps_inf_gxn.view(num_gt, -1).t() # gn > gxn> nxg
 
@@ -152,7 +141,7 @@ class TaskAlignedAssigner3D(BaseAssigner):
         assigned_gt_inds[
             max_overlaps_nx1 != -INF] = argmax_overlaps_nx1[max_overlaps_nx1 != -INF] + 1
         assign_metrics[
-            max_overlaps_nx1 != -INF] = alignment_metrics[
+            max_overlaps_nx1 != -INF] = alignment_metrics_nxg[
                     max_overlaps_nx1 != -INF, argmax_overlaps_nx1[max_overlaps_nx1 != -INF]]
 
         # In assigned_gt_inds, 0 stands for background, so the gt index has to start from 1. 

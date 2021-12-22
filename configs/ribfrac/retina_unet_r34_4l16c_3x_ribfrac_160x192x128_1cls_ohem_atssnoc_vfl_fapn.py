@@ -9,7 +9,7 @@ img_dir = 'data/Task113_RibFrac_KYRe'
 key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 'roi_fp':'_ins2cls.json'}
 data = dict(samples_per_gpu = 2, workers_per_gpu= 6, 
             train=dict(sample_rate = 1.0, json_filename = 'dataset_1130_truesplit.json', img_dir=img_dir, key2suffix = key2suffix), 
-            val=dict(sample_rate = 0.5, json_filename = 'dataset_1130_truesplit.json', img_dir=img_dir, key2suffix = key2suffix), 
+            val=dict(sample_rate =0.7, json_filename = 'dataset_1130_truesplit.json', img_dir=img_dir, key2suffix = key2suffix), 
             test= dict(sample_rate = 0.1, json_filename = 'dataset_1130_truesplit.json',img_dir=img_dir, key2suffix = key2suffix))
 
 densecl_cp = 'work_dirs/densecl_r34_4l16c_ct5k_bone_160x192x128_100eps/latest.pth'

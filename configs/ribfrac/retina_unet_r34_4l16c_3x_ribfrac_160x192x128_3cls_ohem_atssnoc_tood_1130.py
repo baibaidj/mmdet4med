@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models_med/retina_unet_r34_4l16c_atssnoc_160x192x128_tood_1cls.py',
+    '../_base_/models_med/retina_unet_r34_4l16c_atssnoc_160x192x128_tood_3cls.py',
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
     # '../ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
     # '../_base_/swa.py',
@@ -62,12 +62,12 @@ log_config = dict(interval=20, hooks=[
                 # dict(type='TensorboardLoggerHook')
                 ])
 
-evaluation=dict(interval=4, start=0, metric='mAP', 
+evaluation=dict(interval=2, start=0, metric='mAP', 
                 save_best = 'mAP', rule = 'greater', 
                 iou_thr=[0.2, 0.3])
 
 
-# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_tood_1130.py 
-# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29123 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_tood_1130.py 3 --gpus 3 #--no-validate
+# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_tood_1130.py 
+# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29123 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atssnoc_tood_1130.py 3 --gpus 3 #--no-validate
 
 # 32 epoch: 0.50@1 0.58@2 0.67@4 0.76@8 0.78@50

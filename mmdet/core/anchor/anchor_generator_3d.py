@@ -5,7 +5,7 @@ from torch.nn.modules.utils import _pair, _triple
 from .builder import PRIOR_GENERATORS
 from mmdet.utils import print_tensor
 from itertools import product
-import pdb
+import ipdb
 
 @PRIOR_GENERATORS.register_module()
 class AnchorGenerator3D:
@@ -131,7 +131,7 @@ class AnchorGenerator3D:
         """int: number of feature levels that the generator will be applied"""
         return len(self.strides)
 
-    def gen_base_anchors(self, verbose = False):
+    def gen_base_anchors(self):
         """Generate base anchors.
         base_sizes: [1, 2, 4, 8, 16]
         Returns:
@@ -148,7 +148,7 @@ class AnchorGenerator3D:
                     scales=self.scales,
                     ratios=self.ratios,
                     center=center)
-            if verbose: print(f'[BaseAnchor] level {i} basesize {base_size} scale ' + 
+            if self.verbose: print(f'[BaseAnchor] level {i} basesize {base_size} scale ' + 
                                 f'{self.scales} ratio {self.ratios} \n', anchor_i)
             multi_level_base_anchors.append(anchor_i)
         return multi_level_base_anchors
@@ -159,6 +159,8 @@ class AnchorGenerator3D:
                                       ratios,
                                       center=None):
         """Generate base anchors of a single level.
+
+        # the length of an edge will be octave_base_scale * stride
 
         Args:
             base_size (int | float): Basic size of an anchor.

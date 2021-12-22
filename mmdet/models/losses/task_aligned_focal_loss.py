@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ..builder import LOSSES
-from .utils import weight_reduce_loss
+from .utils import weight_reduce_loss, print_tensor
+import ipdb 
 
 # python version no_sigmoid
 def focal_loss_with_prob(prob,
@@ -22,7 +23,16 @@ def focal_loss_with_prob(prob,
     ce_loss = F.binary_cross_entropy(
         prob, target_one_hot, reduction='none')
     loss = flatten_alpha * torch.pow(1 - pt, gamma) * ce_loss
-
+    # valid_mask = weight > 0
+    # print('focal loss with prob')
+    # valid_mask = weight != 0
+    # valid_target = target[valid_mask]
+    # valid_prob = prob[valid_mask]
+    # valid_ce = ce_loss[valid_mask]
+    # valid_pt = pt[valid_mask]
+    # valid_alpha = flatten_alpha[valid_mask]
+    # valid_loss = loss[valid_mask]
+    # ipdb.set_trace()
     if weight is not None:
         loss = weight_reduce_loss(loss, weight.reshape(-1, 1), reduction, avg_factor)
     else:
@@ -66,8 +76,9 @@ class FocalLossWithProb(nn.Module):
                 used for sigmoid or softmax. Defaults to True.
             gamma (float, optional): The gamma for calculating the modulating
                 factor. Defaults to 2.0.
-            alpha (float, optional): A balanced form for Focal Loss.
-                Defaults to 0.25.
+            alpha (float, optional): A balanced form for Focal Loss. Defaults to 0.25. 
+                weighting foreground class and background class.if 0.5 then fg and bg have same weight. 
+                if you want fg has larger weight, then alpha should be bigger than 0.5. 
             reduction (str, optional): The method used to reduce the loss into
                 a scalar. Defaults to 'mean'. Options are "none", "mean" and
                 "sum".

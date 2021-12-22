@@ -5,7 +5,7 @@ from ..iou_calculators import build_iou_calculator
 from .assign_result import AssignResult
 from .base_assigner import BaseAssigner
 from mmdet.utils import print_tensor 
-import pdb
+import ipdb
 
 
 @BBOX_ASSIGNERS.register_module()
@@ -126,56 +126,52 @@ class ATSSAssigner3D(BaseAssigner):
                 selectable_k, dim=0, largest=False)
             candidate_idxs.append(topk_idxs_per_level + start_idx) # kxg
             start_idx = end_idx
+            # if self.verbose:
+            #     print(f'[ATSS] select positive candidte: level {level} num {len(topk_idxs_per_level)}')
         candidate_idxs = torch.cat(candidate_idxs, dim=0) # klxg
-
         # get corresponding iou for the these candidates, and compute the
         # mean and std, set mean + std as the iou threshold
+        # print_tensor('[ATSS]  candidates ix', candidate_idxs)
         candidate_overlaps = overlaps_nxg[candidate_idxs, torch.arange(num_gt)] # klxg
         overlaps_mean_per_gt = candidate_overlaps.mean(0) # 1xg
         overlaps_std_per_gt = candidate_overlaps.std(0) # 1xg
         overlaps_thr_per_gt = overlaps_mean_per_gt + overlaps_std_per_gt  # 1xg
 
         is_pos_klxg = candidate_overlaps >= overlaps_thr_per_gt[None, :] # klxg, binary
-        # pdb.set_trace()
-        # To accommodate the flattening in 
-        for gt_idx in range(num_gt): candidate_idxs[:, gt_idx] += gt_idx * num_bboxes 
         # limit the positive sample's center in gt
         if self.center_within:
-            candidate_idxs = candidate_idxs.view(-1)
-            trans_center_dim = lambda p, dim: p[:, dim].view(1, -1).expand( # 1xn > kxn > kn
-                                        num_gt, num_bboxes).contiguous().view(-1)
-            ep_bboxes_cx = trans_center_dim(bboxes_points, 0)
-            ep_bboxes_cy = trans_center_dim(bboxes_points, 1)
-            ep_bboxes_cz = trans_center_dim(bboxes_points, 2)
-
+            # print('[ATSS] ensure positive bbox center is within GT bbox')
+            candidate_bboxes = bboxes_points[candidate_idxs, :] # klxgx3
             # calculate the left, top, anterior, right, bottom, posterior distance between positive
             # bbox center and gt side
-            l_ = ep_bboxes_cx[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 0]
-            t_ = ep_bboxes_cy[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 1]
-            a_ = ep_bboxes_cz[candidate_idxs].view(-1, num_gt) - gt_bboxes[:, 2]
-            r_ = gt_bboxes[:, 3] - ep_bboxes_cx[candidate_idxs].view(-1, num_gt)
-            b_ = gt_bboxes[:, 4] - ep_bboxes_cy[candidate_idxs].view(-1, num_gt)
-            p_ = gt_bboxes[:, 5] - ep_bboxes_cz[candidate_idxs].view(-1, num_gt)
-            # pdb.set_trace()
-            is_in_gts = torch.stack([l_, t_, a_, r_, b_, p_], dim=1).min(dim=1)[0] > 0.01
+            l_ = candidate_bboxes[:, :, 0] - gt_bboxes[:, 0][None, :]  # klxg - 1xg
+            t_ = candidate_bboxes[:, :, 1] - gt_bboxes[:, 1][None, :]  # klxg - 1xg
+            a_ = candidate_bboxes[:, :, 2] - gt_bboxes[:, 2][None, :]  # klxg - 1xg
+            r_ = gt_bboxes[:, 3][None, :] - candidate_bboxes[:, :, 0]  # 1xg - klxg
+            b_ = gt_bboxes[:, 4][None, :] - candidate_bboxes[:, :, 1]  # 1xg - klxg
+            p_ = gt_bboxes[:, 5][None, :] - candidate_bboxes[:, :, 2]  # 1xg - klxg
+            is_in_gts = torch.stack([l_, t_, a_, r_, b_, p_], dim=1).min(dim=1)[0] >= 0
             is_pos_klxg = is_pos_klxg & is_in_gts
-        
-        if self.verbose:
-            print('[ATSSAssigner] positive candidate in GT matrix \n ', is_pos_klxg)
 
+        if self.verbose:
+            print('[ATSSAssigner] positive candidate in GT matrix', is_pos_klxg.sum())
+
+        # To accommodate the flattening in 
+        for gt_idx in range(num_gt): candidate_idxs[:, gt_idx] += gt_idx * num_bboxes 
+        candidate_idxs = candidate_idxs.view(-1)
         # if an anchor box is assigned to multiple gts,
         # the one with the highest IoU will be selected.
         overlaps_inf_gxn = torch.full_like(overlaps_nxg, # nxg > gxn
                                        -INF).t().contiguous().view(-1)
-        index = candidate_idxs.view(-1)[is_pos_klxg.view(-1)] # 
+        index = candidate_idxs[is_pos_klxg.view(-1)] # 
         overlaps_inf_gxn[index] = overlaps_nxg.t().contiguous().view(-1)[index] # gxn
         if self.verbose:
             print_tensor('[Assigner] positive bbox overlap', overlaps_inf_gxn[index])
         overlaps_inf_nxg = overlaps_inf_gxn.view(num_gt, -1).t() # gn > gxn> nxg
 
         max_overlaps_nx1, argmax_overlaps_nx1 = overlaps_inf_nxg.max(dim=1)
-        assigned_gt_inds[
-            max_overlaps_nx1 != -INF] = argmax_overlaps_nx1[max_overlaps_nx1 != -INF] + 1
+        fg_mask = max_overlaps_nx1 != -INF
+        assigned_gt_inds[fg_mask] = argmax_overlaps_nx1[fg_mask] + 1
         # In assigned_gt_inds, 0 stands for background, so the gt index has to start from 1. 
         if gt_labels is not None:
             assigned_labels = assigned_gt_inds.new_full((num_bboxes, ), -1)

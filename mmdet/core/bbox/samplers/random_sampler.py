@@ -82,7 +82,8 @@ class RandomSampler(BaseSampler):
             return self.random_choice(neg_inds, num_expected)
 
 chn2last_order = lambda x: tuple([0, *[a + 2 for a in range(x)],  1])
-import pdb
+import ipdb
+
 @BBOX_SAMPLERS.register_module()
 class HardNegPoolSampler(BaseSampler):
     """Random sampler.
@@ -102,12 +103,14 @@ class HardNegPoolSampler(BaseSampler):
                  neg_pos_ub=-1,
                  add_gt_as_proposals=True,
                  pool_size = 20,
+                 use_sigmoid = True, 
                  **kwargs):
         from mmdet.core.bbox import demodata
         self.pool_size = pool_size
         super(HardNegPoolSampler, self).__init__(num, pos_fraction, neg_pos_ub,
                                             add_gt_as_proposals)
         self.rng = demodata.ensure_rng(kwargs.get('rng', None))
+        self.use_sigmoid = use_sigmoid
 
     def random_choice(self, gallery, num):
         """Random select some elements from the gallery.
@@ -153,19 +156,22 @@ class HardNegPoolSampler(BaseSampler):
 
     def _sample_neg(self, assign_result, num_expected, cls_scores = None, **kwargs):
         """Randomly sample some negative samples."""
-        neg_inds = torch.nonzero(assign_result.gt_inds == 0, as_tuple=False)
+        neg_inds_pool = torch.nonzero(assign_result.gt_inds == 0, as_tuple=False)
 
         if cls_scores is not None:
-            # 0th channel fg, 1th channel bg # hardest neg samples should be those (bg gt)
-            # having highest score on 0th channel.  bg but predicted to highly likely be fg
-            score_max_nx1 = cls_scores[:, -1] # background probability
-            neg_num_pool = min(int(self.pool_size * num_expected), len(neg_inds))
-            _, negative_idx_pool = score_max_nx1[neg_inds[:, 0]].topk(neg_num_pool, largest=False, sorted=True)
-            neg_inds = neg_inds[negative_idx_pool]
-        # pdb.set_trace()
-        if neg_inds.numel() != 0:
-            neg_inds = neg_inds.squeeze(1)
-        if len(neg_inds) <= num_expected:
-            return neg_inds
+            # fg classes start at 0th channel. If self.use_sigmoid, then there will be no bg channel
+            # if not self.use_sigmoid, then the last channel will be bg channel. 
+            # Either way, bg proposals with high predicted values in fg channels will be hard negative sample. 
+            neg_num_pool = min(int(self.pool_size * num_expected), len(neg_inds_pool))
+            score_max_nxc = cls_scores if self.use_sigmoid else cls_scores[:, -1] # background probability
+            _, negpool_topkidx = score_max_nxc[neg_inds_pool[:, 0]].topk(
+                                     neg_num_pool, dim = 0, largest=False, sorted=True)
+            neg_idx_unique = negpool_topkidx.unique()
+            neg_inds_pool = neg_inds_pool[neg_idx_unique]
+        # ipdb.set_trace()
+        if neg_inds_pool.numel() != 0:
+            neg_inds_pool = neg_inds_pool.squeeze(1)
+        if len(neg_inds_pool) <= num_expected:
+            return neg_inds_pool
         else:
-            return self.random_choice(neg_inds, num_expected)
+            return self.random_choice(neg_inds_pool, num_expected)
