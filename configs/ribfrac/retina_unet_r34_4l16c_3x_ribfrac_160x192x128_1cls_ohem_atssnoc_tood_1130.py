@@ -17,7 +17,7 @@ model = dict(
         bbox_head = dict(stacked_convs=6, verbose = False, 
                         initial_loss_cls=dict(loss_weight=5.0, alpha=0.7), 
                         loss_cls = dict(loss_weight=5.0), 
-                        loss_bbox=dict(loss_weight=0.4), 
+                        loss_bbox=dict(loss_weight=0.8), 
                         anchor_generator=dict(octave_base_scale=2, scales_per_octave=2, verbose = False)
                             ), 
         seg_head = dict(verbose = False, 
