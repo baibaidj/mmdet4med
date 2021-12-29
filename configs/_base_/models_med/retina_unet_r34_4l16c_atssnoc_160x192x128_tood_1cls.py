@@ -137,6 +137,7 @@ model = dict(
             ),
         assigner=dict(
             type='TaskAlignedAssigner3D',
+            alpha = 1, beta = 6,
             topk = 8, ignore_iof_thr=-1,
             iou_calculator=dict(type='BboxOverlaps3D')
             ),

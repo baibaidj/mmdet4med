@@ -140,7 +140,7 @@ def calculate_FROC_by_center(gt_by_case, pred_by_case, luna_output_format=True, 
     # pdb.set_trace()
     for i in tqdm(range(len(pred_bbox_nx7))):
         # pdb.set_trace()
-        inside = check_center_inside(pred_bbox_nx7[i][:6], gt_nx6=gt_by_case[img_idxs[i]][:, :6] )
+        inside = check_center_inside(pred_bbox_nx7[i][:6], gt_nx6=gt_by_case[img_idxs[i]][:, :6], is_strict=False)
         # print(f'Prob {i} ', centers_cat[i], gt_boxes[img_idxs[i]], inside)
         if 1 not in inside:
             nMiss += 1

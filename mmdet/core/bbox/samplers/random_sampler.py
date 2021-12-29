@@ -165,7 +165,7 @@ class HardNegPoolSampler(BaseSampler):
             neg_num_pool = min(int(self.pool_size * num_expected), len(neg_inds_pool))
             score_max_nxc = cls_scores if self.use_sigmoid else cls_scores[:, -1] # background probability
             _, negpool_topkidx = score_max_nxc[neg_inds_pool[:, 0]].topk(
-                                     neg_num_pool, dim = 0, largest=False, sorted=True)
+                                     neg_num_pool, dim = 0, largest=True, sorted=True)
             neg_idx_unique = negpool_topkidx.unique()
             neg_inds_pool = neg_inds_pool[neg_idx_unique]
         # ipdb.set_trace()

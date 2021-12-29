@@ -88,7 +88,7 @@ class ComboLossMed(nn.Module):
 
         if self.class_weight is not None: 
             self.class_weight = torch.tensor(self.class_weight, device=cls_score.device, dtype= cls_score.dtype)
-            # if self.verbose: print(f'[Loss] class weight', self.class_weight)
+            if self.verbose: print(f'[Loss] class weight', self.class_weight)
 
         loss_1 = self.loss_weights[0] * self.criterion_list[0](
                                             cls_score,
@@ -108,8 +108,9 @@ class ComboLossMed(nn.Module):
                         weight, 
                         class_weight = self.class_weight.clone().detach()) if self.loss_weights[1] != 0 else 0
 
-        if self.verbose: print_tensor('[ComboLoss] BCE', loss_1)
-        if self.verbose and isinstance(loss_2, torch.Tensor): print_tensor('[ComboLoss] Dloss', loss_2)
+        if self.verbose: print_tensor(f'\n[ComboLoss] BCE weight {self.loss_weights[0]}', loss_1)
+        if self.verbose and isinstance(loss_2, torch.Tensor): 
+            print_tensor(f'[ComboLoss] Dloss weight {self.loss_weights[1]}', loss_2)
         total_loss = loss_1 + loss_2 
         return total_loss
 
@@ -124,6 +125,7 @@ class ComboLossMed(nn.Module):
 
         self.class_weight = copy.deepcopy(self.class_weight_origin)
         if self.loss_weights[1] !=0: self.criterion_list[1].update1hot_encoder(self.cls_out_channels)
+        # with torch.autograd.detect_anomaly():
         loss_main = self.forward_inner(cls_score, label, *args, **kwargs)
 
         if self.group_dict is not None:

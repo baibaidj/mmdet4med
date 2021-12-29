@@ -210,7 +210,7 @@ class ATSSHead3DNOC(AnchorHead3D):
                 iou_targets_ini = bbox_overlaps_3d(
                     pos_decode_bbox_pred.detach(),
                     pos_decode_bbox_targets.detach(),
-                    is_aligned=True).clamp(min=1e-4)
+                    is_aligned=True).clamp(min=1e-6)
 
                 pos_labels = labels[pos_inds]
                 pos_ious = iou_targets_ini.clone().detach()

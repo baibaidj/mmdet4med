@@ -5,6 +5,9 @@ from mmcv.runner import BaseModule
 from typing import Sequence, List
 from ..builder import NECKS
 from ..utils.ccnet_pure import print_tensor
+from ..utils import nan_hook
+import torch
+import ipdb
 
 
 @NECKS.register_module()
@@ -111,8 +114,8 @@ class FPN3D(BaseModule):
             self.add_extra_convs = 'on_input'
 
         self.out_channels = self.compute_output_channels(is_double_chn)
-        self.up_ops = self.build_upsample_layers(conv_cfg)
-        print(f'[FPN3D] input channels {self.in_channels} out channels {self.out_channels} upmode {self.upsample_mode}')
+        self.up_ops = self.build_upsample_layers(conv_cfg, norm_cfg = None)
+        print(f'[FPN3D] input channels {self.in_channels} out channels {self.out_channels} upmode {self.up_ops[-1]}')
         self.lateral_convs = nn.ModuleList()
         self.fpn_convs = nn.ModuleList()
         self.verbose = verbose
@@ -159,6 +162,7 @@ class FPN3D(BaseModule):
                     inplace=False)
                 self.fpn_convs.append(extra_fpn_conv)
 
+
     def compute_output_channels(self, is_double_chn = True) -> List[int]:
         """
         Compute number of output channels
@@ -178,11 +182,11 @@ class FPN3D(BaseModule):
                 out_channels[ol] = oc
         return out_channels
 
-    def build_upsample_layers(self, conv_cfg):
+    def build_upsample_layers(self, conv_cfg, norm_cfg = None):
         up_ops = nn.ModuleList()
         for i in range(0, self.backbone_end_level):
             if i == 0:
-                up_ops.append(None)
+                up_ops.append(nn.Identity())
             else:
                 if self.upsample_mode is not None:
                     up = nn.Upsample(scale_factor=2, mode= self.upsample_mode, align_corners=True)
@@ -190,18 +194,18 @@ class FPN3D(BaseModule):
                         _conv = ConvModule(self.out_channels[i],
                                             self.out_channels[i - 1], 
                                             1, conv_cfg=conv_cfg, 
-                                            norm_cfg = None, 
+                                            norm_cfg = norm_cfg, 
                                             act_cfg=None)
                         up = nn.Sequential(up, _conv)
                 else:
                     up = nn.Sequential(build_upsample_layer(
-                                                cfg=self.deconv_cfg,
-                                                in_channels=self.out_channels[i],
-                                                out_channels=self.out_channels[i-1],
-                                                bias = False),
-                                                # build_norm_layer(norm_cfg, up_channels)[1],
-                                                # nn.ReLU(inplace=True)
-                                            )
+                                        cfg=self.deconv_cfg,
+                                        in_channels=self.out_channels[i],
+                                        out_channels=self.out_channels[i-1],
+                                        bias = False),
+                                        nn.Identity() if norm_cfg is None else build_norm_layer(norm_cfg, self.out_channels[i-1])[1],
+                                        # nn.ReLU(inplace=True)
+                                        )
                 up_ops.append(up)
         return up_ops
 
@@ -210,10 +214,12 @@ class FPN3D(BaseModule):
         assert len(inputs) == len(self.in_channels)
 
         # build laterals
-        laterals = [
-            lateral_conv(inputs[i])
-            for i, lateral_conv in enumerate(self.lateral_convs)
-        ]
+        laterals = []
+        for i, lateral_conv in enumerate(self.lateral_convs):
+            lat_out = lateral_conv(inputs[i])
+            if self.verbose: print_tensor(f'[FPN] Lateral conv level {i}', lat_out )
+            laterals.append(lat_out)
+
         # build top-down path
         used_backbone_levels = len(laterals)
         for i in range(used_backbone_levels - 1, 0, -1): # 5,4,3,2,1
@@ -222,21 +228,17 @@ class FPN3D(BaseModule):
             # In some cases, fixing `scale factor` (e.g. 2) is preferred, but
             #  it cannot co-exist with `size` in `F.interpolate`.
             up_feat = self.up_ops[i](laterals[i])
+            if self.verbose: print_tensor(f'[FPN] UP level {i}', up_feat )
             laterals[i - 1] = laterals[i - 1] + up_feat
 
-            # if 'scale_factor' in self.upsample_cfg:
-            #     laterals[i - 1] += F.interpolate(laterals[i],
-            #                                      **self.upsample_cfg)
-            # else:
-            #     prev_shape = laterals[i - 1].shape[2:]
-            #     laterals[i - 1] += F.interpolate(
-            #         laterals[i], size=prev_shape, **self.upsample_cfg)
-
         # build outputs
+        outs = []
         # part 1: from original levels
-        outs = [
-            self.fpn_convs[i](laterals[i]) for i in range(used_backbone_levels)
-        ]
+        for i in range(used_backbone_levels):
+            out_i = self.fpn_convs[i](laterals[i])
+            if self.verbose: print_tensor(f'[FPN] Fuse conv level {i}', out_i )
+            outs.append(out_i)
+
         # part 2: add extra levels
         if self.num_outs > len(outs):
             # use max pool to get more levels on top of outputs
@@ -260,9 +262,10 @@ class FPN3D(BaseModule):
                         outs.append(self.fpn_convs[i](F.relu(outs[-1])))
                     else:
                         outs.append(self.fpn_convs[i](outs[-1]))
+        # ipdb.set_trace()
         # bb = [print_tensor(f'[FPNeck] inputlevel {i}', o) for i, o in enumerate(inputs)]
         # level_hasnan = [torch.isnan(a).any() for i, a in enumerate(outs)]
-        if self.verbose: 
-            aa = [print_tensor(f'[FPNeck] level {i}', o) for i, o in enumerate(outs)] #hasnan {level_hasnan[i]}
-        # if any(level_hasnan): pdb.set_trace()
+        # if self.verbose: 
+        #     aa = [print_tensor(f'[FPNeck] level {i}', o) for i, o in enumerate(outs)] #hasnan {level_hasnan[i]}
+        # if any(level_hasnan): ipdb.set_trace()
         return tuple(outs)

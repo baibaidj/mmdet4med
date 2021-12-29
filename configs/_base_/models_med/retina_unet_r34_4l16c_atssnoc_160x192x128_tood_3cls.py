@@ -5,7 +5,7 @@ num_classes = 3 # this is an RPN
 # model settings
 conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
-norm_cfg = dict(type='IN3d', requires_grad=True) 
+norm_cfg = dict(type='IN3d', affine=False, track_running_stats=False, requires_grad=True) 
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
 stem_channels = 16
 fpn_channel = stem_channels * (2**3)
@@ -100,9 +100,10 @@ model = dict(
         # start_iters = 1,
         # max_iters = 4e5,
         loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2), 
-                    num_classes = num_classes + 1, class_weight = (0.33, 1.25, 1.0, 1.0),  verbose = False,   #(0.33, 1.0)
-                    dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
+                    type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2),  verbose = False,  
+                    num_classes = num_classes + 1, class_weight = (0.33, 1.25, 1.0, 1.0),
+                    dice_cfg = dict(ignore_0 = True, verbose = False),
+                     #(0.33, 1.0) # act = 'sigmoid',
                     ),
             ),
     # convert instance mask to bbox 
@@ -137,6 +138,7 @@ model = dict(
             ),
         assigner=dict(
             type='TaskAlignedAssigner3D',
+            alpha = 1, beta = 6,
             topk = 8, ignore_iof_thr=-1,
             iou_calculator=dict(type='BboxOverlaps3D')
             ),

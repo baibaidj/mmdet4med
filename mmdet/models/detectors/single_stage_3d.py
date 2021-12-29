@@ -5,9 +5,11 @@ from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base3d import BaseDetector3D
 from ...datasets.pipelines import Compose
 
+from mmdet.models.necks.fpn_3d import FPN3D
 from mmdet.models.semantic_heads import FCNHead3D
 from mmdet.core.post_processing.bbox_nms import batched_nms_3d
 from mmdet.utils.resize import list_dict2dict_list, resize_3d, print_tensor
+from mmdet.models.utils import nan_hook
 from mmdet.core import bbox2result3d, ShapeHolder, BboxSegEnsembler1Case
 
 from monai.data.utils import dense_patch_slices
@@ -60,7 +62,7 @@ class SingleStageDetector3D(BaseDetector3D):
             backbone.pretrained = pretrained
         self.backbone = build_backbone(backbone)
         if neck is not None:
-            self.neck = build_neck(neck)
+            self.neck : FPN3D = build_neck(neck)
         bbox_head.update(train_cfg=train_cfg)
         bbox_head.update(test_cfg=test_cfg)
         self.bbox_head = build_head(bbox_head)
@@ -80,6 +82,8 @@ class SingleStageDetector3D(BaseDetector3D):
         self.padding_mode = self.test_cfg.pop('padding_mode', 'constant')
         self.sigma_scale = self.test_cfg.pop('sigma_scale', 0.125)
 
+        # for submodule in self.neck.modules():
+        #     submodule.register_forward_hook(nan_hook)
     def extract_feat(self, img):
         """Directly extract features from the backbone+neck."""
         x = self.backbone(img)
@@ -142,7 +146,11 @@ class SingleStageDetector3D(BaseDetector3D):
 
         img, gt_bboxes, gt_labels, gt_semantic_seg = self.update_img_metas(
                                             img, img_metas, seg)
-        x = self.extract_feat(img)
+        try: 
+            x = self.extract_feat(img)
+        except RuntimeError:
+            _ = [print(a['img_meta_dict']['filename_or_obj']) for a in img_metas]
+            ipdb.set_trace()
         # print_tensor('\n[Detector] input', img)
         # print_tensor('[Detector] feat', x[-1])
         # ipdb.set_trace()

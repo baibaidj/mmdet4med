@@ -132,7 +132,7 @@ class Instances2Boxes(AbstractTransform):
                 _classes = torch.tensor([0 for on in instance_idx], device = instance_element.device)
                 pid = data[self.meta_key][batch_idx]['filename_or_obj'].split(os.sep)[-1]
                 print_tensor(f'[Inst2Box] key error pid {pid} sample tensor', instance_element )
-            _classes = _classes.to(device=_boxes_nx6.device) # class start from 0
+            _classes = _classes.to(device=_boxes_nx6.device).long() # class start from 0
             # if self.just1cls is not None: _classes = self.just1cls
             if self.verbose: print_tensor(f'[Getbox] bx{batch_idx} ins2cls {inst2class_map} '
                                     + f'ins {instance_idx}  cls {_classes}, instmask', instance_element)

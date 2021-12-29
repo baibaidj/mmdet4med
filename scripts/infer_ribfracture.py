@@ -1,5 +1,4 @@
 
-from numpy.core.fromnumeric import sort
 import pandas as pd
 import os, sys, argparse
 
@@ -11,7 +10,7 @@ from evaluate_det_result import roi_info_dets, roi_info_mask, evaluate1case, eva
 from mmdet.apis.inference_med import *
 from mmdet.datasets.transform4med.io4med import *
 from scripts.froc_ import calculate_FROC_by_center
-import cc3d
+import cc3d, ipdb
 from mmcv import Timer
 from mmcv.runner import wrap_fp16_model
 # CLASSES = ('bg', 'hv', 'pv')
@@ -159,7 +158,7 @@ def main(cfg,
         timer = Timer() 
         # NOTE: make the target spacings adpative to the affine_matrix 
         origin_spacing = [abs(affine_matrix_i[a, a]) for a in range(3)]
-        target_spacings = find_target_spacing(origin_spacing, use_double_spacing=False)
+        target_spacings = find_target_spacing(origin_spacing, use_double_spacing=True)
         print(f'origin spacing {origin_spacing} target spacint {target_spacings}')
 
         det_results, seg_results = inference_detector4med(model, img_3d, 
@@ -230,7 +229,8 @@ def find_target_spacing(spacing_xyz,
 
 
 def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_save_dir, 
-                                    seg_prob_thresh = 0.5, label_map = None):
+                                    seg_prob_thresh = 0.5, label_map = None, 
+                                    gt_valid_class = (1, 2, 3, 4, 7)):
     """
     Args:
         det_results: list of detection results of 1 image
@@ -253,6 +253,9 @@ def evaluate_store_prediction_1case(det_results, seg_results, cid_infos, nii_sav
         if label_map is not None: 
             gt_roi_mask = convert_label(gt_roi_mask, label_mapping = label_map, value4outlier=1)
     else: gt_roi_mask = None
+
+    if isinstance(gt_valid_class, (tuple, list)): 
+        gt_det_infos = [roi for roi in gt_det_infos if roi['class'] in gt_valid_class]
 
     # 2. compute metrics for detection head first 
     det_roi_infos = roi_info_dets(det_results[0])
@@ -336,6 +339,8 @@ def FROC_dataset_level(pid2niifp_map, nii_save_dir, suffix = 'det_roi_infos.json
                                 for i, rois in enumerate(gtroi_by_case)]
     pred_bbox_nx7 = [safe_nx7_array([roi['bbox'] + [roi['prob']] for roi in rois]) 
                                     for i, rois in enumerate(detroi_by_case)]
+    
+    ipdb.set_trace()
     result_dict, fig = calculate_FROC_by_center(gt_bboxes_nx7, pred_bbox_nx7, 
                                                 luna_output_format=True, plt_figure=True)
     if fig is not None: fig.savefig(osp.join(nii_save_dir, suffix.replace('.json', '_FROC.pdf')))
@@ -466,8 +471,8 @@ def sample_list2run(pid2niifp_map, run_pids = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii.gz', 
-                                  'label': '_instance.nii.gz', 
+                    key2suffix = {'image': '_image.nii', 
+                                  'label': '_instance.nii', 
                                   'roi':'_ins2cls.json'}):
     """
 
@@ -557,7 +562,7 @@ if __name__ == '__main__':
     if cfg.label_rt:
         pid2niifp_map = load_list_scan(cfg.data_rt, label_rt=cfg.label_rt)
     else:
-        pid2niifp_map = load_list_detdj(cfg.data_rt, mode = cfg.split)
+        pid2niifp_map = load_list_detdj(cfg.data_rt, mode = cfg.split, json_filename = 'dataset.json')
     
     if not cfg.eval_final:
         pid2niifp_map = sample_list2run(pid2niifp_map, run_pids=cfg.run_pids, 
