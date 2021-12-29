@@ -40,3 +40,33 @@ def interpolate_as(source, target, mode='bilinear', align_corners=False):
         return source[:, 0, :, :]
     else:
         return _interpolate_as(source, target, mode, align_corners)
+
+import ipdb, torch
+
+def nan_hook(self, inp, output):
+    # print('input', type(inp), 'output', type(output))
+    # ipdb.set_trace()
+
+    def anything2list(out_raw):
+        outs = []
+        if isinstance(out_raw, (tuple, list)):
+            for v in out_raw: 
+                outs.extend(anything2list(v))
+        elif isinstance(out_raw, dict):
+            for k, v in out_raw.items():
+                outs.extend(anything2list(v))
+        elif isinstance(out_raw, torch.Tensor):
+            return [out_raw]
+        else:
+            print(f'Unsetting type', type(out_raw))
+        return outs
+
+    outputs = anything2list(output)
+    for i, out in enumerate(outputs):
+        assert isinstance(out, torch.Tensor), (f'Out should be of type torch.Tensor but got {type(out)}')
+        nan_mask = torch.isnan(out)
+        if nan_mask.any():
+            print("[NaN output]@@In@@", self.__class__.__name__)
+            # ipdb.set_trace()
+            raise RuntimeError(f"Found NAN in output {i} at indices: ")
+            #, nan_mask.nonzero(), "where:", out[nan_mask.nonzero()[:, 0].unique(sorted=True)])

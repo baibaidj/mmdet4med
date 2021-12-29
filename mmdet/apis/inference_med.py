@@ -424,8 +424,12 @@ def tta_detect_1by1(model, img, affine = None, rescale = True,
     # collect_keymap = {'img' : 'img', 'seg': 'seg', 'img_metas': 'img_meta_dict'}
     data_dict = normalizer(data_dict)
     det_results_tta = []
-    for flip_direction in [None, 'diagonal']:
-        for new_spacing in target_spacings:
+    # NOTE: Try two spacing, rather than two view
+    for new_spacing in target_spacings:
+        for flip_direction in [None, ]: #, 'diagonal'
+            # if new_spacing is None and flip_direction is not None:
+            #     continue
+            print(f'\n[DetTTA] new spacing {new_spacing}  flip {flip_direction}')
             resizer = ResizeTensor5DGPU(keys = ('img', 'seg'), new_spacing = new_spacing)
             flipper = FlipTensor5DGPU(keys = ('img', 'seg'), flip_direction = flip_direction)
             # 1. respacing
@@ -492,7 +496,8 @@ class LoadImageGPU:
         results['seg_meta_dict'] = dict(**results['img_meta_dict'])
 
         results['img'] = torch.from_numpy(results['img']).float().to(device)[None, None]
-        results['seg'] = torch.from_numpy(results['seg']).float().to(device)[None, None]
+        if results['seg'] is not None:
+            results['seg'] = torch.from_numpy(results['seg']).float().to(device)[None, None]
         return results
 
 

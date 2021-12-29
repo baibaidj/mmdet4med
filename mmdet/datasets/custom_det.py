@@ -98,6 +98,7 @@ class CustomDatasetDet(Dataset):
                                 'roi_fp':'_ins2cls.json'},
                  keys = ('img', 'seg'),
                  exclude_pids = None,
+                 include_pids = None, 
                  json_filename = 'dataset.json',
                  fn_spliter = ['_', 1],
                  label_map = {1: 0, 2:0, 3:0, 4:0},
@@ -119,6 +120,7 @@ class CustomDatasetDet(Dataset):
         self.keys = keys
         self.verbose = verbose
         self.exclude_pids = exclude_pids
+        self.include_pids = include_pids
         self.json_filename  = json_filename
         self.fn_spliter = fn_spliter
         self.label_map = label_map
@@ -183,6 +185,8 @@ class CustomDatasetDet(Dataset):
             if self.verbose and ix < 2: print('Check cid', cid)
             if self.exclude_pids and (cid in self.exclude_pids): 
                 print('Exclude ', cid)
+                continue
+            if self.include_pids and (cid not in self.include_pids):
                 continue
             this_holder = {'cid': cid}
             for k, suffix in key2suffix.items(): 

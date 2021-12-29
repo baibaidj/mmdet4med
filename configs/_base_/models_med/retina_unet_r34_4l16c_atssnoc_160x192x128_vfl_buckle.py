@@ -148,13 +148,13 @@ model = dict(
         pos_weight=1.0,
         debug=False),
     test_cfg=dict(
-        nms_pre=200,
+        nms_pre=300,
         # nms_pre_tiles = 1000, 
-        min_bbox_size=2,
-        score_thr=0.4,
+        min_bbox_size=1,
+        score_thr=0.25,
         nms=dict(type='nms', iou_threshold=0.1), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
-        max_per_img=32, 
+        max_per_img=48, 
         mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 8,
         blend_mode = 'gaussian' , overlap=0.4, sigma_scale = 0.125, # 'gaussian or constant
         padding_mode='constant' )

@@ -112,8 +112,8 @@ class TOODHead3D(AnchorHead3D):
             self.initial_assigner : ATSSAssigner3D = build_assigner(self.train_cfg.initial_assigner)
             self.initial_loss_cls = build_loss(initial_loss_cls)
             self.assigner : TaskAlignedAssigner3D = build_assigner(self.train_cfg.assigner)
-            self.alpha = self.train_cfg.alpha
-            self.beta = self.train_cfg.beta
+            # self.alpha = self.train_cfg.alpha
+            # self.beta = self.train_cfg.beta
             # SSD sampling=False so use PseudoSampler
             # sampler_cfg = dict(type='PseudoSampler')
             # self.sampler = build_sampler(sampler_cfg, context=self)
@@ -237,8 +237,7 @@ class TOODHead3D(AnchorHead3D):
         # print_tensor('\n[ToodHead] input feat', x)
         # print_tensor('[ToodHead] interative features', feat)
         # task decomposition with torch.cuda.amp.autocast(enabled=True):
-        with torch.cuda.amp.autocast(enabled = False):
-            avg_feat = F.adaptive_avg_pool3d(feat, (1, 1, 1))
+        avg_feat = F.adaptive_avg_pool3d(feat, (1, 1, 1))
         cls_feat = self.cls_decomp(feat, avg_feat)
         reg_feat = self.reg_decomp(feat, avg_feat)
 
@@ -246,7 +245,9 @@ class TOODHead3D(AnchorHead3D):
         cls_logits = self.tood_cls(cls_feat)
         cls_prob = F.relu(self.cls_prob_conv1(feat))
         cls_prob = self.cls_prob_conv2(cls_prob)
-        cls_score = (cls_logits.sigmoid() * cls_prob.sigmoid()).sqrt()
+        with torch.cuda.amp.autocast(enabled = False):
+            cls_score = torch.clamp(cls_logits.float().sigmoid() * 
+                                    cls_prob.float().sigmoid(), min=1e-8).sqrt()
 
         # reg prediction and alignment
         if self.anchor_type == 'anchor_free':
@@ -306,7 +307,7 @@ class TOODHead3D(AnchorHead3D):
         """
         # it is an equivalent implementation of bilinear interpolation
         b, c, h, w, d = feat.shape
-        weight = feat.new_ones(c, 1, 1, 1, 1).float()
+        weight = feat.new_ones(c, 1, 1, 1, 1).float() # c = num_anchor*6
         if self.dcn_bias.device != feat.device: 
             self.dcn_bias = self.dcn_bias.to(feat.device).float()
         # ipdb.set_trace()
@@ -648,17 +649,17 @@ class TOODHead3D(AnchorHead3D):
 
             scores = cls_score.permute(1, 2, 3, 0).reshape(-1, self.cls_out_channels)
             bbox_pred = bbox_pred.permute(1, 2, 3, 0).reshape(-1, 6) * stride[0]
-
+            # print_tensor(f'[Tood] test stride {stride}', scores)
             nms_pre = cfg.get('nms_pre', -1)
             if nms_pre > 0 and scores.shape[0] > nms_pre:
                 max_scores, _ = scores.max(dim=1)
                 _, topk_inds = max_scores.topk(nms_pre)
                 bbox_pred = bbox_pred[topk_inds, :]
                 scores = scores[topk_inds, :]
-
+            
             # NOTE: limiting the bbox boundary may not be necessary
-            bboxes = clip_boxes_to_image(bbox_pred, max_shape=img_shape)
-            mlvl_bboxes.append(bboxes)
+            # bboxes = clip_boxes_to_image(bbox_pred, img_shape = img_shape)
+            mlvl_bboxes.append(bbox_pred)
             mlvl_scores.append(scores)
 
         mlvl_bboxes = torch.cat(mlvl_bboxes)
@@ -859,7 +860,7 @@ class TOODHead3D(AnchorHead3D):
             assign_result = self.assigner.assign(cls_scores, bbox_preds,
                                              anchors, num_level_anchors_inside,
                                              gt_bboxes, gt_bboxes_ignore,
-                                             gt_labels, self.alpha, self.beta)
+                                             gt_labels)
             assign_ious = assign_result.max_overlaps
             assign_metrics = assign_result.assign_metrics
 

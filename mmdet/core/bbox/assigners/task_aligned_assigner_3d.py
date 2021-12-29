@@ -4,6 +4,8 @@ from ..builder import BBOX_ASSIGNERS
 from ..iou_calculators import build_iou_calculator
 from .assign_result import TaskAlignedAssignResult
 from .base_assigner import BaseAssigner
+from mmdet.utils import print_tensor
+import ipdb
 
 
 @BBOX_ASSIGNERS.register_module()
@@ -18,15 +20,22 @@ class TaskAlignedAssigner3D(BaseAssigner):
 
     Args:
         topk (float): number of bbox selected in each level
+        alpha (float):  weight for classification scores, default to 1
+        beta (float): weight for IoU values, default to 6
     """
 
     def __init__(self,
                  topk,
                  iou_calculator=dict(type='BboxOverlaps3D'),
-                 ignore_iof_thr=-1, **kwargs):
+                 ignore_iof_thr=-1, 
+                 alpha=1,
+                 beta=6, 
+                 **kwargs):
         self.topk = topk
         self.iou_calculator = build_iou_calculator(iou_calculator)
         self.ignore_iof_thr = ignore_iof_thr
+        self.alpha = alpha
+        self.beta = beta
 
     def anchor_center(self, anchors):
         """Get anchor centers from anchors.
@@ -49,9 +58,7 @@ class TaskAlignedAssigner3D(BaseAssigner):
                num_level_bboxes,
                gt_bboxes,
                gt_bboxes_ignore=None,
-               gt_labels=None,
-               alpha=1,
-               beta=6):
+               gt_labels=None):
         """Assign gt to bboxes.
 
         The assignment is done in following steps
@@ -81,8 +88,10 @@ class TaskAlignedAssigner3D(BaseAssigner):
         # compute alignment metric between all bbox and gt
         overlaps_nxg = self.iou_calculator(decode_bboxes, gt_bboxes).detach()
         bbox_scores = scores[:, gt_labels].detach()
-        alignment_metrics_nxg = bbox_scores ** alpha * overlaps_nxg ** beta
-
+        alignment_metrics_nxg = bbox_scores ** self.alpha * overlaps_nxg ** self.beta
+        # print_tensor('overlap nxg', overlaps_nxg)
+        # print_tensor('bbox score ', bbox_scores)
+        # print_tensor('align metric', alignment_metrics_nxg)
         # assign 0 by default
         assigned_gt_inds = alignment_metrics_nxg.new_full((num_bboxes, ),
                                              0,
@@ -138,11 +147,9 @@ class TaskAlignedAssigner3D(BaseAssigner):
         overlaps_inf_nxg = overlaps_inf_gxn.view(num_gt, -1).t() # gn > gxn> nxg
 
         max_overlaps_nx1, argmax_overlaps_nx1 = overlaps_inf_nxg.max(dim=1)
-        assigned_gt_inds[
-            max_overlaps_nx1 != -INF] = argmax_overlaps_nx1[max_overlaps_nx1 != -INF] + 1
-        assign_metrics[
-            max_overlaps_nx1 != -INF] = alignment_metrics_nxg[
-                    max_overlaps_nx1 != -INF, argmax_overlaps_nx1[max_overlaps_nx1 != -INF]]
+        fg_mask = max_overlaps_nx1 != -INF
+        assigned_gt_inds[fg_mask] = argmax_overlaps_nx1[fg_mask] + 1
+        assign_metrics[fg_mask] = alignment_metrics_nxg[fg_mask, argmax_overlaps_nx1[fg_mask]]
 
         # In assigned_gt_inds, 0 stands for background, so the gt index has to start from 1. 
         if gt_labels is not None:
