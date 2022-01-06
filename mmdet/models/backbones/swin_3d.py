@@ -603,6 +603,9 @@ class SwinTransformer3D(BaseModule):
         super(SwinTransformer3D, self).__init__(init_cfg=init_cfg)
 
         num_layers = len(depths)
+        self.in_channels = in_channels
+        self.patch_size = patch_size
+        self.strides = strides
         self.out_indices = out_indices
         self.use_abs_pos_embed = use_abs_pos_embed
 
@@ -803,3 +806,50 @@ class SwinTransformer3D(BaseModule):
                 outs.append(out)
 
         return outs
+
+
+class SwinTransformer3D4SimMIM(SwinTransformer3D):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        assert self.num_classes == 0
+        # self.input_size = input_size
+        # self.output_size = [s//2**5 for i, s in enumerate(input_size)]
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, self.num_features[0]))
+
+        trunc_normal_init(self.mask_token, mean=0., std=.02)
+        # self.patch_size = 0
+
+    def forward(self, x, mask):
+        x, hw_shape = self.patch_embed(x)
+
+        assert mask is not None
+        B, L, _ = x.shape
+
+        # not masking the original image, but masking the embedding features !! 
+        # Also, create learnable parameters to weight the masked region 
+        mask_tokens = self.mask_token.expand(B, L, -1)
+        w = mask.flatten(1).unsqueeze(-1).type_as(mask_tokens) # 
+        x = x * (1. - w) + mask_tokens * w
+
+        if self.use_abs_pos_embed:
+            x = x + self.absolute_pos_embed
+
+        x = self.drop_after_pos(x)
+
+        outs  = []
+        for i, stage in enumerate(self.stages):
+            x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
+            if i in self.out_indices:
+                norm_layer = getattr(self, f'norm{i}')
+                out = norm_layer(out)
+                out = out.view(-1, *out_hw_shape,
+                               self.num_features[i]).permute(0, 4, 1,
+                                                             2, 3).contiguous()
+                # print_tensor(f'[Swin] level {i} out', out)
+                outs.append(out)
+        return outs
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return super().no_weight_decay() | {'mask_token'}
