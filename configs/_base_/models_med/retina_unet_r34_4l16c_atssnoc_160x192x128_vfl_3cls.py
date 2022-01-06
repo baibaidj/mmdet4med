@@ -43,7 +43,10 @@ model = dict(
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
-        num_outs=5),
+        num_outs=5, 
+        upsample_cfg=dict(type='deconv3d', mode=None, use_norm = False, 
+                    kernel_size = (2,2,2), stride = (2,2,2)),
+        ),
     bbox_head=dict(
         type='ATSSHead3DNOC', #verbose = True, 
         num_classes=num_classes,
@@ -155,8 +158,8 @@ model = dict(
         nms=dict(type='nms', iou_threshold=0.1), # 
         # https://github.com/MIC-DKFZ/nnDetection/blob/7246044d8824f7b3f6c243db054b61420212ad05/nndet/ptmodule/retinaunet/base.py#L419
         max_per_img=32, 
-        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 6,
-        blend_mode = 'gaussian' , overlap=0.5, sigma_scale = 0.125, # 'gaussian or constant
+        mode='slide', roi_size = {{ _base_.patch_size }}, sw_batch_size = 8,
+        blend_mode = 'gaussian' , overlap=0.4, sigma_scale = 0.125, # 'gaussian or constant
         padding_mode='constant' )
 )
 

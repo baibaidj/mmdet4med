@@ -77,7 +77,7 @@ class FPN3D(BaseModule):
                  conv_cfg=None,
                  norm_cfg=None,
                  act_cfg=None, verbose = False, 
-                 upsample_cfg=dict(type='deconv3d', mode=None, 
+                 upsample_cfg=dict(type='deconv3d', mode=None, use_norm = False, 
                                     kernel_size = (2,2,2), stride = (2,2,2) ),
                  init_cfg=dict(
                      type='Xavier', layer='Conv3d', distribution='uniform'), 
@@ -93,6 +93,7 @@ class FPN3D(BaseModule):
         self.no_norm_on_lateral = no_norm_on_lateral
         self.fp16_enabled = False
         self.upsample_mode = upsample_cfg.pop('mode', None)
+        self.upsample_use_norm = upsample_cfg.pop('use_norm', False)
         self.deconv_cfg = upsample_cfg.copy()
         self.min_out_channels = min_out_channels
         if end_level == -1:
@@ -114,7 +115,7 @@ class FPN3D(BaseModule):
             self.add_extra_convs = 'on_input'
 
         self.out_channels = self.compute_output_channels(is_double_chn)
-        self.up_ops = self.build_upsample_layers(conv_cfg, norm_cfg = None)
+        self.up_ops = self.build_upsample_layers(conv_cfg, norm_cfg = norm_cfg if self.upsample_use_norm else None)
         print(f'[FPN3D] input channels {self.in_channels} out channels {self.out_channels} upmode {self.up_ops[-1]}')
         self.lateral_convs = nn.ModuleList()
         self.fpn_convs = nn.ModuleList()

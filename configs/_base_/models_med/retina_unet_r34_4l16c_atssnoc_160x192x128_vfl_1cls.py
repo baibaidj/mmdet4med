@@ -43,7 +43,10 @@ model = dict(
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
-        num_outs=5),
+        num_outs=5, 
+        upsample_cfg=dict(type='deconv3d', mode=None, use_norm = False, 
+                    kernel_size = (2,2,2), stride = (2,2,2)),
+        ),
     bbox_head=dict(
         type='ATSSHead3DNOC', #verbose = True, 
         num_classes=num_classes,
