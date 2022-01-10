@@ -48,7 +48,7 @@ class BboxSegEnsembler1Case(object):
             self.seg_countmap_4d = torch.zeros((self.num_classes, ) + self.image_size, 
                                         dtype=torch.float, device = self.device)
 
-    def _update_seg_output_1tile(self, seg_logit_tile, slice_tile):
+    def _update_seg_output_1tile(self, seg_logit_tile, slice_tile, interpolate_mode = 'trilinear'):
         """[summary]
 
         Args:
@@ -62,7 +62,7 @@ class BboxSegEnsembler1Case(object):
         if seg_logit_tile.shape[-3:] != self.tile_weight_map_3d.shape:
             # print_tensor('[TileSeg] input ', seg_logit_tile)
             seg_logit_tile = resize_3d(seg_logit_tile[None], self.patch_size, 
-                                        mode='trilinear', 
+                                        mode=interpolate_mode, 
                                         align_corners=False, 
                                         warning=False)[0]
             # print_tensor('[TileSeg] resize ', seg_logit_tile)
@@ -72,7 +72,7 @@ class BboxSegEnsembler1Case(object):
         # print_tensor(f'[BuildTile] segout', self.seg_output_4d)
         # print_tensor(f'[BuildTile] seg count', self.seg_countmap_4d)
         
-    def update_seg_output_batch(self, seg_logit_tiles, slice_tiles):
+    def update_seg_output_batch(self, seg_logit_tiles, slice_tiles, interpolate_mode = 'trilinear'):
         """
         Args:
             seg_logit_tiles (5d_tensor): bchwd, b for number of windows
@@ -90,7 +90,9 @@ class BboxSegEnsembler1Case(object):
         for seg, sli in zip(seg_logit_tiles, slice_tiles):
             # print_tensor(f'[SegFill] seg tile slice {sli}', seg)
             # print_tensor(f'[SegFill] weight map', self.tile_weight_map_3d)
-            self._update_seg_output_1tile(seg, sli[-4:])
+            self._update_seg_output_1tile(seg, sli[-4:], interpolate_mode)
+    
+
 
     def finalize_segmap(self, final_slicing = None):
         # final_slicing : list[slice() ] len = 5
@@ -320,3 +322,26 @@ class ShapeHolder:
         while len(self.final_slicing) < len(self.ready_shape_safe):
             self.final_slicing.insert(0, slice(None))
         
+
+
+def _get_scan_interval(
+    image_size, roi_size, num_spatial_dims: int, overlap: float):
+    """
+    Compute scan interval according to the image size, roi size and overlap.
+    Scan interval will be `int((1 - overlap) * roi_size)`, if interval is 0,
+    use 1 instead to make sure sliding window works.
+
+    """
+    if len(image_size) != num_spatial_dims:
+        raise ValueError("image coord different from spatial dims.")
+    if len(roi_size) != num_spatial_dims:
+        raise ValueError("roi coord different from spatial dims.")
+
+    scan_interval = []
+    for i in range(num_spatial_dims):
+        if roi_size[i] == image_size[i]:
+            scan_interval.append(int(roi_size[i]))
+        else:
+            interval = int(roi_size[i] * (1 - overlap))
+            scan_interval.append(interval if interval > 0 else 1)
+    return tuple(scan_interval)

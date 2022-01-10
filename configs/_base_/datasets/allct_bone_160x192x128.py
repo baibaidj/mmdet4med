@@ -78,6 +78,7 @@ val_sample_rate = 0.30
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
     workers_per_gpu= 6, 
+    persistent_workers = True,
     train=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = train_sample_rate, split='train',

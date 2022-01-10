@@ -13,10 +13,10 @@
   <img src="https://user-images.githubusercontent.com/12907710/137271636-56ba1cd2-b110-4812-8221-b4c120320aa9.png"/>
 
 
-[📘Documentation](https://mmdetection.readthedocs.io/en/v2.17.0/) |
-[🛠️Installation](https://mmdetection.readthedocs.io/en/v2.17.0/get_started.html) |
-[👀Model Zoo](https://mmdetection.readthedocs.io/zh_CN/v2.17.0/model_zoo.html) |
-[🆕Update News](https://mmdetection.readthedocs.io/en/v2.17.0/changelog.html) |
+[📘Documentation](https://mmdetection.readthedocs.io/en/v2.20.0/) |
+[🛠️Installation](https://mmdetection.readthedocs.io/en/v2.20.0/get_started.html) |
+[👀Model Zoo](https://mmdetection.readthedocs.io/en/v2.20.0/model_zoo.html) |
+[🆕Update News](https://mmdetection.readthedocs.io/en/v2.20.0/changelog.html) |
 [🚀Ongoing Projects](https://github.com/open-mmlab/mmdetection/projects) |
 [🤔Reporting Issues](https://github.com/open-mmlab/mmdetection/issues/new/choose)
 
@@ -29,7 +29,7 @@ English | [简体中文](README_zh-CN.md)
 MMDetection is an open source object detection toolbox based on PyTorch. It is
 a part of the [OpenMMLab](https://openmmlab.com/) project.
 
-The master branch works with **PyTorch 1.3+**.
+The master branch works with **PyTorch 1.5+**.
 
 <details open>
 <summary>Major features</summary>
@@ -60,18 +60,18 @@ This project is released under the [Apache 2.0 license](LICENSE).
 
 ## Changelog
 
-**2.17.0** was released in 28/09/2021:
-- Support PVT, PVTv2 and SOLO.
-- Support large scale jittering and New Mask R-CNN baselines.
-- Speed up YOLOv3 inference.
+**2.20.0** was released in 27/12/2021:
 
-Please refer to [changelog.md](docs/changelog.md) for details and release history.
+- Support [TOOD](configs/tood/README.md): Task-aligned One-stage Object Detection (ICCV 2021 Oral)
+- Support resuming from the latest checkpoint automatically
 
-For compatibility changes between different versions of MMDetection, please refer to [compatibility.md](docs/compatibility.md).
+Please refer to [changelog.md](docs/en/changelog.md) for details and release history.
+
+For compatibility changes between different versions of MMDetection, please refer to [compatibility.md](docs/en/compatibility.md).
 
 ## Benchmark and model zoo
 
-Results and models are available in the [model zoo](docs/model_zoo.md).
+Results and models are available in the [model zoo](docs/en/model_zoo.md).
 
 
 <details open>
@@ -148,21 +148,22 @@ Results and models are available in the [model zoo](docs/model_zoo.md).
 - [x] [YOLOX (ArXiv'2021)](configs/yolox/README.md)
 - [x] [SOLO (ECCV'2020)](configs/solo/README.md)
 - [x] [QueryInst (ICCV'2021)](configs/queryinst/README.md)
+- [x] [TOOD (ICCV'2021)](configs/tood/README.md)
 </details>
 
-Some other methods are also supported in [projects using MMDetection](./docs/projects.md).
+Some other methods are also supported in [projects using MMDetection](./docs/en/projects.md).
 
 ## Installation
 
-Please refer to [get_started.md](docs/get_started.md) for installation.
+Please refer to [get_started.md](docs/en/get_started.md) for installation.
 
 ## Getting Started
 
-Please see [get_started.md](docs/get_started.md) for the basic usage of MMDetection.
-We provide [colab tutorial](demo/MMDet_Tutorial.ipynb), and full guidance for quick run [with existing dataset](docs/1_exist_data_model.md) and [with new dataset](docs/2_new_data_model.md) for beginners.
-There are also tutorials for [finetuning models](docs/tutorials/finetune.md), [adding new dataset](docs/tutorials/customize_dataset.md), [designing data pipeline](docs/tutorials/data_pipeline.md), [customizing models](docs/tutorials/customize_models.md), [customizing runtime settings](docs/tutorials/customize_runtime.md) and [useful tools](docs/useful_tools.md).
+Please see [get_started.md](docs/en/get_started.md) for the basic usage of MMDetection.
+We provide [colab tutorial](demo/MMDet_Tutorial.ipynb), and full guidance for quick run [with existing dataset](docs/en/1_exist_data_model.md) and [with new dataset](docs/en/2_new_data_model.md) for beginners.
+There are also tutorials for [finetuning models](docs/en/tutorials/finetune.md), [adding new dataset](docs/en/tutorials/customize_dataset.md), [designing data pipeline](docs/en/tutorials/data_pipeline.md), [customizing models](docs/en/tutorials/customize_models.md), [customizing runtime settings](docs/en/tutorials/customize_runtime.md) and [useful tools](docs/en/useful_tools.md).
 
-Please refer to [FAQ](docs/faq.md) for frequently asked questions.
+Please refer to [FAQ](docs/en/faq.md) for frequently asked questions.
 
 ## Contributing
 
@@ -203,5 +204,10 @@ If you use this toolbox or benchmark in your research, please cite this project.
 - [MMTracking](https://github.com/open-mmlab/mmtracking): OpenMMLab video perception toolbox and benchmark.
 - [MMPose](https://github.com/open-mmlab/mmpose): OpenMMLab pose estimation toolbox and benchmark.
 - [MMEditing](https://github.com/open-mmlab/mmediting): OpenMMLab image and video editing toolbox.
-- [MMOCR](https://github.com/open-mmlab/mmocr): A Comprehensive Toolbox for Text Detection, Recognition and Understanding.
+- [MMOCR](https://github.com/open-mmlab/mmocr): A comprehensive toolbox for text detection, recognition and understanding.
 - [MMGeneration](https://github.com/open-mmlab/mmgeneration): OpenMMLab image and video generative models toolbox.
+- [MMFlow](https://github.com/open-mmlab/mmflow): OpenMMLab optical flow toolbox and benchmark.
+- [MMFewShot](https://github.com/open-mmlab/mmfewshot): OpenMMLab fewshot learning toolbox and benchmark.
+- [MMHuman3D](https://github.com/open-mmlab/mmhuman3d): OpenMMLab 3D human parametric model toolbox and benchmark.
+- [MMSelfSup](https://github.com/open-mmlab/mmselfsup): OpenMMLab self-supervised learning toolbox and benchmark.
+- [MMRazor](https://github.com/open-mmlab/mmrazor): OpenMMLab Model Compression Toolbox and Benchmark.

@@ -577,6 +577,7 @@ class SwinTransformer3D(BaseModule):
                  pretrained=None,
                  convert_weights=False,
                  frozen_stages=-1,
+                 verbose = False,
                  init_cfg=None):
         self.convert_weights = convert_weights
         self.frozen_stages = frozen_stages
@@ -608,7 +609,7 @@ class SwinTransformer3D(BaseModule):
         self.strides = strides
         self.out_indices = out_indices
         self.use_abs_pos_embed = use_abs_pos_embed
-
+        self.verbose = verbose
         # assert strides[0] == patch_size, 'Use non-overlapping patch embed.'
 
         self.patch_embed = PatchEmbed3DNN(
@@ -791,28 +792,28 @@ class SwinTransformer3D(BaseModule):
         if self.use_abs_pos_embed:
             x = x + self.absolute_pos_embed
         x = self.drop_after_pos(x)
-
+        if self.verbose: print_tensor('[Swin] patch embed', x)
         outs = []
         for i, stage in enumerate(self.stages):
             x, hw_shape, out, out_hw_shape = stage(x, hw_shape)
-            # print(f'layer {i} out {out_hw_shape}', out.shape)
+            # if self.verbose: print(f'layer {i} out {out_hw_shape}', out.shape)
             if i in self.out_indices:
                 norm_layer = getattr(self, f'norm{i}')
                 out = norm_layer(out)
                 out = out.view(-1, *out_hw_shape,
                                self.num_features[i]).permute(0, 4, 1,
                                                              2, 3).contiguous()
-                # print_tensor(f'[Swin] level {i} out', out)
+                if self.verbose: print_tensor(f'[Swin] level {i} out', out)
                 outs.append(out)
 
         return outs
 
-
+@BACKBONES.register_module()
 class SwinTransformer3D4SimMIM(SwinTransformer3D):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        assert self.num_classes == 0
+        # assert self.num_classes == 0
         # self.input_size = input_size
         # self.output_size = [s//2**5 for i, s in enumerate(input_size)]
         self.mask_token = nn.Parameter(torch.zeros(1, 1, self.num_features[0]))
@@ -829,7 +830,7 @@ class SwinTransformer3D4SimMIM(SwinTransformer3D):
         # not masking the original image, but masking the embedding features !! 
         # Also, create learnable parameters to weight the masked region 
         mask_tokens = self.mask_token.expand(B, L, -1)
-        w = mask.flatten(1).unsqueeze(-1).type_as(mask_tokens) # 
+        w = mask.flatten(1).unsqueeze(-1).type_as(mask_tokens) # B, L, 1
         x = x * (1. - w) + mask_tokens * w
 
         if self.use_abs_pos_embed:
@@ -846,7 +847,7 @@ class SwinTransformer3D4SimMIM(SwinTransformer3D):
                 out = out.view(-1, *out_hw_shape,
                                self.num_features[i]).permute(0, 4, 1,
                                                              2, 3).contiguous()
-                # print_tensor(f'[Swin] level {i} out', out)
+                # print_tensor(f'[Swin] level {i} out', out) 
                 outs.append(out)
         return outs
 

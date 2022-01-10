@@ -49,7 +49,7 @@ class BaseDecodeHeadMed(BaseDecodeHead):
         if kwargs['num_classes'] is None: kwargs['num_classes'] = 1
         super(BaseDecodeHeadMed, self).__init__(*args, **kwargs)
 
-        self.cls_out_channels = max(actual_num_classes, 2)
+        self.cls_out_channels = actual_num_classes # max(actual_num_classes, 2)
 
         self.num_classes = actual_num_classes
         self.is_3d = False if self.conv_cfg is None else (True if '3d' in self.conv_cfg.get('type', '').lower() else False)
@@ -60,14 +60,6 @@ class BaseDecodeHeadMed(BaseDecodeHead):
         self.final_channel = final_channel
         self.conv_final = nn.Conv3d if self.is_3d else nn.Conv2d
 
-        # last layer for seg
-        # if self.num_slice2pred > 1:
-            # conv_seg_list = []
-            # for _ in range(self.num_slice2pred):
-        #         conv_seg_i = self.conv_final(self.final_channel, self.num_classes, kernel_size=1)
-        #         conv_seg_list.append(conv_seg_i)
-        #     self.conv_seg = nn.ModuleList(conv_seg_list)
-        # else:
         if self.num_classes is None: 
             self.conv_seg = nn.Identity()
         else:
