@@ -82,8 +82,6 @@ class SingleStageDetector3D(BaseDetector3D):
         self.padding_mode = self.test_cfg.pop('padding_mode', 'constant')
         self.sigma_scale = self.test_cfg.pop('sigma_scale', 0.125)
 
-        # for submodule in self.neck.modules():
-        #     submodule.register_forward_hook(nan_hook)
     def extract_feat(self, img):
         """Directly extract features from the backbone+neck."""
         x = self.backbone(img)

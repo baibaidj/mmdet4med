@@ -36,8 +36,8 @@ model = dict(
 custom_hooks = [dict(type="HeadHook")]
 
 find_unused_parameters=True
-load_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_tood_1222/latest.pth'
-resume_from =  None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_tood_1130/latest.pth' 
+load_from = None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atss_tood_upnorm_1231/latest.pth'
+resume_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atss_tood_upnorm_1231/latest.pth' 
 
 # optimizer
 optimizer = dict(

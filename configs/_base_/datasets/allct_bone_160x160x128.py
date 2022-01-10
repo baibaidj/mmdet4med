@@ -21,7 +21,7 @@ train_pipeline = [
     dict(type = 'RandCropByLabelBBoxRegiond', keys=keys,
                                         label_key='img',
                                         spatial_size= ext_patch_size, 
-                                        num_samples=2,
+                                        num_samples=1,
                                         pos=2, neg=1,
                                         whole_image_as_bg=1,
                                         percentile_00_5=-900,
@@ -78,6 +78,7 @@ val_sample_rate = 0.30
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
     workers_per_gpu= 6, 
+    persistent_workers = True,
     train=dict(
         type=dataset_type, img_dir=img_dir, 
         sample_rate = train_sample_rate, split='train',
@@ -102,7 +103,7 @@ gpu_aug_pipelines = [
         # # data in torch tensor, not necessarily on gpu
         dict(type = 'Rand3DElasticGPUd', keys=keys[:core_key_num],
             sigma_range=(9, 13), # larger sigma mean smoother offset with smaller values
-            magnitude_range=(64, 384), # s=8, (-0.008, 0.006) * 256 > (2.04, 1.53)
+            magnitude_range=(64, 256), # s=8, (-0.008, 0.006) * 256 > (2.04, 1.53)
             spatial_size=patch_size, 
             rotate_range=[20] * 3, #rotate_angle * np.pi / 180.0
             translate_range = [16] * 3, 

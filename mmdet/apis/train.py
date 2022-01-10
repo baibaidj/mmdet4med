@@ -14,10 +14,6 @@ from mmcv.runner import (DistSamplerSeedHook, EpochBasedRunner,
 from mmdet.core import DistEvalHook, EvalHook
 from mmdet.datasets import (build_dataloader, build_dataset,
                             replace_ImageToTensor)
-<<<<<<< HEAD
-from mmdet.utils import get_root_logger
-import pdb
-=======
 from mmdet.utils import find_latest_checkpoint, get_root_logger
 
 
@@ -52,7 +48,6 @@ def init_random_seed(seed=None, device='cuda'):
         random_num = torch.tensor(0, dtype=torch.int32, device=device)
     dist.broadcast(random_num, src=0)
     return random_num.item()
->>>>>>> ff9bc39913cb3ff5dde79d3933add7dc2561bab7
 
 
 def set_random_seed(seed, deterministic=False):
@@ -109,15 +104,10 @@ def train_detector(model,
             # `num_gpus` will be ignored if distributed
             num_gpus=len(cfg.gpu_ids),
             dist=distributed,
-<<<<<<< HEAD
-            seed=cfg.seed, persistent_workers = True,
-            runner_type=runner_type) for ds in dataset
-=======
             seed=cfg.seed,
             runner_type=runner_type,
             persistent_workers=cfg.data.get('persistent_workers', False))
         for ds in dataset
->>>>>>> ff9bc39913cb3ff5dde79d3933add7dc2561bab7
     ]
 
     # put model on gpus

@@ -16,7 +16,7 @@ data = dict(samples_per_gpu = 3, workers_per_gpu= 9,
 model = dict(
         neck = dict(upsample_cfg=dict(use_norm = True)),
         bbox_head = dict(verbose = False, use_vfl = True, 
-                        loss_cls_vfl=dict(alpha=0.75, loss_weight=8.0),
+                        loss_cls_vfl=dict(alpha=0.75, loss_weight=4.0),
                         loss_bbox=dict(loss_weight=0.4), 
                         anchor_generator=dict(octave_base_scale=2, scales_per_octave=2, verbose = False)
                         ), 
@@ -32,8 +32,8 @@ model = dict(
     )
 
 find_unused_parameters=True
-load_from =  'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atss_vfl_upnorm_1231/latest.pth'
-resume_from =  None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1222/latest.pth' 
+load_from = None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atss_vfl_upnorm_1231/latest.pth'
+resume_from = 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atss_vfl_upnorm_1231/latest.pth' 
 
 # optimizer
 optimizer = dict(

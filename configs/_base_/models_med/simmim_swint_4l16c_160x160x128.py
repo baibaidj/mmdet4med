@@ -12,11 +12,11 @@ fpn_channel = stem_channels * (2**3)
 model = dict(
     type='SimMIM',
     backbone=dict(
-        type='SwinTransformer3D',
+        type='SwinTransformer3D4SimMIM',
         embed_dims= stem_channels * 2,
         in_channels=1,
         depths=[2, 2, 4, 2],
-        strides=(4, 2, 2, 2),
+        strides=(4, 2, 2, 2), 
         num_heads=[4, 8, 16, 32],
         window_size=7,
         mlp_ratio=4,
@@ -27,24 +27,24 @@ model = dict(
         drop_path_rate=0.2,
         patch_norm=True,
         out_indices=(0, 1, 2, 3),
-        with_cp=False,
+        with_cp=False, 
         ),
     neck=dict(
         type='FPN3D',
-        in_channels=[stem_channels * (2**c) for c in range(4)], 
+        in_channels=[stem_channels * (2**(c+ 1) ) for c in range(4)], 
         fixed_out_channels = fpn_channel,
         start_level=0,
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
         num_outs=4, 
-        upsample_cfg=dict(type='deconv3d', mode=None, use_norm = False, 
+        upsample_cfg=dict(type='deconv3d', mode=None, use_norm = True, 
                     kernel_size = (2,2,2), stride = (2,2,2)),
         ),
 
     seg_head = dict(
         type='FCNHead3D', # verbose = True, 
-        in_channels= stem_channels * 2,
+        in_channels= fpn_channel,
         in_index=0,
         channels= stem_channels,
         # input_transform='resize_concat',
@@ -59,6 +59,12 @@ model = dict(
         gt_index = 0),
 
     gpu_aug_pipelines = {{ _base_.gpu_aug_pipelines }},
+    mask_cfg = dict(input_size=(160, 160, 128), mask_patch_size=32,
+                                 stem_stride=4, mask_ratio=0.6), 
+                                 
+    test_cfg=dict(roi_size = {{ _base_.patch_size }}, sw_batch_size = 6,
+        blend_mode = 'constant' , overlap=0.05, sigma_scale = 0.125, # 'gaussian or constant
+        padding_mode='constant' )
 
 )
 
