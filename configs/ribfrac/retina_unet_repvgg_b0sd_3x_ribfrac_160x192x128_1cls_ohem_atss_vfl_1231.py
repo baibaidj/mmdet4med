@@ -5,8 +5,8 @@ _base_ = [
 ]
 
 img_dir = 'data/Task113_RibFrac_KYRe'
-key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 'roi_fp':'_ins2cls.json'}
-data = dict(samples_per_gpu = 3, workers_per_gpu= 9, 
+key2suffix = {'img_fp': '_image.nii.gz',  'seg_fp': '_instance.nii.gz', 'roi_fp':'_ins2cls.json'}
+data = dict(samples_per_gpu = 2, workers_per_gpu= 6, 
             train=dict(sample_rate = 1.0, json_filename = 'dataset_1231.json', img_dir=img_dir, key2suffix = key2suffix), 
             val=dict(sample_rate = 0.5, json_filename = 'dataset_1231.json', img_dir=img_dir, key2suffix = key2suffix), 
             test= dict(sample_rate = 0.1, json_filename = 'dataset_1231.json',img_dir=img_dir, key2suffix = key2suffix))
@@ -35,7 +35,7 @@ model = dict(
     )
 
 find_unused_parameters=True
-load_from = 'work_dirs/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atss_1231/latest.pth'
+load_from = 'work_dirs/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atss_vfl_1231/publish-0b214710.pth'
 resume_from = None # 'work_dirs/retina_unet_repvgg_b0sd_3x_ribfrac_160x192x128_1cls_ohem_atss_vfl_1231/latest.pth' 
 
 # optimizer
@@ -62,7 +62,7 @@ lr_config = dict(_delete_=True,
                  warmup='linear', warmup_iters=500,  
                  )
 
-runner = dict(type='EpochBasedRunner', max_epochs=24)
+runner = dict(type='EpochBasedRunner', max_epochs=12)
 checkpoint_config = dict(interval=1, max_keep_ckpts = 4)
 # yapf:disable
 log_config = dict(interval=20, hooks=[

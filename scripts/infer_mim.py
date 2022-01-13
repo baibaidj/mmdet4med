@@ -1,6 +1,10 @@
 
 import pandas as pd
 import os, sys, argparse
+mmseg_rt = '/home/dejuns/git/mmseg4med'
+monai_rt = '/home/dejuns/git/MONAI'
+if mmseg_rt in sys.path: sys.path.remove(mmseg_rt)
+if monai_rt in sys.path: sys.path.remove(monai_rt)
 
 import SimpleITK, json
 from evaluate_det_result import roi_info_mask
@@ -10,7 +14,6 @@ from mmdet.datasets.transform4med.io4med import *
 import cc3d, ipdb
 from mmcv import Timer
 from mmcv.runner import wrap_fp16_model
-# CLASSES = ('bg', 'hv', 'pv')
 
 def main(cfg, 
         nii_save_dir = '',  
@@ -58,8 +61,10 @@ def main(cfg,
         cid_infos['image_3d'] = img_3d
         cid_infos['affine'] = affine_matrix_i
         timer = Timer() 
-
-        reconstr_images, rand_masks = masked_image_modeling(model, img_3d, 
+        # 400-16 = 192*2 = 384
+        crop_slicer = tuple([slice(64, 448), slice(64 , 448), slice(None, None)])
+        img_3d_crop = img_3d[crop_slicer]
+        reconstr_images, rand_masks = masked_image_modeling(model, img_3d_crop, 
                                                         affine = affine_matrix_i,
                                                         rescale = True)
         if cfg.verbose: 
@@ -71,8 +76,13 @@ def main(cfg,
         duration  = timer.since_start()
         print(f'\t infer takes {duration:04f}')
 
-        IO4Nii.write(reconstr_images, nii_save_dir, f'{cid_true}_reconstruct', affine_matrix_i)
-        IO4Nii.write(rand_masks, nii_save_dir, f'{cid_true}_rand_masks', affine_matrix_i)
+        reconstr_img_origin = np.zeros_like(img_3d, dtype = np.float32)
+        reconstr_img_origin[crop_slicer] = reconstr_images
+        rand_mask_origin = np.zeros_like(img_3d, dtype = np.uint8)
+        rand_mask_origin[crop_slicer] = rand_masks
+        
+        IO4Nii.write(reconstr_img_origin, nii_save_dir, f'{cid_true}_reconstruct', affine_matrix_i)
+        IO4Nii.write(rand_mask_origin, nii_save_dir, f'{cid_true}_rand_masks', affine_matrix_i)
         pcount += 1
 
     # per_case_fp = osp.join(nii_save_dir, f'aug_inference_{fold_ix_str}.csv')
@@ -203,8 +213,8 @@ def sample_list2run(pid2niifp_map, run_pids = None,
 def load_list_detdj(data_folder:str,  mode = 'test ', 
                     json_filename = 'dataset.json', 
                     exclude_pids = None,
-                    key2suffix = {'image': '_image.nii', 
-                                  'label': '_instance.nii', 
+                    key2suffix = {'image': '_image.nii.gz', 
+                                  'label': '_instance.nii.gz', 
                                   'roi':'_ins2cls.json'}):
     """
 
@@ -294,7 +304,7 @@ if __name__ == '__main__':
     if cfg.label_rt:
         pid2niifp_map = load_list_scan(cfg.data_rt, label_rt=cfg.label_rt)
     else:
-        pid2niifp_map = load_list_detdj(cfg.data_rt, mode = cfg.split, json_filename = 'dataset.json')
+        pid2niifp_map = load_list_detdj(cfg.data_rt, mode = cfg.split, json_filename = 'dataset_1231.json')
     
     pid2niifp_map = sample_list2run(pid2niifp_map, run_pids=cfg.run_pids, 
                                             num_fold=cfg.num_fold, 
