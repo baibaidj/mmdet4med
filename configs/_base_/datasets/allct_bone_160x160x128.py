@@ -12,8 +12,8 @@ keys = ('img', ) #, seg='instance_seg'
 dtypes = ('float', ) # , 'float', 
 interp_modes = ("bilinear", )  #  , "bilinear", 'nearest'
 core_key_num = 1
-ext_patch_size = (256, 256, 224) # avoid artifacts such as boarder reflection
-patch_size = (160, 160, 128)  # [160 192 112] # xyz
+ext_patch_size = (240, 240, 200) # avoid artifacts such as boarder reflection
+patch_size = (192, 192, 160)  # [160 192 112] # xyz
 train_pipeline = [
     dict(type = 'LoadImaged', keys = keys, reader = 'NibabelReader'),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
     dict(type = 'AddChanneld', keys= keys), 

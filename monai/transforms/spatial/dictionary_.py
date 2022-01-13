@@ -527,7 +527,7 @@ class Rand3DElasticGPUd(Randomizable, MapTransform):
 
     def set_random_state(
         self, seed: Optional[int] = None, state: Optional[np.random.RandomState] = None
-    ) -> "Rand3DElasticd":
+    ):
         self.rand_affine_grid.set_random_state(seed, state)
         super().set_random_state(seed, state)
         return self
