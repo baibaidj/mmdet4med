@@ -28,5 +28,6 @@ __all__ = [
     'DetectoRS_ResNeXt', 'Darknet', 'ResNeSt', 'TridentResNet', 'CSPDarknet',
     'SwinTransformer', 'PyramidVisionTransformer', 'PyramidVisionTransformerV2', 
     'ResNet3dIso', 'RepVGG', 'PyramidVisionTransformer3DV2', 
-    'SwinTransformer3D', 'SwinTransformer3D4SimMIM', 'ConvNeXt3D', 'ConvNeXt3D4SimMIM'
+    'SwinTransformer3D', 'SwinTransformer3D4SimMIM', 
+    'ConvNeXt3D', 'ConvNeXt3D4SimMIM'
 ]

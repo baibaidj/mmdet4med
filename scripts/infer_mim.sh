@@ -3,7 +3,7 @@
 gpuix=$1 #${PORT:-29500}
 numfold=$2
 
-model_name=simmim_swint_4l16c_allct_bone_160x160x128_100eps_interp
+model_name=simmim_convnext_s32c32_allct_bone_160x160x128_100eps_interp
 weightfile='latest.pth' #best_mAP_epoch_14.pth #
 
 work_dirs=/home/dejuns/git/mmdet4med/work_dirs 
@@ -11,33 +11,33 @@ work_dirs=/home/dejuns/git/mmdet4med/work_dirs
 data_rt=/mnt/data4t/dejuns/ribfrac/raw_rename
 
 split=test
-setname=kyt30o40
+setname=ext100r66
 
 gpuix=${gpuix:-0}
 numfold=${numfold:-3}
 foldix=${FOLDIX:-0}
-# for (( foldix = 0; foldix < $numfold; foldix++ )) # $numfold
-# do {
-#     sleeptime=$(( 1*foldix + 0 ))
-#     gpuix_exe=$gpuix #$(( gpuix + $foldix))
-#     echo GPU$gpuix_exe-Foldix$foldix/$numfold-WaitStart$sleeptime
-#     if [[ $foldix -gt 0 ]]; then # run in parralel but not start together
-#         sleep $sleeptime
-#     fi
-#     CUDA_VISIBLE_DEVICES=$gpuix_exe python scripts/infer_ribfracture.py \
-#     --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
-#     --model $model_name --not-ky-style --weight-file $weightfile \
-#     --split $split --dataset-name $setname --gpu-ix 0 \
-#     --fold-ix $foldix --num-fold $numfold --verbose --fp16
-#     } &
-# done
-# wait
- 
-CUDA_VISIBLE_DEVICES=$gpuix python scripts/infer_mim.py \
+for (( foldix = 0; foldix < $numfold; foldix++ )) # $numfold
+do {
+    sleeptime=$(( 1*foldix + 0 ))
+    gpuix_exe=$gpuix #$(( gpuix + $foldix))
+    echo GPU$gpuix_exe-Foldix$foldix/$numfold-WaitStart$sleeptime
+    if [[ $foldix -gt 0 ]]; then # run in parralel but not start together
+        sleep $sleeptime
+    fi
+    CUDA_VISIBLE_DEVICES=$gpuix_exe python scripts/infer_mim.py \
     --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
     --model $model_name --not-ky-style --weight-file $weightfile \
     --split $split --dataset-name $setname --gpu-ix 0 \
-    --fold-ix $foldix --num-fold 1 --verbose --fp16 --run_pids '1347005-20190507'  #
+    --fold-ix $foldix --num-fold $numfold --verbose --fp16
+    } &
+done
+wait
+ 
+# CUDA_VISIBLE_DEVICES=$gpuix python scripts/infer_mim.py \
+#     --data-rt $data_rt --repo-rt $work_dirs --pos-thresh '0.5' \
+#     --model $model_name --not-ky-style --weight-file $weightfile \
+#     --split $split --dataset-name $setname --gpu-ix 0 \
+#     --fold-ix $foldix --num-fold 1 --verbose --fp16 #--run_pids '1347005-20190507'  #
 
 # bash scripts/infer_mim.sh 0 1
 
