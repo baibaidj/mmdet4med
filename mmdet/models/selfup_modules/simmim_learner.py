@@ -160,6 +160,7 @@ class SimMIM(BaseLearner3D):
                                                 ).repeat_interleave(self.stem_stride, 2
                                                 ).repeat_interleave(self.stem_stride, 3)[:, None, ...].contiguous()
                 # batched patch segmentation
+                # Cumulvate Moving Average: CMA_n+1 = (X_n+1 + n * CMA_n)/ (n + 1); CMA_n = (x1 + x2 + ...) / n
                 for j, slicer in enumerate(tiles_slicer):
                     rec_image_full[slicer] = rec_imgs[j:j+1]
                     rec_mask_full[slicer] = rand_masks_5d[j:j+1]

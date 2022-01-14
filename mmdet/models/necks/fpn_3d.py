@@ -214,10 +214,12 @@ class FPN3D(BaseModule):
         """Forward function."""
         assert len(inputs) == len(self.in_channels)
 
+        # _ = [print_tensor(i, s) for i, s in enumerate(inputs)]
         # build laterals
         laterals = []
         for i, lateral_conv in enumerate(self.lateral_convs):
             lat_out = lateral_conv(inputs[i])
+            # ipdb.set_trace()
             if self.verbose: print_tensor(f'[FPN] Lateral conv level {i}', lat_out )
             laterals.append(lat_out)
 

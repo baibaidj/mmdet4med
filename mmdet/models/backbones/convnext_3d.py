@@ -200,12 +200,12 @@ class ConvNeXt3D(BaseModule):
         # x = self.head(x)
         x = self.stem_layer(x)
         outs = [x]
-        outs.append(x)
         for i in range(4):
             x = self.downsample_layers[i](x)
             x = self.stages[i](x)
             norm_layer = getattr(self, f'norm{i}')
             x_out = norm_layer(x)
+            # print_tensor(f'[ConvNext] level i {i}', x_out)
             outs.append(x_out)
 
         return tuple([outs[i] for i in self.out_indices])
