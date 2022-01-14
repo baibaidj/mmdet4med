@@ -227,7 +227,6 @@ class ConvNeXt3D4SimMIM(ConvNeXt3D):
 
     def forward(self, x, mask):
         x = self.stem_layer(x)
-        outs  = [x]
         assert mask is not None
         # B, L, H, W, D = x.shape
         # not masking the original image, but masking the embedding features !! 
@@ -238,6 +237,7 @@ class ConvNeXt3D4SimMIM(ConvNeXt3D):
         # if self.use_abs_pos_embed:
         #     x = x + self.absolute_pos_embed
         # x = self.drop_after_pos(x)
+        outs  = [x]
         for i, stage in enumerate(self.stages):
             x = self.downsample_layers[i](x)
             x = stage(x)

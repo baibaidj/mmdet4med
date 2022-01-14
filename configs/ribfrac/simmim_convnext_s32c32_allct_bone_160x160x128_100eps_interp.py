@@ -18,12 +18,13 @@ model = dict(
                     verbose = False
                     ), 
         seg_head = dict(verbose = False), 
+        mask_cfg = dict(mask_patch_size=32, mask_ratio=0.5), 
         verbose = False,
 
 )
 
 find_unused_parameters=True
-load_from = None # 'work_dirs/simmim_convnext_4l16c_allct_bone_160x160x128_100eps_interp/latest.pth'
+load_from = 'work_dirs/simmim_convnext_s32c32_allct_bone_160x160x128_100eps_interp/epoch_22_p32r05.pth'
 resume_from = None  #'work_dirs/simmim_swint_4l16c_allct_bone_160x160x128_100eps/latest.pth'
 
 # optimizer
