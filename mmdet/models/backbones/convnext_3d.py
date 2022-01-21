@@ -84,11 +84,9 @@ class ConvNeXt3D(BaseModule):
 
     def __init__(self, 
                 in_channels=1, 
-                stem_stride_1 = 1,
-                stem_stride_2 = 1, 
-                stem_channel_div = 2, 
-                # strides=(1, 2, 2, 2, 2),
-                num_stages=4,
+                stem_cfg = dict(conv1kernel = 3, conv1stride = 1, conv1_chn_div = 2, 
+                                conv2kernel = 3, conv2stride = 1), 
+                expand_ratio = 4, 
                 dw_kernel_size = 5, 
                 depths=[0, 3, 3, 9, 3], 
                 dims=[24, 48, 96, 192, 384], 
@@ -105,16 +103,18 @@ class ConvNeXt3D(BaseModule):
                 ):
         super(ConvNeXt3D, self).__init__(init_cfg=init_cfg)
 
+        self.stem_cfg = stem_cfg
         self.in_channels = in_channels
         self.num_features = dims
         self.out_indices = out_indices
-        self.strides = [stem_stride_1 * stem_stride_2, 2, 2, 2, 2]
+        self.num_stages = len(depths)
+        self.strides = [stem_cfg.get('conv1stride', 1) * stem_cfg.get('conv2stride', 1)] \
+                        + [2] * (self.num_stages - 1)
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
         self.dw_kernel_size = dw_kernel_size
 
-        self.stem_layer = self._make_stem_layer(in_channels, dims[0], stem_stride_1, 
-                                                stem_stride_2, stem_channel_div)
+        self.stem_layer = self._make_stem_layer(in_channels, dims[0], stem_cfg)
 
         self.downsample_layers = nn.ModuleList() # stem and 3 intermediate downsampling conv layers
         # stem = nn.Sequential(
@@ -123,7 +123,7 @@ class ConvNeXt3D(BaseModule):
         # )
         # self.downsample_layers.append(stem)
     
-        for i in range(4):
+        for i in range(self.num_stages - 1):
             downsample_layer = nn.Sequential(
                 nn.Identity() if i == 0 else LayerNorm(dims[i], eps=1e-6, data_format="channels_first"),
                 nn.Conv3d(dims[i], dims[i+1], kernel_size=2, stride=2),
@@ -133,12 +133,13 @@ class ConvNeXt3D(BaseModule):
         self.stages = nn.ModuleList() # 4 feature resolution stages, each consisting of multiple residual blocks
         dp_rates=[x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))] 
         cur = 0
-        for i in range(4):
+        for i in range(self.num_stages - 1):
             stage = nn.Sequential(
                 *[CNextBlock3D(dim=dims[i+1], 
-                dropout_layer=dict(type='DropPath', drop_prob=dp_rates[cur + j]),  #drop_path=dp_rates[cur + j], 
-                layer_scale_init_value=layer_scale_init_value, 
-                dw_kernel_size = dw_kernel_size, 
+                            expand_ratio = expand_ratio, 
+                            dropout_layer=dict(type='DropPath', drop_prob=dp_rates[cur + j]),  #drop_path=dp_rates[cur + j], 
+                            layer_scale_init_value=layer_scale_init_value, 
+                            dw_kernel_size = dw_kernel_size, 
                 ) for j in range(depths[i+1])]
             )
             self.stages.append(stage)
@@ -149,22 +150,39 @@ class ConvNeXt3D(BaseModule):
         # self.apply(self._init_weights)
 
         norm_layer = partial(LayerNorm, eps=1e-6, data_format="channels_first")
-        for i_layer in range(4):
+        for i_layer in range(self.num_stages - 1):
             layer = norm_layer(dims[i_layer+1])
             layer_name = f'norm{i_layer}'
             self.add_module(layer_name, layer)
 
-    def _make_stem_layer(self, in_channels, stem_channels, stem_stride_1 = 1, stem_stride_2 = 1, 
-                        stem_channel_div = 2):
-        """Make stem layer for ResNet."""
+    def _make_stem_layer(self, in_channels, stem_channels, 
+                    stem_cfg = dict(conv1kernel = 3, conv1stride = 1, conv1_chn_div = 2, 
+                                    conv2kernel = 3, conv2stride = 1)):
+        """Make stem layer for ResNet.
+        
+        i = input size, o = output size, p = padding, k = kernel_size, s = stride, d = dilation
+        o = [i + 2*p - k - (k-1)*(d-1)]/s + 1
+        if i == o: then (o - 1)s = (i - 1)*s = i + 2*p - k - (k-1)*(d-1)
+        p = (k + (k - 1)*(d-1) + i*(s -1) - s)/2
+        if d = 1, p = (k + i *(s -1) -s)/2
+
+        """
+        stem_channel_div = stem_cfg.get('conv1_chn_div', 1)
+        conv1kernel = stem_cfg.get('conv1kernel', 3)
+        conv1stride = stem_cfg.get('conv1stride', 1)
+        conv1pad = (conv1kernel - 1 )//2 #if (conv1kernel % conv1stride != 0) else 0
+        conv2kernel = stem_cfg.get('conv2kernel', 3)
+        conv2stride = stem_cfg.get('conv2stride', 1)
+        conv2pad = (conv2kernel - 1 )//2
+        
         stem_layer = nn.Sequential(
             build_conv_layer(
                 self.conv_cfg,
                 in_channels,
                 stem_channels // stem_channel_div, # 
-                kernel_size=(5, 5, 5),
-                stride=[stem_stride_1] * 3,
-                padding=(2, 2, 2),
+                kernel_size=[conv1kernel] *3,
+                stride=[conv1stride] * 3,
+                padding=[conv1pad] * 3,
                 bias=False),
             LayerNorm(stem_channels // stem_channel_div, eps=1e-6, data_format="channels_first"), 
             # build_norm_layer(self.norm_cfg, stem_channels)[1], #// 2
@@ -173,9 +191,9 @@ class ConvNeXt3D(BaseModule):
                 self.conv_cfg,
                 stem_channels // stem_channel_div,#
                 stem_channels ,#// 2
-                kernel_size=(3, 3, 3),
-                stride= [stem_stride_2] * 3,
-                padding=(1, 1, 1),
+                kernel_size=[conv2kernel] *3,
+                stride= [conv2stride] * 3,
+                padding=[conv2pad] * 3,
                 bias=False),
             LayerNorm(stem_channels, eps=1e-6, data_format="channels_first"), 
             # build_norm_layer(self.norm_cfg, stem_channels)[1],#// 2
@@ -200,7 +218,7 @@ class ConvNeXt3D(BaseModule):
         # x = self.head(x)
         x = self.stem_layer(x)
         outs = [x]
-        for i in range(4):
+        for i in range(self.num_stages - 1 ):
             x = self.downsample_layers[i](x)
             x = self.stages[i](x)
             norm_layer = getattr(self, f'norm{i}')

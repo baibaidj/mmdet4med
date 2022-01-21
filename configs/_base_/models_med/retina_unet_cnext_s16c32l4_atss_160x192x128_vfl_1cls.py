@@ -7,21 +7,20 @@ conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
 norm_cfg = dict(type='IN3d', requires_grad=True) 
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
-stem_channels = 32
-stem_stride = 2
+stem_channels = 16
+stem_stride = 1
 fpn_channel = 128 #stem_channels * (2**3)
 model = dict(
     type='RetinaNet3D',
     backbone=dict(
         type='ConvNeXt3D',
         in_channels=1, 
-        stem_stride_1 = stem_stride,
-        stem_stride_2 = 1, 
-        stem_channel_div = 2, 
-        dw_kernel_size = 7, 
-        num_stages=5,
-        depths=[0, 3, 3, 9, 3], 
-        dims=[stem_channels * (2**c ) for c in range(5)], 
+        stem_cfg = dict(conv1kernel = 3, conv1stride = 1, conv1_chn_div = 1, 
+                        conv2kernel = 3, conv2stride = 1), 
+        expand_ratio = 3, 
+        dw_kernel_size = 5, 
+        depths=[0, 3, 3, 9, 3],  #  6: 26.7G, 9: 27G
+        dims=[stem_channels * (2**c ) for c in range(5)],  # 16, 32, 64, 128, 256
         drop_path_rate=0.2, 
         layer_scale_init_value=1.0, 
         out_indices=(0, 1, 2, 3, 4),
@@ -32,7 +31,7 @@ model = dict(
         type='FPN3D',
         in_channels=[stem_channels * (2**c) for c in range(5)], 
         fixed_out_channels = fpn_channel,
-        start_level=1,
+        start_level=2,
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
@@ -46,7 +45,7 @@ model = dict(
         num_classes=num_classes,
         in_channels=fpn_channel,
         stacked_convs=4,
-        start_level = 1, 
+        start_level = 2, 
         feat_channels=fpn_channel,
         conv_cfg = conv_cfg, 
         norm_cfg = norm4head, 
@@ -55,7 +54,7 @@ model = dict(
             octave_base_scale=2,
             scales_per_octave=2, 
             ratios=[1.0],
-            strides=[4, 8, 16, 32]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
+            strides=[4, 8, 16]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder3D',
             target_means=[.0, .0, .0, .0, 0., 0.],
@@ -80,10 +79,10 @@ model = dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
         ), 
 
-    seg_head = dict(
-        type='FCNHead3D', # verbose = True, 
-        in_channels= stem_channels ,
-        in_index=0,
+    seg_head = dict( 
+        type='FCNHead3D', # TODO: try to remove seg_head 
+        in_channels= stem_channels * 2 ,
+        in_index=1,
         channels= stem_channels //2 ,
         # input_transform='resize_concat',
         kernel_size=1,

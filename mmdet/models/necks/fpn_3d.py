@@ -184,6 +184,9 @@ class FPN3D(BaseModule):
         return out_channels
 
     def build_upsample_layers(self, conv_cfg, norm_cfg = None):
+        """
+        # deconv consumes less gpu memory
+        """
         up_ops = nn.ModuleList()
         for i in range(0, self.backbone_end_level):
             if i == 0:

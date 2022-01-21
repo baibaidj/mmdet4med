@@ -414,17 +414,17 @@ class CustomDatasetDet(Dataset):
                     eval_results[f'AR@{num}'] = ar[i]
 
         num_classes_seg = len(self.CLASSES) + 1
-        pred_seg_list = [a[1] for a in results] # model return tuple(seg_mask_4d, aux_mask_4d, cls_out)
-        gt_seg_list = [info['gt_seg'] for pid, info in anno_by_pids.items()]
-        # pdb.set_trace()
-        seg_metric_detail, seg_metric_cls = segmentation_performance(pred_seg_list, gt_seg_list, num_classes_seg)
-        # pdb.set_trace()
-        seg_mean_results = organize_seg_performance(seg_metric_cls, self.CLASSES[:num_classes_seg], 
-                                                    logger=logger) # 
+        pred_seg_list = [a[1] for a in results] # 
 
-        for k, seg_tb in seg_metric_detail.items():
-            print(f'[SegMetric]{k}\n', np.around(seg_tb[:4], 4))
-        
+        if pred_seg_list[0] is not None:
+            gt_seg_list = [info['gt_seg'] for pid, info in anno_by_pids.items()]
+            # pdb.set_trace()
+            seg_metric_detail, seg_metric_cls = segmentation_performance(pred_seg_list, gt_seg_list, num_classes_seg)
+            # pdb.set_trace()
+            seg_mean_results = organize_seg_performance(seg_metric_cls, self.CLASSES[:num_classes_seg], 
+                                                        logger=logger) # 
+            for k, seg_tb in seg_metric_detail.items():
+                print(f'[SegMetric]{k}\n', np.around(seg_tb[:4], 4))
         return eval_results #, seg_metric_detail
 
 def ins2cls4seg(instance_mask, roi_info_list, label_map = {}, verbose = False):

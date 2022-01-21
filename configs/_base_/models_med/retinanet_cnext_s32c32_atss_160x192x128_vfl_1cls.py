@@ -80,32 +80,32 @@ model = dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
         ), 
 
-    seg_head = dict(
-        type='FCNHead3D', # verbose = True, 
-        in_channels= stem_channels ,
-        in_index=0,
-        channels= stem_channels //2 ,
-        # input_transform='resize_concat',
-        kernel_size=1,
-        num_convs=1,
-        concat_input=False,
-        dropout_ratio=0.1,
-        num_classes=num_classes + 1,
-        conv_cfg = conv_cfg, 
-        norm_cfg=norm4head,
-        align_corners=False,
-        gt_index = 0, 
-        # parameters for implicit semantic data augmentation
-        # is_use_isda = True, 
-        # isda_lambda = 2.5,
-        # start_iters = 1,
-        # max_iters = 4e5,
-        loss_decode =dict(
-                    type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2), 
-                    num_classes = num_classes + 1, class_weight = (0.4, 1.25),  verbose = False,   #(0.33, 1.0)
-                    dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
-                    ),
-            ),
+    # seg_head = dict(
+    #     type='FCNHead3D', # verbose = True, 
+    #     in_channels= stem_channels ,
+    #     in_index=0,
+    #     channels= stem_channels //2 ,
+    #     # input_transform='resize_concat',
+    #     kernel_size=1,
+    #     num_convs=1,
+    #     concat_input=False,
+    #     dropout_ratio=0.1,
+    #     num_classes=num_classes + 1,
+    #     conv_cfg = conv_cfg, 
+    #     norm_cfg=norm4head,
+    #     align_corners=False,
+    #     gt_index = 0, 
+    #     # parameters for implicit semantic data augmentation
+    #     # is_use_isda = True, 
+    #     # isda_lambda = 2.5,
+    #     # start_iters = 1,
+    #     # max_iters = 4e5,
+    #     loss_decode =dict(
+    #                 type='ComboLossMed', loss_weight=(1.0 * 0.2, 0.66 * 0.2), 
+    #                 num_classes = num_classes + 1, class_weight = (0.4, 1.25),  verbose = False,   #(0.33, 1.0)
+    #                 dice_cfg = dict(ignore_0 = True, verbose = False) # act = 'sigmoid',
+    #                 ),
+    #         ),
     # convert instance mask to bbox 
     mask2bbox_cfg = [dict(type = 'FindInstances', #verbose = True, 
                         instance_key="seg",

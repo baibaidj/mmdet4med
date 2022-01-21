@@ -7,46 +7,53 @@ conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
 norm_cfg = dict(type='IN3d', requires_grad=True) 
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
-stem_channels = 32
-stem_stride = 2
-fpn_channel = 128 #stem_channels * (2**3)
+stem_channels = 16
+fpn_channel = stem_channels * (2**3)
 model = dict(
     type='RetinaNet3D',
     backbone=dict(
-        type='ConvNeXt3D',
-        in_channels=1, 
-        stem_stride_1 = stem_stride,
+        type='ResNet3dIso', # verbose = False, 
+        deep_stem = True,
+        avg_down=True,
+        depth='343d', # 18.3G 
+        in_channels=1,
+        stem_stride_1 = 1,
         stem_stride_2 = 1, 
-        stem_channel_div = 2, 
-        dw_kernel_size = 7, 
-        num_stages=5,
-        depths=[0, 3, 3, 9, 3], 
-        dims=[stem_channels * (2**c ) for c in range(5)], 
-        drop_path_rate=0.2, 
-        layer_scale_init_value=1.0, 
-        out_indices=(0, 1, 2, 3, 4),
+        stem_channels= stem_channels, # 32 
+        base_channels= stem_channels * 2, # 64 
+        num_stages=4,
+        strides=(2, 2, 2, 2), # 64, 128, 256, 320
+        dilations=(1, 1, 1, 1),
+        out_indices=(1, 2, 3, 4, 5), # 0 is input image 
         conv_cfg=conv_cfg,
-        norm_cfg=norm_cfg,  # TODO: replace ReLU with Swish
+        norm_cfg=norm_cfg,
+        style='pytorch',
+        # non_local=((0, 0), (0, 0), (0, 0), (0, 0)),
+        # non_local_cfg=dict(
+        #     conv_cfg = conv_cfg,
+        #     norm_cfg=norm_cfg,
+        #     out_projection = True,
+        #     reduction=8)
         ),
     neck=dict(
         type='FPN3D',
         in_channels=[stem_channels * (2**c) for c in range(5)], 
         fixed_out_channels = fpn_channel,
-        start_level=1,
+        start_level=2,
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
-        is_double_chn = False, 
         num_outs=5, 
         upsample_cfg=dict(type='deconv3d', mode=None, use_norm = False, 
                     kernel_size = (2,2,2), stride = (2,2,2)),
         ),
     bbox_head=dict(
-        type='ATSSHead3DNOC', #verbose = True, 
+        type='DynamicHead3D', #verbose = True, 
         num_classes=num_classes,
         in_channels=fpn_channel,
-        stacked_convs=4,
-        start_level = 1, 
+        stacked_convs=0,
+        start_level = 2, 
+        num_dytower = 4, 
         feat_channels=fpn_channel,
         conv_cfg = conv_cfg, 
         norm_cfg = norm4head, 
@@ -55,7 +62,7 @@ model = dict(
             octave_base_scale=2,
             scales_per_octave=2, 
             ratios=[1.0],
-            strides=[4, 8, 16, 32]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
+            strides=[4, 8, 16]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder3D',
             target_means=[.0, .0, .0, .0, 0., 0.],
@@ -82,9 +89,9 @@ model = dict(
 
     seg_head = dict(
         type='FCNHead3D', # verbose = True, 
-        in_channels= stem_channels ,
-        in_index=0,
-        channels= stem_channels //2 ,
+        in_channels= stem_channels * 4,
+        in_index=1,
+        channels= stem_channels,
         # input_transform='resize_concat',
         kernel_size=1,
         num_convs=1,

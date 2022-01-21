@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models_med/retina_unet_cnext_s32c32_atss_160x192x128_vfl_1cls.py',
+    '../_base_/models_med/retina_unet_cnext_s16c32_atss_160x192x128_vfl_1cls.py',
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
     # '../ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
     # '../_base_/swa.py',
@@ -73,7 +73,7 @@ evaluation=dict(interval=2, start=0, metric='mAP',
                 iou_thr=[0.2, 0.3])
 
 
-# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_cnext_s32c32_rf1231_160x192x128_1cls_ohem_atss_ce.py 
-# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29033 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_cnext_s32c32_rf1231_160x192x128_1cls_ohem_atss_ce.py 3 --gpus 3 #--no-validate
+# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_cnext_s16c32_rf1231_160x192x128_1cls_ohem_atss_ce.py 
+# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29033 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_cnext_s16c32_rf1231_160x192x128_1cls_ohem_atss_ce.py 3 --gpus 3 #--no-validate
 
 # 32 epoch: 0.50@1 0.58@2 0.67@4 0.76@8 0.78@50

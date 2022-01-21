@@ -19,25 +19,24 @@ model = dict(
         stem_stride_2 = 1, 
         stem_channel_div = 2, 
         dw_kernel_size = 7, 
-        num_stages=5,
-        depths=[0, 3, 3, 9, 3], 
-        dims=[stem_channels * (2**c ) for c in range(5)], 
+        depths=[0, 3, 3, 9], 
+        dims=[stem_channels * (2**c ) for c in range(4)], 
         drop_path_rate=0.2, 
         layer_scale_init_value=1.0, 
-        out_indices=(0, 1, 2, 3, 4),
+        out_indices=(0, 1, 2, 3),
         conv_cfg=conv_cfg,
         norm_cfg=norm_cfg,  # TODO: replace ReLU with Swish
         ),
     neck=dict(
         type='FPN3D',
-        in_channels=[stem_channels * (2**c) for c in range(5)], 
+        in_channels=[stem_channels * (2**c) for c in range(4)], 
         fixed_out_channels = fpn_channel,
         start_level=1,
         conv_cfg = conv_cfg, 
         norm_cfg = norm_cfg, 
         add_extra_convs=False,
         is_double_chn = False, 
-        num_outs=5, 
+        num_outs=4, 
         upsample_cfg=dict(type='deconv3d', mode=None, use_norm = False, 
                     kernel_size = (2,2,2), stride = (2,2,2)),
         ),
@@ -55,7 +54,7 @@ model = dict(
             octave_base_scale=2,
             scales_per_octave=2, 
             ratios=[1.0],
-            strides=[4, 8, 16, 32]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
+            strides=[4, 8, 16]), #NOTE: stride == base_size the len of stride should be identical to fpn levels
         bbox_coder=dict(
             type='DeltaXYWHBBoxCoder3D',
             target_means=[.0, .0, .0, .0, 0., 0.],
@@ -80,8 +79,8 @@ model = dict(
         #     type='CrossEntropyLoss', use_sigmoid=True, loss_weight=0.66)
         ), 
 
-    seg_head = dict(
-        type='FCNHead3D', # verbose = True, 
+    seg_head = dict( 
+        type='FCNHead3D', # TODO: try to remove seg_head 
         in_channels= stem_channels ,
         in_index=0,
         channels= stem_channels //2 ,
