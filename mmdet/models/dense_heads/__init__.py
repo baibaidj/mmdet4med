@@ -42,6 +42,7 @@ from .atss_head_3d import ATSSHead3D
 from .atss_head_3d_noc import ATSSHead3DNOC
 from .vfnet_head_3d import VFNetHead3D
 from .tood_head_3d import TOODHead3D
+from .dyhead_3d import DynamicHead3D
 
 __all__ = [
     'AnchorFreeHead', 'AnchorHead', 'GuidedAnchorHead', 'FeatureAdaption',
@@ -56,5 +57,6 @@ __all__ = [
     'SOLOHead', 'DecoupledSOLOHead', 'CenterNetHead', 'YOLOXHead',
     'DecoupledSOLOLightHead', 'LADHead', 'TOODHead', 
 
-    'RetinaHead3D', 'ATSSHead3D', 'ATSSHead3DNOC', 'VFNetHead3D', 'TOODHead3D'
+    'RetinaHead3D', 'ATSSHead3D', 'ATSSHead3DNOC', 'VFNetHead3D', 'TOODHead3D', 
+    'DynamicHead3D'
 ]

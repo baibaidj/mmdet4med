@@ -17,11 +17,15 @@ from .transformer import (DetrTransformerDecoder, DetrTransformerDecoderLayer,
                           DynamicConv, PatchEmbed, Transformer, nchw_to_nlc,
                           nlc_to_nchw)
 
-from . transformer3d import (PatchEmbed3D, nchwd_to_nlc, nlc_to_nchwd)
-
+from .transformer3d import (PatchEmbed3D, nchwd_to_nlc, nlc_to_nchwd)
+from .modulated_deform_conv import DeformConv3d, ModulatedDeformConv3d
 print_tensor = lambda n, x: print(n, type(x), x.dtype, x.shape, x.min(), x.max())
 chn2last_order = lambda x: tuple([0, *[a + 2 for a in range(x)],  1])
 
+
+from mmcv.cnn import CONV_LAYERS
+CONV_LAYERS.register_module('DCN3dv1', module=DeformConv3d)
+CONV_LAYERS.register_module('DCN3dv2', module=ModulatedDeformConv3d)
 
 __all__ = [
     'ResLayer', 'gaussian_radius', 'gen_gaussian_target',
@@ -33,5 +37,6 @@ __all__ = [
     'adaptive_avg_pool2d', 'AdaptiveAvgPool2d', 'PatchEmbed', 'nchw_to_nlc',
     'nlc_to_nchw', 'pvt_convert', 
 
-    'ResLayer3D', 'ResLayerIso', 'PatchEmbed3D', 'nlc_to_nchwd', 'nchwd_to_nlc', 'nan_hook'
+    'ResLayer3D', 'ResLayerIso', 'PatchEmbed3D', 'nlc_to_nchwd', 'nchwd_to_nlc', 'nan_hook', 
+    'DeformConv3d', 'ModulatedDeformConv3d'
 ]

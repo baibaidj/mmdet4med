@@ -14,7 +14,7 @@ interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
 core_key_num = 2
 ext_patch_size = (212, 240, 176) # avoid artifacts such as boarder reflection
 patch_size = (160, 192, 128)  # [160 192 112] # xyz
-label_map = {1: 0, 2:0, 3:0, 4:0, 7:0}
+label_map = {1: 0, 2:0, 3:0, 4:0, 7:0} # TODO: how to realize multiscale training?
 train_pipeline = [
     dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), label_map = label_map),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
     dict(type = 'AddChanneld', keys= keys), 

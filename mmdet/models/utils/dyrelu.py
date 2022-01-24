@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule
+import ipdb
 
 def _make_divisible(v, divisor, min_value=None):
     if min_value is None:
@@ -89,7 +90,7 @@ class DYReLU(nn.Module):
             x_out = x
         b, c, *spatial_dims = x_in.size()
         y = self.avg_pool(x_in).view(b, c)
-        y = self.fc(y).view(b, self.oup * self.exp, 1, 1)
+        y = self.fc(y).view(b, self.oup * self.exp, *[1 for _ in spatial_dims])
         if self.exp == 4:
             a1, b1, a2, b2 = torch.split(y, self.oup, dim=1)
             a1 = (a1 - 0.5) * self.lambda_a + self.init_a[0]  # 1.0

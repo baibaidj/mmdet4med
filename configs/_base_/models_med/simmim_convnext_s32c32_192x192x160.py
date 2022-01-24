@@ -9,7 +9,7 @@ norm_cfg = dict(type='IN3d', requires_grad=True)
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
 stem_channels = 32
 stem_stride = 2
-fpn_channel = 96 # > 128 #stem_channels * (2**3)
+fpn_channel = 128 # > 128 #stem_channels * (2**3)
 model = dict(
     type='SimMIM',
     backbone=dict(
@@ -44,7 +44,7 @@ model = dict(
     seg_head = dict(
         type='FCNHead3D', # verbose = True, 
         in_channels= stem_channels * 2,
-        in_index=0,
+        in_index= 0,
         channels= stem_channels,
         # input_transform='resize_concat',
         kernel_size=1,
@@ -57,8 +57,8 @@ model = dict(
         align_corners=False,
         gt_index = 0),
     gpu_aug_pipelines = {{ _base_.gpu_aug_pipelines }},
-    mask_cfg = dict(input_size={{ _base_.patch_size }}, mask_patch_size=24,
-                                 stem_stride=stem_stride, mask_ratio=0.333), 
+    mask_cfg = dict(input_size={{ _base_.patch_size }}, mask_patch_size=32,
+                                 stem_stride=stem_stride, mask_ratio=0.5), 
                                  
     test_cfg=dict(roi_size = {{ _base_.patch_size }}, sw_batch_size = 6,
         blend_mode = 'constant' , overlap=0.05, sigma_scale = 0.125, # 'gaussian or constant

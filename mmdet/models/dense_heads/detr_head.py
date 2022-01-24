@@ -8,7 +8,7 @@ from mmcv.runner import force_fp32
 
 from mmdet.core import (bbox_cxcywh_to_xyxy, bbox_xyxy_to_cxcywh,
                         build_assigner, build_sampler, multi_apply,
-                        reduce_mean)
+                        reduce_mean, HungarianAssigner)
 from mmdet.models.utils import build_transformer
 from ..builder import HEADS, build_loss
 from .anchor_free_head import AnchorFreeHead
@@ -116,7 +116,7 @@ class DETRHead(AnchorFreeHead):
             assert loss_iou['loss_weight'] == assigner['iou_cost']['weight'], \
                 'The regression iou weight for loss and matcher should be' \
                 'exactly the same.'
-            self.assigner = build_assigner(assigner)
+            self.assigner : HungarianAssigner = build_assigner(assigner)
             # DETR sampling=False, so use PseudoSampler
             sampler_cfg = dict(type='PseudoSampler')
             self.sampler = build_sampler(sampler_cfg, context=self)

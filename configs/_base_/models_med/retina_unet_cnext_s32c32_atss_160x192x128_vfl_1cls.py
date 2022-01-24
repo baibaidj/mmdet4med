@@ -7,8 +7,8 @@ conv_cfg = dict(type = 'Conv3d')
 norm4head = dict(type='GN', num_groups=8, requires_grad=True) 
 norm_cfg = dict(type='IN3d', requires_grad=True) 
 # bs=2, ng=8, chn=2, m=18.1G;  bs=2, ng=2, m=17.2G;  bs=2, ng=8, chn=1, m=19.3G 
-stem_stride = 2
 stem_channels = 32
+stem_stride = 2
 fpn_channel = 128 #stem_channels * (2**3)
 model = dict(
     type='RetinaNet3D',

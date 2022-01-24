@@ -144,11 +144,11 @@ class SingleStageDetector3D(BaseDetector3D):
 
         img, gt_bboxes, gt_labels, gt_semantic_seg = self.update_img_metas(
                                             img, img_metas, seg)
-        try: 
-            x = self.extract_feat(img)
-        except RuntimeError:
-            _ = [print(a['img_meta_dict']['filename_or_obj']) for a in img_metas]
-            ipdb.set_trace()
+        # try: 
+        x = self.extract_feat(img)
+        # except RuntimeError:
+        #     _ = [print(a['img_meta_dict']['filename_or_obj']) for a in img_metas]
+        #     ipdb.set_trace()
         # print_tensor('\n[Detector] input', img)
         # print_tensor('[Detector] feat', x[-1])
         # ipdb.set_trace()
@@ -263,7 +263,8 @@ class SingleStageDetector3D(BaseDetector3D):
         # print_tensor('original inputs', inputs) BCHWD
         ensembler = BboxSegEnsembler1Case(Shaper.ready_shape_safe, Shaper.patch_shape, 
                                     self.seg_num_classes, self.test_cfg, device = device)
-        ensembler.initial_tile_weight_map(Shaper.patch_shape, mode = mode, sigma_scale = sigma_scale)
+        if self.with_seghead:
+            ensembler.initial_tile_weight_map(Shaper.patch_shape, mode = mode, sigma_scale = sigma_scale)
         # print_tensor('[Ensemble] initalize', ensembler.seg_output_4d)
         # print_tensor('[Ensemble] initalize', ensembler.seg_countmap_4d)
         det_result_batch, seg_result_batch = [], []
@@ -288,19 +289,24 @@ class SingleStageDetector3D(BaseDetector3D):
                 #         print_tensor(f'\n[SliceInfer] bix {bi} det result score', det[1])
                 # pdb.set_trace()
                 ensembler.store_det_output(det_results)
-                ensembler.update_seg_output_batch(seg_results, tiles_slicer)
+                if self.with_seghead: 
+                    ensembler.update_seg_output_batch(seg_results, tiles_slicer)
             
             det_result_img = ensembler.finalize_det_bbox(verbose=False) # (bboxes_nx7, labels_nx1)
-            seg_result_img = ensembler.finalize_segmap() # 1CHWD
-            # print_tensor(f'[SliceInfer] seg results ensemble {bix}', seg_result_img)
+            
             det_result_img = ensembler.offset_preprocess4detect(det_result_img, img_meta, 
                                                             Shaper.ready_shape_safe, rescale)
-            seg_result_img = ensembler.offset_preprocess4seg(seg_result_img, img_meta, 
-                                                            Shaper.ready_shape_safe, rescale)                                               
             det_result_batch.append(det_result_img)
-            seg_result_batch.append(seg_result_img)
-            ensembler.reset_seg_output(); ensembler.reset_seg_countmap()
             ensembler.reset_det_storage()
+
+            if self.with_seghead:
+                seg_result_img = ensembler.finalize_segmap() # 1CHWD
+                # print_tensor(f'[SliceInfer] seg results ensemble {bix}', seg_result_img)
+                seg_result_img = ensembler.offset_preprocess4seg(seg_result_img, img_meta, 
+                                                                Shaper.ready_shape_safe, rescale)
+                seg_result_batch.append(seg_result_img)
+                ensembler.reset_seg_output(); ensembler.reset_seg_countmap()
+
             torch.cuda.empty_cache()
             # print_tensor('[Ensemble] reset', ensembler.seg_output_4d)
             # print_tensor('[Ensemble] reset', ensembler.seg_countmap_4d)
@@ -337,7 +343,8 @@ class SingleStageDetector3D(BaseDetector3D):
             # NOTE: whole inference should be implemented
             det_results, seg_results= self.whole_inference(imgs, img_metas, rescale)
 
-        seg_results = torch.cat([torch.softmax(seg, dim=1) if seg.shape[1] > 1 else torch.sigmoid(seg)
+        if self.with_seghead:
+            seg_results = torch.cat([torch.softmax(seg, dim=1) if seg.shape[1] > 1 else torch.sigmoid(seg)
                                 for seg in seg_results], axis = 0).cpu()
         return det_results, seg_results 
 
@@ -346,15 +353,16 @@ class SingleStageDetector3D(BaseDetector3D):
         """Simple test with single image."""
         det_results, seg_results = self.inference(img, img_meta, rescale)
         # print_tensor('simple test %s' %need_logits, seg_logit)
-        if need_probs:
-            seg_pred = seg_results.cpu() #.float().cpu().numpy()
-        else:
-            seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
-            # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
-            seg_pred = seg_pred.to(torch.uint8).cpu()
-            # unravel batch dim
-            seg_pred = list(seg_pred)
-        
+        if self.with_seghead:
+            if need_probs:
+                seg_pred = seg_results.cpu() #.float().cpu().numpy()
+            else:
+                seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
+                # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
+                seg_pred = seg_pred.to(torch.uint8).cpu()
+                # unravel batch dim
+                seg_pred = list(seg_pred)
+        else: seg_pred = None
         # pdb.set_trace()
         bbox_results = [bbox2result3d(det_bboxes, det_labels, self.bbox_head.num_classes) 
                         for det_bboxes, det_labels in det_results]
@@ -378,19 +386,22 @@ class SingleStageDetector3D(BaseDetector3D):
         for i in range(1, len(imgs)):
             cur_det_results, cur_seg_results = self.inference(imgs[i], img_metas[i], rescale)
             # Cumulvate Moving Average: CMA_n+1 = (X_n+1 + n * CMA_n)/ (n + 1); CMA_n = (x1 + x2 + ...) / n
-            seg_results = (cur_seg_results + seg_results * infer_times) / (infer_times + 1)
+            if self.with_seghead:
+                seg_results = (cur_seg_results + seg_results * infer_times) / (infer_times + 1)
             infer_times += 1
             det_resutls.extend(cur_det_results)
             imgs[i] = None; torch.cuda.empty_cache()
 
-        if need_probs:
-            seg_pred = seg_results.cpu() #.float().cpu().numpy()
-        else:
-            seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
-            # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
-            seg_pred = seg_pred.to(torch.uint8).cpu()
-            # unravel batch dim
-            seg_pred = list(seg_pred)
+        if self.with_seghead:
+            if need_probs:
+                seg_pred = seg_results.cpu() #.float().cpu().numpy()
+            else:
+                seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
+                # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
+                seg_pred = seg_pred.to(torch.uint8).cpu()
+                # unravel batch dim
+                seg_pred = list(seg_pred)
+        else: seg_pred = None
 
         # detection
         bbox_nx7 = torch.cat([d1[0] for d1 in det_resutls], axis = 0) # nx7
@@ -400,9 +411,7 @@ class SingleStageDetector3D(BaseDetector3D):
             
         dets_clean, keep_idx = batched_nms_3d(bbox_nx7[:, :6], bbox_nx7[:, 6], 
                                              label_nx1, self.test_cfg['nms'])
-        # TODO: 2897118_image.nii cause exception,  max_coordinate = boxes.max()  operation does not have an identity
         label_nx1 = label_nx1[keep_idx]
-
         if self.test_cfg['max_per_img'] > 0:
             dets_clean = dets_clean[:self.test_cfg['max_per_img']]
             label_nx1 = label_nx1[:self.test_cfg['max_per_img']]
