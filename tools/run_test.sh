@@ -16,8 +16,8 @@
 
 task=ribfrac
 # model=retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls
-# model=retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls
-model=retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_fapn #retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn
+# model=retina_unet_r34_4l16c_rf1231_160x192x128_1cls_ohem_atssdy_vfl
+model=retina_unet_r34_4l16c_rf1231_160x192x128_1cls_ohem_atssdy_vfl #retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn
 # model=retinanet3d_4l8c_vnet_1x_ribfrac_1cls
 
 

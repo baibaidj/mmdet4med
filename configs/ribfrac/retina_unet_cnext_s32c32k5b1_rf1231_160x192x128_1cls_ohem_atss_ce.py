@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models_med/retina_unet_cnext_s32c32k5_atss_160x192x128_vfl_1cls.py',
+    '../_base_/models_med/retina_unet_cnext_s32c32k5b1_atss_160x192x128_vfl_1cls.py',
     '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
     # '../ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
     # '../_base_/swa.py',
@@ -7,21 +7,21 @@ _base_ = [
 
 img_dir = 'data/Task113_RibFrac_KYRe'
 key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 'roi_fp':'_ins2cls.json'}
-data = dict(samples_per_gpu = 4, workers_per_gpu= 8, 
+data = dict(samples_per_gpu = 4, workers_per_gpu= 10, 
             train=dict(sample_rate = 0.4, json_filename = 'dataset_1231.json', img_dir=img_dir, key2suffix = key2suffix), 
             val=dict(sample_rate = 0.5, json_filename = 'dataset_1231.json', img_dir=img_dir, key2suffix = key2suffix), 
             test= dict(sample_rate = 0.1, json_filename = 'dataset_1231.json',img_dir=img_dir, key2suffix = key2suffix))
 
-pretrain_cp = 'work_dirs/simmim_convnext_s32c32_allct_bone_160x160x128_100eps_interp/latest.pth'
+# pretrain_cp = 'work_dirs/simmim_convnext_s32c32_allct_bone_160x160x128_100eps_interp/latest.pth'
 model = dict(
-        backbone = dict(init_cfg=dict(
-                        type='Pretrained', prefix='backbone.', 
-                        checkpoint=pretrain_cp, map_location = 'cpu')
-                        ), 
+        # backbone = dict(init_cfg=dict(
+        #                 type='Pretrained', prefix='backbone.', 
+        #                 checkpoint=pretrain_cp, map_location = 'cpu')
+        #                 ), 
         neck = dict(upsample_cfg=dict(use_norm = True, mode=None), # deconv consumes less gpu memory
-                    init_cfg=dict(
-                        type='Pretrained', prefix='neck.', 
-                        checkpoint=pretrain_cp, map_location = 'cpu'), 
+                    # init_cfg=dict(
+                    #     type='Pretrained', prefix='neck.', 
+                    #     checkpoint=pretrain_cp, map_location = 'cpu'), 
                     verbose = False),
         bbox_head = dict(verbose = False, #use_vfl = True, loss_cls_vfl=dict(alpha=0.75, loss_weight=8.0),
                         loss_cls = dict(_delete_ = True,
@@ -60,7 +60,7 @@ lr_config = dict(_delete_=True,
                  by_epoch=False, warmup='linear', warmup_iters=1000
                  )
 
-runner = dict(type='EpochBasedRunner', max_epochs=24)
+runner = dict(type='EpochBasedRunner', max_epochs=36)
 checkpoint_config = dict(interval=1, max_keep_ckpts = 4)
 # yapf:disable
 log_config = dict(interval=20, hooks=[
@@ -73,7 +73,7 @@ evaluation=dict(interval=2, start=0, metric='mAP',
                 iou_thr=[0.2, 0.3])
 
 
-# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_cnext_s32c32k5_rf1231_160x192x128_1cls_ohem_atss_ce.py 
-# CUDA_VISIBLE_DEVICES=0,2 PORT=29225 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_cnext_s32c32k5_rf1231_160x192x128_1cls_ohem_atss_ce.py 2 --gpus 2 #--no-validate
+# CUDA_VISIBLE_DEVICES=0 python tools/train.py configs/ribfrac/retina_unet_cnext_s32c32k5b1_rf1231_160x192x128_1cls_ohem_atss_ce.py 
+# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29225 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_cnext_s32c32k5b1_rf1231_160x192x128_1cls_ohem_atss_ce.py 3 --gpus 3 #--no-validate
 
 # 32 epoch: 0.50@1 0.58@2 0.67@4 0.76@8 0.78@50

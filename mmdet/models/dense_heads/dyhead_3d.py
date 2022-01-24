@@ -72,11 +72,13 @@ class DCNv2_Norm_3D(BaseModule):
         self.stride = stride
         self.conv = ModulatedDeformConv3d(in_channels, out_channels, 
                                             kernel_size = kernel_size, stride=stride, 
-                                            padding = (kernel_size-1)//2)
+                                            padding = (kernel_size-1)//2, 
+                                            # in_step=128
+                                            )
         self.bn = nn.GroupNorm(num_groups=16, num_channels=out_channels)
 
     def forward(self, input,  offset, mask):
-        offset, mask = offset.contiguous().float(), mask.contiguous()
+        offset, mask = offset.contiguous(), mask.contiguous()
         if self.stride == 1 and (offset.shape[2:] != input.shape[2:]):
             # print('Do resize for offset and mask')
             offset = F.interpolate(offset, size =  input.shape[2:], mode = 'trilinear', align_corners= False)

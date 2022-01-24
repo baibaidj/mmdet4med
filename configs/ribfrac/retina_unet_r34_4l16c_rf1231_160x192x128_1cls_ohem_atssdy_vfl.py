@@ -7,7 +7,7 @@ _base_ = [
 
 img_dir = 'data/Task113_RibFrac_KYRe'
 key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 'roi_fp':'_ins2cls.json'}
-data = dict(samples_per_gpu = 2, workers_per_gpu= 4, 
+data = dict(samples_per_gpu = 2, workers_per_gpu= 6, 
             train=dict(sample_rate = 1.0, json_filename = 'dataset_1231.json', img_dir=img_dir, key2suffix = key2suffix), 
             val=dict(sample_rate = 0.5, json_filename = 'dataset_1231.json', img_dir=img_dir, key2suffix = key2suffix), 
             test= dict(sample_rate = 0.1, json_filename = 'dataset_1231.json',img_dir=img_dir, key2suffix = key2suffix))
@@ -32,8 +32,8 @@ model = dict(
     )
 
 find_unused_parameters=True
-load_from =  'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atss_vfl_upnorm_1231/latest.pth'
-resume_from =  None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1222/latest.pth' 
+load_from = None # 'work_dirs/retina_unet_r34_4l16c_rf1231_160x192x128_1cls_ohem_atssdy_vfl/latest.pth'
+resume_from =  'work_dirs/retina_unet_r34_4l16c_rf1231_160x192x128_1cls_ohem_atssdy_vfl/latest.pth' 
 
 # optimizer
 optimizer = dict(
@@ -47,7 +47,7 @@ fp16 = dict(loss_scale = dict(init_scale=2**10, growth_factor=2.0,
 lr_config = dict(_delete_=True, 
                  policy='poly', power=0.99, min_lr=1e-5, 
                 # policy='CosineAnnealing',  min_lr=1e-5,
-                 by_epoch=False, warmup='linear', warmup_iters=500
+                 by_epoch=False, warmup='linear', warmup_iters=2000
                  )
 
 runner = dict(type='EpochBasedRunner', max_epochs=24)
