@@ -42,8 +42,8 @@ model = dict(
     )
 
 find_unused_parameters=True
-load_from = None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atss_vfl_upnorm_1231/latest.pth'
-resume_from = None # 'work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_3cls_ohem_atss_vfl_upnorm_1231/latest.pth' 
+load_from = None # 'work_dirs/retina_unet_cnext_s32c32_rf1231_160x192x128_1cls_ohem_atss_ce/latest.pth'
+resume_from = None # 'work_dirs/retina_unet_cnext_s32c32_rf1231_160x192x128_1cls_ohem_atss_ce/latest.pth' 
 
 # optimizer
 optimizer = dict(
