@@ -150,7 +150,7 @@ def plotNImage(img_2d_list, cmap='viridis', rows = 1,
         alpha_list = [1 / pow(2, n) for n in range(len(img_list))][::-1]
         for j, img in enumerate(img_list):
             ax.imshow(img, cmap=cmap[i] if j == 0 else 'gray', alpha = alpha_list.pop()) #0 (transparent) and 1 (opaque)
-        plt.title('%s-%0.1f-%0.1f' %(title_list[i], img_list[0].min(), img_list[0].max()), fontsize=16)
+        plt.title('%s[%0.1f~%0.1f]' %(title_list[i], img_list[0].min(), img_list[0].max()), fontsize=16)
         # ax.set_title('%s-%0.3f-%0.3f' %(title_list[i], img.min(), img.max()))
     # plt.colorbar()
     if fig_title is not None:
