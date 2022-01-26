@@ -18,9 +18,10 @@ from .yolox_pafpn import YOLOXPAFPN
 from .fpn_3d import FPN3D
 from .tpn_3d import TPN3D
 from .FaPN_3d import FaPN3D
+from .fpn_3d2022 import FPN3D2022
 __all__ = [
     'FPN', 'BFP', 'ChannelMapper', 'HRFPN', 'NASFPN', 'FPN_CARAFE', 'PAFPN',
     'NASFCOS_FPN', 'RFP', 'YOLOV3Neck', 'FPG', 'DilatedEncoder',
     'CTResNetNeck', 'SSDNeck', 'YOLOXPAFPN', 
-    'FPN3D', 'TPN3D', 'FaPN3D'
+    'FPN3D', 'TPN3D', 'FaPN3D', 'FPN3D2022'
 ]
