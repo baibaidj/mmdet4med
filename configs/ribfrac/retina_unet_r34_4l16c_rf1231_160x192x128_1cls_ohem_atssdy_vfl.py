@@ -20,7 +20,7 @@ model = dict(
                         loss_bbox=dict(loss_weight=0.4), 
                         anchor_generator=dict(octave_base_scale=2, scales_per_octave=2, verbose = False)
                         ), 
-        seg_head = dict(verbose = False, 
+        seg_head = dict(verbose = False,  
                         loss_decode =dict( loss_weight=(1.0 * 0.3, 0.66 * 0.3)), 
                     ),
         train_cfg= dict(
