@@ -196,7 +196,8 @@ def process_loop(img_paths, store_dir,
 if __name__ == '__main__':
 
 
-    imgdir2store = {'/data/lung_algorithm/data/sw_project/lung/MONAI/raw/imagesAll_0404' : 'Thoracic_SW', 
+    imgdir2store = {
+                    # '/data/lung_algorithm/data/sw_project/lung/MONAI/raw/imagesAll_0404' : 'Thoracic_SW', 
                     '/data/lung_algorithm/data/lung_nodule/raw/Task110_keya_CT/images': 'Thoracic_Nodule1', 
                     '/data/lung_algorithm/data/lung_nodule/raw/Task112_keya_CT/images': 'Thoracic_Nodule1', 
                     '/data/lung_algorithm/data/lung_nodule/raw/Task113_keya_CT/images': 'Thoracic_Nodule1', 
@@ -229,4 +230,3 @@ if __name__ == '__main__':
         cohort_info_tb.to_csv(store_rt/f'case_info_{cohort}_{counter}.csv', index = False)
         # save_string_list(store_rt/f'image_list_{cohort}_{counter}.txt', cohort_paths)
         counter += 1
-        break

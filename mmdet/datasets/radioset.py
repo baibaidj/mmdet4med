@@ -2,6 +2,7 @@ from .custom_nn import CustomDatasetNN
 from .custom_det import CustomDatasetDet
 from .custom_seg import CustomDatasetMonai
 from .transform4med.io4med import os, osp, load_string_list, np
+import pandas as pd
 
 from .builder import DATASETS
 
@@ -49,6 +50,7 @@ class AllCTDataset(CustomDatasetMonai):
         self.gt_seg_maps = None
         self.flag = np.ones(len(self), dtype=np.uint8)
 
+
     
     def _img_list2dataset(self, data_folder:str, **kwags):
         """
@@ -59,7 +61,12 @@ class AllCTDataset(CustomDatasetMonai):
         # a = [print(self.map_key(k)) for k in keys]
         js_fp = os.path.join(data_folder, self.json_filename)
         if not osp.exists(js_fp): return []
-        image_fps = load_string_list(js_fp)
+        if js_fp.endswith('txt'):
+            image_fps = load_string_list(js_fp)
+        elif js_fp.endswith('csv'):
+            case_tb = pd.read_csv(js_fp)
+            image_fps = case_tb['img_path']
+
         pid2pathpairs = []
         for ifp  in image_fps:
             cid = ifp.split(os.sep)[-1].split('.')[0]

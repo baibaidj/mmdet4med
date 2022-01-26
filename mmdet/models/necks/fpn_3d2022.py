@@ -6,10 +6,11 @@ from typing import Sequence, List
 from ..builder import NECKS
 from ..utils.ccnet_pure import print_tensor
 from ..utils import nan_hook
+# from mmdet.models.backbones.convnext_3d import CNextBlock3D
 
 
 @NECKS.register_module()
-class FPN3D(BaseModule):
+class FPN3D2022(BaseModule):
     r"""Feature Pyramid Network.
 
     modified based on UFPN from https://github.com/MIC-DKFZ/nnDetection/blob/main/nndet/arch/decoder/base.py
@@ -75,13 +76,14 @@ class FPN3D(BaseModule):
                  conv_cfg=None,
                  norm_cfg=None,
                  act_cfg=None, verbose = False, 
+                 kernel_size = 5, 
                  upsample_cfg=dict(type='deconv3d', mode=None, use_norm = False, 
                                     kernel_size = (2,2,2), stride = (2,2,2) ),
                  init_cfg=dict(
                      type='Xavier', layer='Conv3d', distribution='uniform'), 
                  is_double_chn = True,     
                 ):
-        super(FPN3D, self).__init__(init_cfg)
+        super(FPN3D2022, self).__init__(init_cfg)
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.fixed_out_channels = fixed_out_channels
@@ -94,6 +96,7 @@ class FPN3D(BaseModule):
         self.upsample_use_norm = upsample_cfg.pop('use_norm', False)
         self.deconv_cfg = upsample_cfg.copy()
         self.min_out_channels = min_out_channels
+        self.kernel_size = kernel_size
         if end_level == -1:
             self.backbone_end_level = self.num_ins
             assert num_outs >= self.num_ins - start_level
@@ -130,8 +133,8 @@ class FPN3D(BaseModule):
             fpn_conv = ConvModule(
                 self.out_channels[i],
                 self.out_channels[i],
-                3,
-                padding=1,
+                self.kernel_size,
+                padding= (self.kernel_size - 1)//2,
                 conv_cfg=conv_cfg,
                 norm_cfg=norm_cfg,
                 act_cfg=act_cfg,
