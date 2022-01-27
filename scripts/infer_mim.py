@@ -19,6 +19,7 @@ def main(cfg,
         nii_save_dir = '',  
         pid2niifp_map = dict(),
         is_test = False,
+        target_spacing = (1.6, 1.6, 1.6),
         fold_ix_str = '0@1', 
         ):
 
@@ -40,6 +41,13 @@ def main(cfg,
     if cfg.fp16: 
         wrap_fp16_model(model)
         print('\nFP16 inference')
+    
+    norm_intense_cfg = dict(type='NormalizeIntensityGPUd',
+                                    keys='img',
+                                    subtrahend=model.cfg.norm_param['mean'],
+                                    divisor=model.cfg.norm_param['std'],
+                                    percentile_99_5=model.cfg.norm_param['percentile_99_5'],
+                                    percentile_00_5=model.cfg.norm_param['percentile_00_5'])
     # print('\nCases to infer : %d \n' %len(pid2niifp_map))
     pcount = 0
     # infer by model
@@ -56,19 +64,34 @@ def main(cfg,
             print(f'{reconst_img_fp} exist, so skip inference')
             continue
 
-        img_3d, affine_matrix_i = IO4Nii.read(img_nii_fp, axis_order = None, 
+        img_3d_origin, affine_origin = IO4Nii.read(img_nii_fp, axis_order = None, 
                                                 verbose = False, dtype=np.int16)
-        cid_infos['image_3d'] = img_3d
-        cid_infos['affine'] = affine_matrix_i
+        # img_ori_size = img_3d_origin.shape
+        # # print_tensor(f'Pid {pid} img', img_3d_origin)
+        # old_spacing = [abs(affine_origin[i, i]) for i in range(3)]
+        # new_shape_raw = [int(img_ori_size[i] * old_spacing[i] / target_spacing[i]) for i in range(3)]
+
+        # # 1. resize to target spacing
+        # img_ori_resize = respacing_volume(img_3d_origin, new_shape_raw)
+        # img_shrink_size = img_ori_resize.shape
+        # affine2model = affine_matrix_i.copy()
+        # for i in range(3): affine2model[i, i]  = np.sign(affine_matrix_i[i, i]) * target_spacing[i]
+
+        # body_center = [img_shrink_size[i]//2  for i in range(3)]
+        # center_cropper = SpatialCropDJ(body_center, model.cfg.patch_size)
+        # img_3d_body, slices4img, slices4patch = center_cropper(img_3d_origin)
+
         timer = Timer() 
         # 400-16 = 192*2 = 384
-        crop_slicer = tuple([slice(64, 448), slice(64 , 448), slice(None, None)])
-        img_3d_crop = img_3d[crop_slicer]
-        reconstr_images, rand_masks = masked_image_modeling(model, img_3d_crop, 
-                                                        affine = affine_matrix_i,
-                                                        rescale = True)
+        # crop_slicer = tuple([slice(64, 448), slice(64 , 448), slice(None, None)])
+        # img_3d_crop = img_3d[crop_slicer]
+        reconstr_images, rand_masks = masked_image_modeling(model, img_3d_origin,  
+                                        affine = affine_origin, rescale = True, 
+                                        target_spacing = target_spacing, 
+                                        input_patch_size = model.cfg.patch_size, 
+                                        norm_intense_cfg = norm_intense_cfg)
         if cfg.verbose: 
-            print_tensor('\t reconstruct images', reconstr_images)
+            print_tensor('\t reconstruct images', reconstr_images) 
             print_tensor('\t rand masks', rand_masks)
         reconstr_images = reconstr_images[0, 0].cpu().numpy().astype(np.float32)
         rand_masks = rand_masks[0, 0].cpu().numpy().astype(np.uint8)                                           
@@ -76,13 +99,15 @@ def main(cfg,
         duration  = timer.since_start()
         print(f'\t infer takes {duration:04f}')
 
-        reconstr_img_origin = np.zeros_like(img_3d, dtype = np.float32)
-        reconstr_img_origin[crop_slicer] = reconstr_images
-        rand_mask_origin = np.zeros_like(img_3d, dtype = np.uint8)
-        rand_mask_origin[crop_slicer] = rand_masks
+        # reconstr_img_resize = np.zeros_like(img_ori_resize, dtype = np.float32)
+        # reconstr_img_resize[slices4img] = reconstr_images[slices4patch]
+        # rand_mask_resize = np.zeros_like(img_ori_resize, dtype = np.uint8)
+        # rand_mask_resize[slices4img] = rand_masks[slices4patch]
+        # reconstr_img_origin = respacing_volume(reconstr_img_resize, img_ori_size)
+        # rand_mask_origin = respacing_volume(rand_mask_resize, img_ori_size)
         
-        IO4Nii.write(reconstr_img_origin, nii_save_dir, f'{cid_true}_reconstruct', affine_matrix_i)
-        IO4Nii.write(rand_mask_origin, nii_save_dir, f'{cid_true}_rand_masks', affine_matrix_i)
+        IO4Nii.write(reconstr_images, nii_save_dir, f'{cid_true}_reconstruct', affine_origin)
+        IO4Nii.write(rand_masks, nii_save_dir, f'{cid_true}_rand_masks', affine_origin)
         pcount += 1
 
     # per_case_fp = osp.join(nii_save_dir, f'aug_inference_{fold_ix_str}.csv')

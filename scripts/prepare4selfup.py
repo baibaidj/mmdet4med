@@ -67,13 +67,14 @@ def find_body_extend(img_3d, verb = False):
     return img_3d_fg, slicer3d, fig
 
 def respacing_volume(img_3d, target_shape):
+    dtype = img_3d.dtype
     img_3d = torch.from_numpy(img_3d).float()
     # ipdb.set_trace()
     img_5d_new = F.interpolate(img_3d[None, None], 
                                 size = target_shape, 
                                 mode = 'trilinear', 
                                 align_corners= False)
-    img_3d_new = img_5d_new[0, 0].int().numpy()
+    img_3d_new = img_5d_new[0, 0].numpy().astype(dtype)
     return img_3d_new
 
 
@@ -138,8 +139,6 @@ def process1volume(pid, origin_path, save_dir,
     """
 
 
-
-
     img_3d_origin, affine_matrix = IO4Nii.read(origin_path, verbose = False, dtype = np.int16)
     img_ori_size = img_3d_origin.shape
     # print_tensor(f'Pid {pid} img', img_3d_origin)
@@ -168,7 +167,8 @@ def process1volume(pid, origin_path, save_dir,
     
     # print_tensor('[final crop]', img_3d_body)
     store_file = f'{pid}_{save_suffix}'
-    new_img_path = IO4Nii.write(img_3d_body.astype(np.int16), save_dir, store_file, affine_new)
+    if not osp.exists(osp.join(save_dir, store_file, '.nii.gz')):
+        new_img_path = IO4Nii.write(img_3d_body.astype(np.int16), save_dir, store_file, affine_new)
 
     save_fig(proj_fig, osp.join(save_dir, f'{store_file}.png'))
 
@@ -199,64 +199,71 @@ def process_loop(img_paths, store_dir,
 if __name__ == '__main__':
 
 
-    pn_rt = Path(f'/mnt/data4t/dejuns/stoic/open_pneumonia') 
-    sets = ['train', 'test']
-    for set_name in sets:
-        # set_name = 'train'
-        raw_set_dir = pn_rt/f'{set_name}_dicom'
-        store_set_dir = pn_rt/f'{set_name}_nii'
+    # pn_rt = Path(f'/mnt/data4t/dejuns/stoic/open_pneumonia') 
+    # sets = ['train', 'test']
+    # for set_name in sets:
+    #     # set_name = 'train'
+    #     raw_set_dir = pn_rt/f'{set_name}_dicom'
+    #     store_set_dir = pn_rt/f'{set_name}_nii'
 
-        case_dcm_dirs = []
-        for subr, subd, subf in os.walk(raw_set_dir):
-            if len(subf) > 0:
-                if 'dcm' in subf[0]:
-                    case_dcm_dirs.append(subr)
+    #     case_dcm_dirs = []
+    #     for subr, subd, subf in os.walk(raw_set_dir):
+    #         if len(subf) > 0:
+    #             if 'dcm' in subf[0]:
+    #                 case_dcm_dirs.append(subr)
         
-        print(f'[DicomDir] under {raw_set_dir} ', len(case_dcm_dirs))
+    #     print(f'[DicomDir] under {raw_set_dir} ', len(case_dcm_dirs))
         
-        case_info_list, *_ =  run_parralel(Dicom2NiiLoop, 
-                                        case_dcm_dirs, store_set_dir, 
-                                        num_workers=4)
-        set_info_tb = pd.DataFrame(case_info_list)
-        set_info_tb.to_csv(store_set_dir/f'dicom_info_{set_name}.csv', index = False)
+    #     case_info_list, *_ =  run_parralel(Dicom2NiiLoop, 
+    #                                     case_dcm_dirs, store_set_dir, 
+    #                                     num_workers=4)
+    #     set_info_tb = pd.DataFrame(case_info_list)
+    #     set_info_tb.to_csv(store_set_dir/f'dicom_info_{set_name}.csv', index = False)
 
 
-    # imgdir2store = {
-    #                 # '/data/lung_algorithm/data/sw_project/lung/MONAI/raw/imagesAll_0404' : 'Thoracic_SW', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task110_keya_CT/images': 'Thoracic_Nodule1', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task112_keya_CT/images': 'Thoracic_Nodule1', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task113_keya_CT/images': 'Thoracic_Nodule1', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task114_keya_CT/images': 'Thoracic_Nodule2', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task115_keya_CT/images': 'Thoracic_Nodule2', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task116_keya_CT/images': 'Thoracic_Nodule2', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task210_keya_CT/images': 'Thoracic_Nodule3', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task211_keya_CT/images': 'Thoracic_Nodule3', 
-    #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task310_keya_CT/images': 'Thoracic_Nodule3', 
-    #                 # '/data/lung_algorithm/data/LUNA16/raw/imagesTr' : 'Thoracic_LUNA',
-    #                 # '/nas/pneumonia/pn_classification_nii/anoy_nii_all/Images': 'Thoracic_Pneumonia', 
-    #                 '/mnt/data4t/dejuns/ribfrac/infer4refine/anndate_1231/cv02_test_941/image': 'Thoracic_Ribfrac1', 
-    #                 '/mnt/data4t/dejuns/ribfrac/infer4refine/anndate_1231/cv12_test_942/image': 'Thoracic_Ribfrac2', 
+    imgdir2store = {
+                    # '/data/lung_algorithm/data/sw_project/lung/MONAI/raw/imagesAll_0404' : 'Thoracic_SW', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task110_keya_CT/images': 'Thoracic_Nodule1', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task112_keya_CT/images': 'Thoracic_Nodule1', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task113_keya_CT/images': 'Thoracic_Nodule1', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task114_keya_CT/images': 'Thoracic_Nodule2', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task115_keya_CT/images': 'Thoracic_Nodule2', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task116_keya_CT/images': 'Thoracic_Nodule2', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task210_keya_CT/images': 'Thoracic_Nodule3', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task211_keya_CT/images': 'Thoracic_Nodule3', 
+                    # '/data/lung_algorithm/data/lung_nodule/raw/Task310_keya_CT/images': 'Thoracic_Nodule3', 
+                    # '/data/lung_algorithm/data/LUNA16/raw/imagesTr' : 'Thoracic_LUNA',
+                    # '/nas/pneumonia/pn_classification_nii/anoy_nii_all/Images': 'Thoracic_Pneumonia', 
+                    # '/mnt/data4t/dejuns/ribfrac/infer4refine/anndate_1231/cv02_test_941/image': 'Thoracic_Ribfrac1', 
+                    # '/mnt/data4t/dejuns/ribfrac/infer4refine/anndate_1231/cv12_test_942/image': 'Thoracic_Ribfrac2', 
 
-    #                 }
-    # # store_root = Path('/data/lung_algorithm/data/selfup/processed')
-    # store_root = Path('/mnt/data4t/dejuns/selfup/processed')
+                    # '/nas/pneumonia/pn_segmentation/Keya_COVID19/Images' : 'Thoracic_PNKy0',  # 574
+                    # '/nas/pneumonia/pn_segmentation/keya_d3/Images' : 'Thoracic_PNKy0',  # 273
+                    # '/nas/pneumonia/pn_segmentation/keya_d4/images' : 'Thoracic_PNKy0',  # 252
+                    '/nas/pneumonia/pn_segmentation/Keya_data_mildcase/Images': 'Thoracic_PNKy1',  # 243
+                    '/nas/pneumonia/pn_segmentation/Keya_data_mildcase_v2/Images': 'Thoracic_PNKy1',  # 261
+                    '/nas/pneumonia/pn_segmentation/anoy_nii/Images': 'Thoracic_PNKy1',  # 186
+                    '/nas/pneumonia/pn_segmentation/manual_sel_negtive/Images': 'Thoracic_PNKy1',  # 439
+                    }
+    # store_root = Path('/data/lung_algorithm/data/selfup/processed')
+    store_root = Path('/mnt/data4t/dejuns/selfup/processed')
 
-    # target_spacing = (1.6, 1.6, 1.6)
-    # target_shape = (240, 240, None)
-    # save_suffix = 'p17s224'
-    # counter = 0
-    # for img_dir, cohort in imgdir2store.items():
-    #     store_rt = store_root/cohort
-    #     store_rt.mkdir(parents=True, exist_ok=True)
-    #     image_paths = [osp.join(img_dir, a) for a in os.listdir(img_dir)]
+    target_spacing = (1.6, 1.6, 1.6)
+    target_shape = (240, 240, None)
+    save_suffix = 'p17s224'
+    counter = 3
+    for img_dir, cohort in imgdir2store.items():
+        store_rt = store_root/cohort
+        store_rt.mkdir(parents=True, exist_ok=True)
+        image_paths = [osp.join(img_dir, a) for a in os.listdir(img_dir) if '.nii' in a]
 
-    #     cohort_info_list, *_ = run_parralel(process_loop, 
-    #                                 image_paths, 
-    #                                 store_rt, 
-    #                                 target_spacing, 
-    #                                 target_shape, 
-    #                                 save_suffix, num_workers=8)
-    #     cohort_info_tb = pd.DataFrame(cohort_info_list)
-    #     cohort_info_tb.to_csv(store_rt/f'case_info_{cohort}_{counter}.csv', index = False)
-    #     # save_string_list(store_rt/f'image_list_{cohort}_{counter}.txt', cohort_paths)
-    #     counter += 1
+        cohort_info_list, *_ = run_parralel(process_loop, 
+                                    image_paths, 
+                                    store_rt, 
+                                    target_spacing, 
+                                    target_shape, 
+                                    save_suffix, num_workers=1)
+        cohort_info_tb = pd.DataFrame(cohort_info_list)
+        cohort_info_tb.to_csv(store_rt/f'case_info_{cohort}_{counter}.csv', index = False)
+        # save_string_list(store_rt/f'image_list_{cohort}_{counter}.txt', cohort_paths)
+        counter += 1
