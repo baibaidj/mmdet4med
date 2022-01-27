@@ -4,7 +4,10 @@ import torch.nn as nn
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 from torch.nn.modules.utils import _pair,_triple
-import MDCONV_CUDA
+try: 
+    import MDCONV_CUDA
+except:
+    print('DCN3D should be built before use')
 
 # for building, please refer to https://github.com/baibaidj/modulated-deform-conv
 
