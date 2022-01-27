@@ -9,14 +9,15 @@ import torch
 import torch.nn.functional as F
 import numpy as np 
 import pandas as pd
+import SimpleITK as sitk
 
 from mmdet.utils.this_utils import  run_parralel
 from mmdet.datasets.transform4med.io4med import (
         os, IO4Nii, osp, Path, print_tensor)
-from mmdet.datasets.transform4med.load_dicom import Dicom2NiiLoop
+from mmdet.datasets.transform4med.load_dicom import Dicom2NiiLoop, affine_matrix_sitk
 
 from skimage.morphology import binary_opening, disk
-import cc3d
+import cc3d, ipdb
 
 from demo.visual_gt_pred import  plotNImage, save_fig
 
@@ -31,15 +32,15 @@ def largest_region_index(mask_multi):
 def find_body_extend(img_3d, verb = False):
 
     x, y, z = img_3d.shape
-    axial_proj_2d = img_3d.sum(axis = -1)
+    axial_proj_2d = img_3d[..., z//4:3*z//4].sum(axis = -1) * 2 /z
     hu_max, hu_min = np.max(axial_proj_2d), np.min(axial_proj_2d)
     hu_mean, hu_std = np.mean(axial_proj_2d), np.std(axial_proj_2d)
-    thresh = hu_mean + 0.55 * hu_std
+    thresh = hu_mean + 0.4 * hu_std
     # axial_proj_2d = (axial_proj_2d - hu_mean) / hu_std
     # thresh = threshold_otsu(axial_proj_2d)
     if verb: print(f'[axial_proj] min{hu_min:.4f} max{hu_max:.4f} mean{hu_mean:.4f} std{hu_std:.4f} thresh {thresh}')
     down_mask = np.array(axial_proj_2d > thresh, dtype=np.uint8)
-    down_mask_open = binary_opening(down_mask, disk(int(7*x/512)))
+    down_mask_open = binary_opening(down_mask, disk(int(5*x/512)))
     down_mask_max, num_region = cc3d.largest_k(down_mask_open, k = 1, connectivity=8, delta=0, return_N=True)
 
     fg_coords = np.where(down_mask_max.astype(bool))
@@ -137,10 +138,8 @@ def process1volume(pid, origin_path, save_dir,
     from load to process to save
     """
 
-
-
-
     img_3d_origin, affine_matrix = IO4Nii.read(origin_path, verbose = False, dtype = np.int16)
+
     img_ori_size = img_3d_origin.shape
     # print_tensor(f'Pid {pid} img', img_3d_origin)
     old_spacing = [abs(affine_matrix[i, i]) for i in range(3)]
@@ -194,31 +193,116 @@ def process_loop(img_paths, store_dir,
 
     return case_info_list
 
+triple2str = lambda x: '_'.join([str(a) for a in x]) if isinstance(x, (tuple, list)) else ''
+
+def stoic_converse_loop(case_info_tb, stoic_rt, save_dir,
+                        target_spacing = (1.6, 1.6, 1.6), 
+                        target_shape_raw = (240, 240, None), 
+                        prcs_ix = 99):
+    case_info_list = []
+    for i in case_info_tb.index:
+        case_info = dict(case_info_tb.loc[i])
+        pid = case_info['PatientID']
+        covid = case_info['probCOVID']
+        severity = case_info['probSevere']
+        mhd_fp = stoic_rt/img_dir/f'{pid}.mha'
+        # if str(pid) not in ['3616']: continue
+        print(f'[Job{prcs_ix}] load {pid}', mhd_fp)
+        img_sitk = sitk.ReadImage(str(mhd_fp))
+
+        for k in img_sitk.GetMetaDataKeys():
+            case_info[k] = img_sitk.GetMetaData(k)
+
+        age, sex = case_info.get('PatientAge', 0), case_info.get('PatientSex', 'N')
+        store_file = f'{pid}_age{age}_sex{sex}_covid{covid}_severe{severity}'
+        case_info['img_path'] = store_file
+
+        affine_matrix = affine_matrix_sitk(img_sitk)
+        img_3d_origin = sitk.GetArrayFromImage(img_sitk).transpose(2, 1, 0)
+
+        img_ori_size = img_3d_origin.shape
+        # print_tensor(f'Pid {pid} img', img_3d_origin)
+        old_spacing = [abs(affine_matrix[i, i]) for i in range(3)]
+        new_shape_raw = [int(img_ori_size[i] * old_spacing[i] / target_spacing[i]) for i in range(3)]
+
+        # 1. resize to target spacing
+        img_ori_resize = respacing_volume(img_3d_origin, new_shape_raw)
+        img_shrink_size = img_ori_resize.shape
+
+        target_shape = [a for a in target_shape_raw]
+        for i, ts in enumerate(target_shape_raw): 
+            if ts is None: target_shape[i] = new_shape_raw[i]
+
+        print(f'\t orisize {img_ori_size} respacing {img_shrink_size} target {target_shape}')
+        # 2. find body center and perform center crop to target size
+        img_3d_fg, body_slicer, proj_fig = find_body_extend(img_ori_resize, verb = True)
+
+        body_center = [(body_slicer[i].start + body_slicer[i].stop)//2  for i in range(3)]
+        center_cropper = SpatialCropDJ(body_center, target_shape)
+        img_3d_body, slices4img, slices4patch = center_cropper(img_3d_fg)
+
+        # 3. write body image to disk
+        affine_new = affine_matrix.copy()
+        for i in range(3): affine_new[i, i]  = np.sign(affine_matrix[i, i]) * target_spacing[i]
+        
+
+        case_info.update({'old_shape': triple2str(img_ori_size), 'old_spacing': triple2str(old_spacing), 
+                        'resize_shape': triple2str(img_shrink_size), 'new_shape': triple2str(img_3d_body.shape), 
+                        'new_spacing': triple2str(target_spacing), 'body_center': triple2str(body_center)})
+        case_info_list.append(case_info)
+
+        # print_tensor('[final crop]', img_3d_body)
+        store_fp = osp.join(save_dir, store_file, '.nii.gz')
+        # if osp.exists(store_fp): continue
+        new_img_path = IO4Nii.write(img_3d_body.astype(np.int16), save_dir, store_file, affine_new)
+        save_fig(proj_fig, osp.join(save_dir, f'{store_file}.png'))
+
+    return case_info_list
+
 
 
 if __name__ == '__main__':
 
+    # /mnt/3efe7c24-877b-427a-b1a5-4a26ebca9208/STOIC2021/data
+    # pn_rt = Path(f'/mnt/data4t/dejuns/stoic/open_pneumonia') 
+    # sets = ['train', 'test']
+    # for set_name in sets:
+    #     # set_name = 'train'
+    #     raw_set_dir = pn_rt/f'{set_name}_dicom'
+    #     store_set_dir = pn_rt/f'{set_name}_nii'
 
-    pn_rt = Path(f'/mnt/data4t/dejuns/stoic/open_pneumonia') 
-    sets = ['train', 'test']
-    for set_name in sets:
-        # set_name = 'train'
-        raw_set_dir = pn_rt/f'{set_name}_dicom'
-        store_set_dir = pn_rt/f'{set_name}_nii'
+    #     case_dcm_dirs = []
+    #     for subr, subd, subf in os.walk(raw_set_dir):
+    #         if len(subf) > 0:
+    #             if 'dcm' in subf[0]:
+    #                 case_dcm_dirs.append(subr)
+        
+    #     print(f'[DicomDir] under {raw_set_dir} ', len(case_dcm_dirs))
+        
+    #     case_info_list, *_ =  run_parralel(Dicom2NiiLoop, 
+    #                                     case_dcm_dirs, store_set_dir, 
+    #                                     num_workers=4)
+    #     set_info_tb = pd.DataFrame(case_info_list)
+    #     set_info_tb.to_csv(store_set_dir/f'dicom_info_{set_name}.csv', index = False)
+    # abnormal cases: 9459, 2638, 1943, 3616, 7022
+    target_spacing = (1.6, 1.6, 1.6)
+    target_shape_raw = (240, 240, None)
+    stoic_rt = Path(f'/mnt/3efe7c24-877b-427a-b1a5-4a26ebca9208/STOIC2021')
+    save_dir = Path('/mnt/data2/dejuns/stoic2021/processed')
+    img_dir, meta_file = 'data/mha', 'metadata/reference.csv'
+    meta_keys = ('PatientID', 'probCOVID', 'probSevere', 'ITK_InputFilterName', 'ITK_original_direction', 
+                'ITK_original_spacing', 'PatientAge', 'PatientName', 'PatientSex', 'SliceThickness')
 
-        case_dcm_dirs = []
-        for subr, subd, subf in os.walk(raw_set_dir):
-            if len(subf) > 0:
-                if 'dcm' in subf[0]:
-                    case_dcm_dirs.append(subr)
+    case_info_tb = pd.read_csv(stoic_rt/meta_file)
+    case_info_list, *_ = run_parralel(stoic_converse_loop, 
+                                        case_info_tb, 
+                                        stoic_rt, save_dir, 
+                                        target_spacing, target_shape_raw, 
+                                        num_workers=1)
+
+    # case_info_alltb = pd.DataFrame(case_info_list)
+    # case_info_alltb.to_csv(save_dir/f'stoic2021_case_info.csv', index = False)
         
-        print(f'[DicomDir] under {raw_set_dir} ', len(case_dcm_dirs))
-        
-        case_info_list, *_ =  run_parralel(Dicom2NiiLoop, 
-                                        case_dcm_dirs, store_set_dir, 
-                                        num_workers=4)
-        set_info_tb = pd.DataFrame(case_info_list)
-        set_info_tb.to_csv(store_set_dir/f'dicom_info_{set_name}.csv', index = False)
 
 
     # imgdir2store = {
@@ -234,9 +318,9 @@ if __name__ == '__main__':
     #                 # '/data/lung_algorithm/data/lung_nodule/raw/Task310_keya_CT/images': 'Thoracic_Nodule3', 
     #                 # '/data/lung_algorithm/data/LUNA16/raw/imagesTr' : 'Thoracic_LUNA',
     #                 # '/nas/pneumonia/pn_classification_nii/anoy_nii_all/Images': 'Thoracic_Pneumonia', 
-    #                 '/mnt/data4t/dejuns/ribfrac/infer4refine/anndate_1231/cv02_test_941/image': 'Thoracic_Ribfrac1', 
-    #                 '/mnt/data4t/dejuns/ribfrac/infer4refine/anndate_1231/cv12_test_942/image': 'Thoracic_Ribfrac2', 
-
+    #                 # '/mnt/data4t/dejuns/ribfrac/infer4refine/anndate_1231/cv02_test_941/image': 'Thoracic_Ribfrac1', 
+    #                 # '/mnt/data4t/dejuns/ribfrac/infer4refine/anndate_1231/cv12_test_942/image': 'Thoracic_Ribfrac2', 
+    #                 ''
     #                 }
     # # store_root = Path('/data/lung_algorithm/data/selfup/processed')
     # store_root = Path('/mnt/data4t/dejuns/selfup/processed')
