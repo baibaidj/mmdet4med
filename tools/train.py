@@ -20,7 +20,7 @@ from mmdet import __version__
 from mmdet.apis import init_random_seed, set_random_seed, train_detector, train_detector_swa
 from mmdet.datasets import build_dataset
 from mmdet.models import build_detector
-from mmdet.utils import collect_env, get_root_logger
+from mmdet.utils import collect_env, get_root_logger, setup_multi_processes
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
@@ -40,13 +40,19 @@ def parse_args():
     group_gpus.add_argument(
         '--gpus',
         type=int,
-        help='number of gpus to use '
+        help='(Deprecated, please use --gpu-id) number of gpus to use '
         '(only applicable to non-distributed training)')
     group_gpus.add_argument(
         '--gpu-ids',
         type=int,
         nargs='+',
-        help='ids of gpus to use '
+        help='(Deprecated, please use --gpu-id) ids of gpus to use '
+        '(only applicable to non-distributed training)')
+    group_gpus.add_argument(
+        '--gpu-id',
+        type=int,
+        default=0,
+        help='id of gpu to use '
         '(only applicable to non-distributed training)')
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument(
@@ -97,6 +103,10 @@ def main():
     cfg = Config.fromfile(args.config)
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
+
+    # set multi-process settings
+    setup_multi_processes(cfg)
+
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
@@ -111,21 +121,24 @@ def main():
     if args.resume_from is not None:
         cfg.resume_from = args.resume_from
     cfg.auto_resume = args.auto_resume
+    if args.gpus is not None:
+        cfg.gpu_ids = range(1)
+        warnings.warn('`--gpus` is deprecated because we only support '
+                      'single GPU mode in non-distributed training. '
+                      'Use `gpus=1` now.')
     if args.gpu_ids is not None:
-        cfg.gpu_ids = args.gpu_ids
-    else:
-        cfg.gpu_ids = range(1) if args.gpus is None else range(args.gpus)
+        cfg.gpu_ids = args.gpu_ids[0:1]
+        warnings.warn('`--gpu-ids` is deprecated, please use `--gpu-id`. '
+                      'Because we only support single GPU mode in '
+                      'non-distributed training. Use the first GPU '
+                      'in `gpu_ids` now.')
+    if args.gpus is None and args.gpu_ids is None:
+        cfg.gpu_ids = [args.gpu_id]
 
     # torch.autograd.set_detect_anomaly(True)
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
         distributed = False
-        if len(cfg.gpu_ids) > 1:
-            warnings.warn(
-                f'We treat {cfg.gpu_ids} as gpu-ids, and reset to '
-                f'{cfg.gpu_ids[0:1]} as gpu-ids to avoid potential error in '
-                'non-distribute training time.')
-            cfg.gpu_ids = cfg.gpu_ids[0:1]
     else:
         distributed = True
         init_dist(args.launcher, **cfg.dist_params)

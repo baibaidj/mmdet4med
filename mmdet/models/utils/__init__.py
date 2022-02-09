@@ -7,7 +7,7 @@ from .csp_layer import CSPLayer
 from .gaussian_target import gaussian_radius, gen_gaussian_target
 from .inverted_residual import InvertedResidual
 from .make_divisible import make_divisible
-from .misc import interpolate_as, nan_hook
+from .misc import interpolate_as, sigmoid_geometric_mean,  nan_hook
 from .normed_predictor import NormedConv2d, NormedLinear
 from .positional_encoding import (LearnedPositionalEncoding,
                                   SinePositionalEncoding)
@@ -35,7 +35,7 @@ __all__ = [
     'NormedLinear', 'NormedConv2d', 'make_divisible', 'InvertedResidual',
     'SELayer', 'interpolate_as', 'ConvUpsample', 'CSPLayer',
     'adaptive_avg_pool2d', 'AdaptiveAvgPool2d', 'PatchEmbed', 'nchw_to_nlc',
-    'nlc_to_nchw', 'pvt_convert', 
+    'nlc_to_nchw', 'pvt_convert', 'sigmoid_geometric_mean', 
 
     'ResLayer3D', 'ResLayerIso', 'PatchEmbed3D', 'nlc_to_nchwd', 'nchwd_to_nlc', 'nan_hook', 
     'DeformConv3d', 'ModulatedDeformConv3d'
