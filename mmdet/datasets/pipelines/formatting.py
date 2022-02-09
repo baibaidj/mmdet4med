@@ -5,6 +5,7 @@ import mmcv
 import numpy as np
 import torch
 from mmcv.parallel import DataContainer as DC
+from ..transform4med.io4med import print_tensor
 
 from ..builder import PIPELINES
 
@@ -316,12 +317,13 @@ class Collect:
     """
 
     def __init__(self,
-                 keys,
+                 keys, verbose = False,
                  meta_keys=('filename', 'ori_filename', 'ori_shape',
                             'img_shape', 'pad_shape', 'scale_factor', 'flip',
                             'flip_direction', 'img_norm_cfg')):
         self.keys = keys
         self.meta_keys = meta_keys
+        self.verbose = verbose
 
     def __call__(self, results):
         """Call function to collect keys in results. The keys in ``meta_keys``
@@ -340,15 +342,18 @@ class Collect:
         data = {}
         img_meta = {}
         for key in self.meta_keys:
-            img_meta[key] = results[key]
+            img_meta[key] = results.get(key, None)#results[key]
+            if self.verbose: print(f'[collect] meta {key}', img_meta[key])
         data['img_metas'] = DC(img_meta, cpu_only=True)
         for key in self.keys:
             data[key] = results[key]
+            if self.verbose:  print_tensor(f'[collect] {key}', data[key].data)
         return data
 
     def __repr__(self):
         return self.__class__.__name__ + \
                f'(keys={self.keys}, meta_keys={self.meta_keys})'
+
 
 
 @PIPELINES.register_module()
@@ -390,3 +395,50 @@ class WrapFieldsToLists:
 
     def __repr__(self):
         return f'{self.__class__.__name__}()'
+
+
+@PIPELINES.register_module()
+class FormatShapeMonai:
+    """
+    input_image: HWT
+    3D model: HWT > 1THW
+    2D model-tsm: HWT > T1HW, 
+
+    """
+
+    def __init__(self, input_format= 'CWHD', collapse = False, channels = 1,
+                keys = ('image', 'label', 'sign_dist_map'),
+                is_gt2long = True,
+                use_datacontainer = True, 
+                key2long = ('gt_semantic_seg', 'seg', 'label'),
+                verbose = False):
+        self.input_format = input_format
+        self.collapse = collapse
+        self.channels = channels
+        self.use_datacontainer = use_datacontainer
+        self.keys = keys
+        self.verbose = verbose
+        self.key2long = key2long
+
+        if self.input_format not in ['CDHW', 'DCHW', 'CHW', 'CWHD']:
+            raise ValueError(
+                f'The input format {self.input_format} is invalid.')
+
+    def __call__(self, results):
+        """
+        data are assumed on gpus, in shape of CWHD
+        """
+        for key in self.keys:
+            tensor_key = results.get(key, None)
+            if tensor_key is None: continue
+            if self.verbose: print_tensor(f'\t[format]raw input {key}', tensor_key)
+            if key in self.key2long: tensor_key = tensor_key.to(torch.long)
+
+            if key == 'img':
+                tensor_key = tensor_key.expand(self.channels, -1, -1, -1)
+            # if self.input_format == 'CWHD':
+            if self.input_format == 'DCHW':
+                tensor_key = tensor_key.permute(3, 0, 2, 1)
+            if self.verbose: print_tensor(f'\t[format]{self.input_format} {key}', tensor_key)
+            results[key] = DC(tensor_key, stack= True) if self.use_datacontainer else tensor_key
+        return results
