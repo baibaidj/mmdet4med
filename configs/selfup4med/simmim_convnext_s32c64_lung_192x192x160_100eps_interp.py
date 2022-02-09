@@ -5,9 +5,9 @@ _base_ = [
 ]
 
 data = dict(samples_per_gpu = 6, workers_per_gpu= 9, 
-            train=dict(sample_rate = 1.0, json_filename = 'case_info_5sources.csv', split='train'), 
-            val=dict(sample_rate = 1.0, json_filename = 'case_info_5sources.csv', split='test'), 
-            test= dict(sample_rate = 0.1, json_filename = 'case_info_5souces.csv', split='test')
+            train=dict(sample_rate = 1.0, json_filename = 'case_info_6sources.csv', split='train'), 
+            val=dict(sample_rate = 1.0, json_filename = 'case_info_6sources.csv', split='test'), 
+            test= dict(sample_rate = 0.1, json_filename = 'case_info_6souces.csv', split='test')
             )
             
 model = dict(
@@ -23,7 +23,7 @@ model = dict(
 )
 
 find_unused_parameters=True
-load_from = 'work_dirs/simmim_convnext_s32c64_lung_192x192x160_100eps_interp/latest.pth'
+load_from = 'work_dirs/simmim_convnext_s32c64_lung_192x192x160_100eps_interp/epoch_46_5sources.pth'
 resume_from = None  #'work_dirs/simmim_convnext_s32c64_lung_192x192x160_100eps_interp/latest.pth'
 
 # optimizer
@@ -41,7 +41,7 @@ lr_config = dict(_delete_=True,
                 min_lr=1e-4, by_epoch=False,  warmup='linear', warmup_iters=1000, 
                  )
 
-runner = dict(type='EpochBasedRunner', max_epochs=128)
+runner = dict(type='EpochBasedRunner', max_epochs=24)
 checkpoint_config = dict(interval=2, max_keep_ckpts = 4)
 # yapf:disable 
 log_config = dict(interval=20, hooks=[

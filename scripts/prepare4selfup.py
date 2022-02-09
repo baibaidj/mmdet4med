@@ -215,18 +215,22 @@ if __name__ == '__main__':
     target_shape = (240, 240, None)
     save_suffix = 'p17s224'
     counter = 0
-    for img_dir, cohort in imgdir2store.items():
-        store_rt = store_root/cohort
-        store_rt.mkdir(parents=True, exist_ok=True)
-        image_paths = [osp.join(img_dir, a) for a in os.listdir(img_dir)]
+    # for img_dir, cohort in imgdir2store.items():
+    #     store_rt = store_root/cohort
+    #     store_rt.mkdir(parents=True, exist_ok=True)
+    #     image_paths = [osp.join(img_dir, a) for a in os.listdir(img_dir)]
 
-        cohort_info_list, *_ = run_parralel(process_loop, 
-                                    image_paths, 
-                                    store_rt, 
-                                    target_spacing, 
-                                    target_shape, 
-                                    save_suffix, num_workers=4)
-        cohort_info_tb = pd.DataFrame(cohort_info_list)
-        cohort_info_tb.to_csv(store_rt/f'case_info_{cohort}_{counter}.csv', index = False)
-        # save_string_list(store_rt/f'image_list_{cohort}_{counter}.txt', cohort_paths)
-        counter += 1
+    #     cohort_info_list, *_ = run_parralel(process_loop, 
+    #                                 image_paths, 
+    #                                 store_rt, 
+    #                                 target_spacing, 
+    #                                 target_shape, 
+    #                                 save_suffix, num_workers=4)
+    #     cohort_info_tb = pd.DataFrame(cohort_info_list)
+    #     cohort_info_tb.to_csv(store_rt/f'case_info_{cohort}_{counter}.csv', index = False)
+    #     # save_string_list(store_rt/f'image_list_{cohort}_{counter}.txt', cohort_paths)
+    #     counter += 1
+    
+    
+
+        
