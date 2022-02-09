@@ -659,68 +659,69 @@ class Path4TCIA(object):
 
     
 
-class SpatialNormer():
-    """
-    given old-spacing and new-spacing, 
-    transform old shape to new shape
-    the dimensions for spacing and shape should be the same
-    default is z, y, x; or axial, saggital, coronal 
+# class SpatialNormer():
+#     """
+#     given old-spacing and new-spacing, 
+#     transform old shape to new shape
+#     the dimensions for spacing and shape should be the same
+#     default is z, y, x; or axial, saggital, coronal 
     
-    """
-    def __init__(self, affine_matrix, new_spacing, verbose = False):
-        assert affine_matrix.shape == (4,4)
-        assert len(new_spacing) ==3
+#     """
+#     def __init__(self, affine_matrix, new_spacing, verbose = False):
+#         assert affine_matrix.shape == (4,4)
+#         assert len(new_spacing) ==3
 
-        self.affine_matrix = affine_matrix
-        self.old_spacing = [affine_matrix[2-i, 2-i] for i in range(3)] # z, y, x
-        self.new_spacing = [new_spacing[a] * np.sign(self.old_spacing[a]) for a in range(3)]
+#         self.affine_matrix = affine_matrix
+#         self.old_spacing = [affine_matrix[2-i, 2-i] for i in range(3)] # z, y, x
+#         self.new_spacing = [new_spacing[a] * np.sign(self.old_spacing[a]) for a in range(3)]
 
-        self.verbose = verbose
-        if self.verbose: print('\n\nold affine\n', affine_matrix)
+#         self.verbose = verbose
+#         if self.verbose: print('\n\nold affine\n', affine_matrix)
 
-    @property
-    def x_col_sign(self): return int(-1 * np.sign(self.affine_matrix[0,0]))
+#     @property
+#     def x_col_sign(self): return int(-1 * np.sign(self.affine_matrix[0,0]))
 
-    @property
-    def y_row_sign(self): return int(-1 * np.sign(self.affine_matrix[1,1]))
+#     @property
+#     def y_row_sign(self): return int(-1 * np.sign(self.affine_matrix[1,1]))
 
-    @property
-    def z_slice_sign(self): return int(np.sign(self.affine_matrix[2,2]))
+#     @property
+#     def z_slice_sign(self): return int(np.sign(self.affine_matrix[2,2]))
 
-    @property
-    def new_affine(self):
-        new_affine_matrix = np.copy(self.affine_matrix)
-        for i in range(3):
-            new_affine_matrix[2-i, 2-i] = self.new_spacing[i]
+#     @property
+#     def new_affine(self):
+#         new_affine_matrix = np.copy(self.affine_matrix)
+#         for i in range(3):
+#             new_affine_matrix[2-i, 2-i] = self.new_spacing[i]
         
-        if self.verbose: print('new affine\n', new_affine_matrix)
-        return new_affine_matrix
+#         if self.verbose: print('new affine\n', new_affine_matrix)
+#         return new_affine_matrix
 
-    @property
-    def trans_ratio(self):
-        ratio = [ abs(self.old_spacing[a]/self.new_spacing[a]) for a 
-                 in range(3)]
-        if self.verbose: print('trans ratio\n', ratio)
-        return ratio
+#     @property
+#     def trans_ratio(self):
+#         ratio = [ abs(self.old_spacing[a]/self.new_spacing[a]) for a 
+#                  in range(3)]
+#         if self.verbose: print('trans ratio\n', ratio)
+#         return ratio
     
-    def new_shape(self, old_shape):
-        new_shape = [int(old_shape[a] * self.trans_ratio[a]) for a in range(3)]
-        if self.verbose: print('new shape\n', new_shape)
-        return new_shape
+#     def new_shape(self, old_shape):
+#         new_shape = [int(old_shape[a] * self.trans_ratio[a]) for a in range(3)]
+#         if self.verbose: print('new shape\n', new_shape)
+#         return new_shape
 
-    def transform(self, input_image, mode = 'nearest'):
-        if self.verbose: print_tensor('input\n', input_image)
-        try:
-            input_tensor = torch.from_numpy(input_image.copy())
-        except TypeError:
-            input_image = np.array(input_image, dtype = np.uint8)
-            input_tensor = torch.from_numpy(input_image.copy())
+#     def transform(self, input_image, mode = 'nearest'):
+#         if self.verbose: print_tensor('input\n', input_image)
+#         try:
+#             input_tensor = torch.from_numpy(input_image.copy())
+#         except TypeError:
+#             input_image = np.array(input_image, dtype = np.uint8)
+#             input_tensor = torch.from_numpy(input_image.copy())
             
-        np_dtype = input_image.dtype 
-        img_d, img_h, img_w = input_image.shape
-        input_tensor = input_tensor.view(1, 1, img_d, img_h, img_w).float()
-        resize_tensor = F.interpolate(input_tensor, self.new_shape(input_image.shape), mode=mode).data[0, 0]
+#         np_dtype = input_image.dtype 
+#         img_d, img_h, img_w = input_image.shape
+#         input_tensor = input_tensor.view(1, 1, img_d, img_h, img_w).float()
+#         resize_tensor = F.interpolate(input_tensor, self.new_shape(input_image.shape), mode=mode).data[0, 0]
         
-        if self.verbose: print_tensor('post trans\n', resize_tensor)
-        resize_tensor = np.array(resize_tensor, dtype = np_dtype)
-        return resize_tensor
+#         if self.verbose: print_tensor('post trans\n', resize_tensor)
+#         resize_tensor = np.array(resize_tensor, dtype = np_dtype)
+#         return resize_tensor
+

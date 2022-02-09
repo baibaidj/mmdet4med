@@ -23,7 +23,7 @@ class DynamicHead3D(ATSSHead3DNOC):
         print(f'[DYHead] kernelsize {kernel_size} num_dytower {num_dytower}')
         super(DynamicHead3D, self).__init__(*arg, **kwargs)
 
-        self._init_layers_dy()
+        self._init_layers_dy() 
 
         # print('[DYHead] start level', self.start_level)
 
@@ -31,7 +31,7 @@ class DynamicHead3D(ATSSHead3DNOC):
         """Initialize layers of the head."""
         dyhead_tower = []
         for i in range(self.num_dytower):
-            dy_block_i = DyConv3D(self.in_channels, 
+            dy_block_i = DyConv3D(self.in_channels if i == 0 else self.feat_channels, 
                                   self.feat_channels, 
                                   kernel_size = self.kernel_size, 
                                   conv_cfg = self.conv_cfg, 
@@ -78,7 +78,7 @@ class DCNv2_Norm_3D(BaseModule):
         self.bn = nn.GroupNorm(num_groups=16, num_channels=out_channels)
 
     def forward(self, input,  offset, mask):
-        offset, mask = offset.contiguous(), mask.contiguous()
+        # offset, mask = offset.contiguous(), mask.contiguous()
         if self.stride == 1 and (offset.shape[2:] != input.shape[2:]):
             # print('Do resize for offset and mask')
             offset = F.interpolate(offset, size =  input.shape[2:], mode = 'trilinear', align_corners= False)
@@ -158,8 +158,8 @@ class DyConv3D(BaseModule):
             offset_mask = self.offset(feature)
 
             # print_tensor(f'\n[Feat] lvl {level} feature', feature)
-            offset = offset_mask[:, :self.offset_channel * 3, ...] # B,18,H,W() # 3x3x3 x3 , coordinates for each kernel element
-            mask = offset_mask[:, self.offset_channel*3:, ...].sigmoid() # B,9,H,W (0~1), # 3x3 x 1, weight to rescale the value offset. 
+            offset = offset_mask[:, :self.offset_channel * 3, ...].contiguous() # B,18,H,W() # 3x3x3 x3 , coordinates for each kernel element
+            mask = offset_mask[:, self.offset_channel*3:, ...].contiguous().sigmoid() # B,9,H,W (0~1), # 3x3 x 1, weight to rescale the value offset. 
             conv_args = dict(offset=offset, mask=mask)
             # ipdb.set_trace()
             # print_tensor(f'[Feat] lvl {level} offset', offset)
