@@ -29,7 +29,7 @@ import random
 @PIPELINES.register_module()
 class FindInstances(AbstractTransform):
     """
-    
+    adopted from nnDetection
     finding the label value of instances in each sample (batch dimension)
     """
 

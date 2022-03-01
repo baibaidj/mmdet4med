@@ -146,26 +146,12 @@ class SingleStageDetector3D(BaseDetector3D):
                                             img, img_metas, seg)
         # try: 
         x = self.extract_feat(img)
-        # except RuntimeError:
-        #     _ = [print(a['img_meta_dict']['filename_or_obj']) for a in img_metas]
-        #     ipdb.set_trace()
-        # print_tensor('\n[Detector] input', img)
-        # print_tensor('[Detector] feat', x[-1])
-        # ipdb.set_trace()
         losses = self.bbox_head.forward_train(x, img_metas, gt_bboxes,
                                               gt_labels, gt_bboxes_ignore)
-        # print_tensor('[Detector] img', img)
-        # print('[Detector] gt bbox', gt_bboxes)
-        # print('[Detector] gt labels', gt_labels)
-        # print('[Detector] loss', losses)
         if self.with_seghead:
-            # print_tensor('semantic seg', gt_semantic_seg)
-            # pdb.set_trace()
             loss_seg = self.seg_head.forward_train(x, img_metas, gt_semantic_seg, 
                                                    self.train_cfg)
-            # print('Detector] seg loss', loss_seg)
             losses.update(loss_seg)
-        # pdb.set_trace()
         return losses
 
     def simple_test_tile(self, img, img_metas, rescale=False):
@@ -197,9 +183,7 @@ class SingleStageDetector3D(BaseDetector3D):
         img_metas, 
         mode: Union[BlendMode, str] = BlendMode.CONSTANT,
         sigma_scale = 0.125,
-        padding_mode: Union[PytorchPadMode, str] = PytorchPadMode.CONSTANT,
-        rescale = True
-    ) -> torch.Tensor:
+        rescale = True) -> torch.Tensor:
         """
         TODO: visualize this method to gain insight on how the patches are cropped
         TODO: sliding has order, the target may be split during cropping, and optimal sliding order should be determined
@@ -248,25 +232,23 @@ class SingleStageDetector3D(BaseDetector3D):
             - input must be channel-first and have a batch dim, supports N-D sliding window.
 
         """
-
-        if (self.overlap < 0) or (self.overlap >= 1):
-            raise AssertionError("overlap must be >= 0 and < 1.")
-        # ip_dtype = torch.float #inputs.dtype
         device = inputs.device; sw_device = device#'cpu'
         batch_size = inputs.shape[0]
         Shaper = ShapeHolder(inputs.shape[2:], self.roi_size)
-        scan_interval = _get_scan_interval(Shaper.ready_shape_safe, Shaper.patch_shape, 
+        scan_interval = _get_scan_interval(Shaper.ready_shape_safe, 
+                                           Shaper.patch_shape, 
                                            Shaper.spatial_dim, self.overlap)
-        window_slices = dense_patch_slices(Shaper.ready_shape_safe, Shaper.patch_shape, scan_interval)
+        window_slices = dense_patch_slices(Shaper.ready_shape_safe, 
+                                            Shaper.patch_shape, scan_interval)
         num_win = len(window_slices)  # number of windows per image
-        # Perform predictions
         # print_tensor('original inputs', inputs) BCHWD
-        ensembler = BboxSegEnsembler1Case(Shaper.ready_shape_safe, Shaper.patch_shape, 
-                                    self.seg_num_classes, self.test_cfg, device = device)
+        ensembler = BboxSegEnsembler1Case(Shaper.ready_shape_safe, 
+                                        Shaper.patch_shape, 
+                                        self.seg_num_classes, 
+                                        self.test_cfg, device = device)
         if self.with_seghead:
-            ensembler.initial_tile_weight_map(Shaper.patch_shape, mode = mode, sigma_scale = sigma_scale)
-        # print_tensor('[Ensemble] initalize', ensembler.seg_output_4d)
-        # print_tensor('[Ensemble] initalize', ensembler.seg_countmap_4d)
+            ensembler.initial_tile_weight_map(Shaper.patch_shape, 
+                                        mode = mode, sigma_scale = sigma_scale)
         det_result_batch, seg_result_batch = [], []
         for bix in range(batch_size):
             img_meta = img_metas[bix]
@@ -282,18 +264,11 @@ class SingleStageDetector3D(BaseDetector3D):
                 window_data = torch.cat([inputs[win_slice] for win_slice in tiles_slicer]).to(device)
                 # print_tensor(f'[SlideInfer] window {six} data', window_data)
                 det_results, seg_results = self.simple_test_tile(window_data, img_meta_tiles)  # batched patch segmentation
-                # if self.verbose and six % 30 ==0 :  #self.verbose and  six % 30 ==0 
-                #     print_tensor(f'\n[SliceInfer] seg results batch{bix} win{six}', seg_results)
-                #     for bi, det in enumerate(det_results):
-                #         print_tensor(f'\n[SliceInfer] bix {bi} det result bbox', det[0])
-                #         print_tensor(f'\n[SliceInfer] bix {bi} det result score', det[1])
-                # pdb.set_trace()
                 ensembler.store_det_output(det_results)
                 if self.with_seghead: 
                     ensembler.update_seg_output_batch(seg_results, tiles_slicer)
             
             det_result_img = ensembler.finalize_det_bbox(verbose=False) # (bboxes_nx7, labels_nx1)
-            
             det_result_img = ensembler.offset_preprocess4detect(det_result_img, img_meta, 
                                                             Shaper.ready_shape_safe, rescale)
             det_result_batch.append(det_result_img)
@@ -301,16 +276,22 @@ class SingleStageDetector3D(BaseDetector3D):
 
             if self.with_seghead:
                 seg_result_img = ensembler.finalize_segmap() # 1CHWD
-                # print_tensor(f'[SliceInfer] seg results ensemble {bix}', seg_result_img)
                 seg_result_img = ensembler.offset_preprocess4seg(seg_result_img, img_meta, 
                                                                 Shaper.ready_shape_safe, rescale)
                 seg_result_batch.append(seg_result_img)
                 ensembler.reset_seg_output(); ensembler.reset_seg_countmap()
-
             torch.cuda.empty_cache()
             # print_tensor('[Ensemble] reset', ensembler.seg_output_4d)
             # print_tensor('[Ensemble] reset', ensembler.seg_countmap_4d)
         return det_result_batch, seg_result_batch
+        # if self.verbose and six % 30 ==0 :  #self.verbose and  six % 30 ==0 
+                #     print_tensor(f'\n[SliceInfer] seg results batch{bix} win{six}', seg_results)
+                #     for bi, det in enumerate(det_results):
+                #         print_tensor(f'\n[SliceInfer] bix {bi} det result bbox', det[0])
+                #         print_tensor(f'\n[SliceInfer] bix {bi} det result score', det[1])
+                # pdb.set_trace()
+        # print_tensor('[Ensemble] initalize', ensembler.seg_output_4d)
+        # print_tensor('[Ensemble] initalize', ensembler.seg_countmap_4d)
 
     def inference(self, imgs, img_metas, rescale):
         """Inference with slide/whole style.
@@ -330,22 +311,22 @@ class SingleStageDetector3D(BaseDetector3D):
 
         """
         assert imgs.shape[0] == 1 and len(img_metas) == 1
-
         assert self.test_cfg.mode in ['slide', 'whole']
-
         # print(f'INFER: Flip {flip} Direction {flip_direction} dims {flip_dims}')
         if self.test_cfg.mode == 'slide':
-            det_results, seg_results = self.sliding_window_inference(imgs, img_metas, mode = self.blend_mode, 
-                                                                    padding_mode= self.padding_mode,
-                                                                    sigma_scale=self.sigma_scale, 
-                                                                    rescale= rescale)
+            det_results, seg_results = self.sliding_window_inference(
+                                imgs, img_metas, mode = self.blend_mode, 
+                                padding_mode= self.padding_mode,
+                                sigma_scale=self.sigma_scale, 
+                                rescale= rescale)
         else:
             # NOTE: whole inference should be implemented
             det_results, seg_results= self.whole_inference(imgs, img_metas, rescale)
 
         if self.with_seghead:
-            seg_results = torch.cat([torch.softmax(seg, dim=1) if seg.shape[1] > 1 else torch.sigmoid(seg)
-                                for seg in seg_results], axis = 0).cpu()
+            seg_results = torch.cat([torch.softmax(seg, dim=1) 
+                                    if seg.shape[1] > 1 else torch.sigmoid(seg)
+                                    for seg in seg_results], axis = 0).cpu()
         return det_results, seg_results 
 
 
@@ -357,7 +338,8 @@ class SingleStageDetector3D(BaseDetector3D):
             if need_probs:
                 seg_pred = seg_results.cpu() #.float().cpu().numpy()
             else:
-                seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 else seg_results.squeeze(1) > 0.5
+                seg_pred = seg_results.argmax(dim=1) if seg_results.shape[1] > 1 \
+                             else seg_results.squeeze(1) > 0.5
                 # print_tensor(f'[SimpleTest] pred unique labels {torch.unique(seg_pred)}', seg_pred)
                 seg_pred = seg_pred.to(torch.uint8).cpu()
                 # unravel batch dim

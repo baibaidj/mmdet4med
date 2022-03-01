@@ -1,70 +1,82 @@
 # dataset settings
-dataset_type = 'RibFractureDet'
-img_dir = 'data/Task113_RibFrac_KYRe' #'data/Task113_RibFrac_Keya'
+dataset_type = 'RibFractureDet' # mmdet/datasets/radioset.py 中注册的类
+img_dir = 'data/Task113_RibFrac_KYRe' # 存放了经过MONAI下./scripts/plan4ribfrac.py 处理后的数据
 in_channel=  1
-norm_param = {
-    "mean": 330, "std": 562.5, "median": 221,
-    "mn": -1024, "mx": 3071,
-    "percentile_99_5": 3071,
-    "percentile_00_5": -927}
+norm_param = { "mean": 330, "std": 562.5, "median": 221, # 归一化参数，借用自nnDetection
+                "mn": -1024, "mx": 3071, 
+                "percentile_99_5": 3071,"percentile_00_5": -927}
 
-keys = ('img', 'seg') #, seg='instance_seg' 
-dtypes = ('float', 'int',) # , 'float', 
-interp_modes = ("bilinear", "nearest")  #  , "bilinear", 'nearest'
+keys = ('img', 'seg') # 每例样本要加载的数据
+dtypes = ('float', 'int',) # 加载数据类别对应的数据类型
+interp_modes = ("bilinear", "nearest")  #  加载数据使用的插值方法
 core_key_num = 2
 ext_patch_size = (212, 240, 176) # avoid artifacts such as boarder reflection
 patch_size = (160, 192, 128)  # [160 192 112] # xyz
-label_map = {1: 0, 2:0, 3:0, 4:0, 7:0} # TODO: how to realize multiscale training?
+label_map = {1: 0, 2:0, 3:0, 4:0, 7:0} # 如何使用标注的各个类别
 train_pipeline = [
-    dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), label_map = label_map),  # img_meta_dict see mmseg.datasets.pipeline.transform_moani
-    dict(type = 'AddChanneld', keys= keys), 
-    # dict(type = 'ConvertLabeld', keys = 'seg', label_mapping = label_mapping, value4outlier = 1), 
-    dict(type = 'InstanceBasedCropDet', keys=keys, patch_size= ext_patch_size, verbose = False), # cropshape
-    dict(type = 'SpatialPadd_', keys=keys, spatial_size= ext_patch_size, # padshape
-                                mode='reflect', verbose = False),  
+     # mmdet/datasets/transform4med/load_det.py 中注册的类
+    dict(type = 'Load1CaseDet', keys = ('img', 'seg', 'roi'), # 自建加载类
+                label_map = label_map),
+    dict(type = 'AddChanneld', keys= keys), # 取自monai
+    dict(type = 'InstanceBasedCropDet', keys=keys, # 自建采样crop类
+                patch_size= ext_patch_size, verbose = False), # cropshape
+    dict(type = 'SpatialPadd_', keys=keys, 
+                spatial_size= ext_patch_size, # padshape
+                mode='reflect', verbose = False),  
     dict(type = 'CastToTyped_', keys = keys,  dtype=dtypes), 
     dict(type = 'ToTensord', keys = keys),
-    dict(type = 'RandFlipd_', keys = keys, spatial_axis=(0, 1), prob=0.4),
-    dict(type = 'RandFlipd_', keys = keys, spatial_axis=(2, ), prob=0.4),
-    # dict(type = 'RideOnLabel', keys = {'seg': ('seg', 'skeleton') }, cat_dim = 0),
+    dict(type = 'RandFlipd_', keys = keys, 
+                spatial_axis=(0, 1), prob=0.4),
+    dict(type = 'RandFlipd_', keys = keys, 
+                spatial_axis=(2, ), prob=0.4),
     # dict(type = 'DataStatsd', keys = keys, prefix = 'Final'), 
-    dict(type='FormatShapeMonai', verbose = False, keys = keys[:core_key_num],  channels = in_channel),
-    dict(type='Collect', keys=keys[:core_key_num], verbose = False, meta_keys = ('img_meta_dict', )),
-]
-test_keys = ('img', )
-test_pipeline = [ 
-        dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map),  
-        dict(type='MultiScaleFlipAug3D',
-            # label_mapping = label_mapping,
-            target_spacings = None, 
-            flip = False,
-            flip_direction= ['diagonal'],
-            transforms=[
-                dict(type = 'AddChanneld', keys= test_keys), 
-                dict(type = 'SpacingTTAd', keys = test_keys, pixdim = None, mode = ('bilinear', )),
-                dict(type = 'SpatialPadd_', keys= test_keys, spatial_size= patch_size, mode='reflect', method = 'end'), 
-                dict(type = 'FlipTTAd_', keys = test_keys),  
-                dict(type = 'CastToTyped_', keys = ('img', ),  dtype= ('float', )),
-                dict(type = 'ToTensord', keys = ('img', )), 
-                dict(type = 'NormalizeIntensityGPUd', keys='img',
-                            subtrahend=norm_param['mean'],
-                            divisor=norm_param['std'],
-                            percentile_99_5=norm_param['percentile_99_5'],
-                            percentile_00_5=norm_param['percentile_00_5']
-                            ),
-                dict(type= 'FormatShapeMonai', keys=('img', ), use_datacontainer = False,
-                                             channels = in_channel),
-                dict(type='Collect', keys=('img', ), meta_keys = ('img_meta_dict', ))
-                ], 
-            )
+    # 调整输入的通道数，放入mmcv提供的DataContainer中。
+    dict(type='FormatShapeMonai', keys = keys[:core_key_num], 
+                channels = in_channel, verbose = False),
+    # 收集训练中用到的数据，img_fp, seg_fp等会被丢掉。 
+    dict(type='Collect', keys=keys[:core_key_num], 
+                meta_keys = ('img_meta_dict', ), verbose = False),
+    # img_meta_dict see mmseg.datasets.pipeline.transform_moani
 ]
 
-# draw_step = 8
-total_samples = 160 #// draw_step #9842
-sample_per_gpu = 3# bs2 >> 24.5 G  # 
+# if flip_direction == 'diagonal': flip_dims = (0, 1)
+# elif flip_direction == 'headfeet': flip_dims = (2, )
+# elif flip_direction == 'all3axis': flip_dims = (0, 1, 2)
+test_keys = ('img', )
+test_pipeline = [ 
+    dict(type = 'Load1CaseDet', keys = ('img', 'roi'),  label_map = label_map),  
+    dict(type='MultiScaleFlipAug3D',
+        # label_mapping = label_mapping,
+        target_spacings = None, 
+        flip = False,
+        flip_direction= ['diagonal'], 
+        transforms=[
+            dict(type = 'AddChanneld', keys= test_keys), 
+            dict(type = 'SpacingTTAd', keys = test_keys, 
+                    pixdim = None, mode = ('bilinear', )),
+            dict(type = 'SpatialPadd_', keys= test_keys, 
+                    spatial_size= patch_size, mode='reflect', method = 'end'), 
+            dict(type = 'FlipTTAd_', keys = test_keys),  
+            dict(type = 'CastToTyped_', keys = ('img', ),  dtype= ('float', )),
+            dict(type = 'ToTensord', keys = ('img', )), 
+            dict(type = 'NormalizeIntensityGPUd', keys='img',
+                    subtrahend=norm_param['mean'],
+                    divisor=norm_param['std'],
+                    percentile_99_5=norm_param['percentile_99_5'],
+                    percentile_00_5=norm_param['percentile_00_5']
+                    ),
+            dict(type= 'FormatShapeMonai', keys=('img', ), 
+                    use_datacontainer = False,  channels = in_channel),
+            dict(type='Collect', keys=('img', ), meta_keys = ('img_meta_dict', ))
+            ], 
+        )
+]
+
+sample_per_gpu = 3 #bs2 >> 24.5 G  # 
 train_sample_rate = 1.0
 val_sample_rate = 0.30
-key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 
+key2suffix = {'img_fp': '_image.nii',  
+              'seg_fp': '_instance.nii', 
               'roi_fp':'_ins2cls.json'}
 data = dict(
     samples_per_gpu=sample_per_gpu,  # 16-3G
@@ -96,6 +108,7 @@ data = dict(
         ))
 
 gpu_aug_pipelines = [
+        # mmdet/datasets/transform4med/transform_monai.py 中注册的类
         # # data in torch tensor, not necessarily on gpu
         dict(type = 'Rand3DElasticGPUd', keys=keys[:core_key_num],
             sigma_range=(9, 13), # larger sigma mean smoother offset with smaller values
@@ -106,7 +119,6 @@ gpu_aug_pipelines = [
             scale_range=[0.15] * 3,
             prob=1.0,
             mode=interp_modes[:core_key_num], 
-            verbose=False
             ),  # 2s/mini-batch
         dict(type = 'NormalizeIntensityGPUd', keys='img',
                     subtrahend=norm_param['mean'],

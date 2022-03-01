@@ -168,18 +168,18 @@ class MultiScaleFlipAug3D(object):
     def __init__(self,
                  transforms,
                  target_spacings = None,
-                 img_scale = None,
                  flip=False,
-                 flip_direction= ('diagonal', 'headfeat', 'all3axis'), #'diagonal', 'headfeet', 'all3axis'
+                 flip_direction= ('diagonal', 'headfeat', 'all3axis'),
                  label_mapping = None,
                  value4outlier = 0,
-                 input_format = 'TCHW'):
+                 input_format = 'TCHW', **kwargs):
         self.label_mapping = label_mapping
         self.value4outlier = value4outlier
         self.input_format = input_format
         self.transforms = Compose(transforms)
         if target_spacings is not None:
-            self.target_spacings = target_spacings if isinstance(target_spacings, list) else [target_spacings]
+            self.target_spacings = target_spacings if \
+                    isinstance(target_spacings, list) else [target_spacings]
         else:
             self.target_spacings = [None]
 
@@ -188,7 +188,8 @@ class MultiScaleFlipAug3D(object):
             flip_direction, list) else [flip_direction]
 
         assert mmcv.is_list_of(self.flip_direction, str)
-        assert set(self.flip_direction) <= set(['diagonal', 'headfeet', 'all3axis', None]), f'Given directions are {self.flip_direction}'
+        assert set(self.flip_direction) <= set(['diagonal', 'headfeet', 'all3axis', None]
+                    ), f'Given directions are {self.flip_direction}'
 
         if not self.flip:
             warnings.warn(
@@ -233,7 +234,6 @@ class MultiScaleFlipAug3D(object):
         for data in aug_data:
             for key, val in data.items():
                 aug_data_dict[key].append(val)
-        
         # print(aug_data_dict['img_metas'])
         return aug_data_dict
 

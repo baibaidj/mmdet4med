@@ -29,8 +29,6 @@ class BboxSegEnsembler1Case(object):
                                                         device = self.device, 
                                                         **kwargs) #.clip(1e-8) #.to(torch.half)
         # print_tensor('[BuildTile] tile weight map', self.tile_weight_map_3d)
-        # pdb.set_trace()
-
     def reset_det_storage(self):
         self.det_storage = []
 
@@ -48,7 +46,8 @@ class BboxSegEnsembler1Case(object):
             self.seg_countmap_4d = torch.zeros((self.num_classes, ) + self.image_size, 
                                         dtype=torch.float, device = self.device)
 
-    def _update_seg_output_1tile(self, seg_logit_tile, slice_tile, interpolate_mode = 'trilinear'):
+    def _update_seg_output_1tile(self, seg_logit_tile, slice_tile, 
+                                interpolate_mode = 'trilinear'):
         """[summary]
 
         Args:
@@ -71,8 +70,8 @@ class BboxSegEnsembler1Case(object):
         self.seg_countmap_4d[slice_tile] += self.tile_weight_map_3d[None,  ...]
         # print_tensor(f'[BuildTile] segout', self.seg_output_4d)
         # print_tensor(f'[BuildTile] seg count', self.seg_countmap_4d)
-        
-    def update_seg_output_batch(self, seg_logit_tiles, slice_tiles, interpolate_mode = 'trilinear'):
+    def update_seg_output_batch(self, seg_logit_tiles, slice_tiles, 
+                                interpolate_mode = 'trilinear'):
         """
         Args:
             seg_logit_tiles (5d_tensor): bchwd, b for number of windows
@@ -91,8 +90,6 @@ class BboxSegEnsembler1Case(object):
             # print_tensor(f'[SegFill] seg tile slice {sli}', seg)
             # print_tensor(f'[SegFill] weight map', self.tile_weight_map_3d)
             self._update_seg_output_1tile(seg, sli[-4:], interpolate_mode)
-    
-
 
     def finalize_segmap(self, final_slicing = None):
         # final_slicing : list[slice() ] len = 5
@@ -136,7 +133,6 @@ class BboxSegEnsembler1Case(object):
             print_tensor('[SlideInfer] integrate det score refine', bboxes[..., 6])
             print_tensor('[SlideInfer] integrate det label refine', labels)
         return (bboxes, labels)
-
 
     def offset_preprocess4detect(self, det_result, img_meta, ready_img_shape, rescale):
         """

@@ -14,7 +14,6 @@ class RibFractureNN(CustomDatasetNN):
     def __init__(self, *args, **kwargs):
         super(RibFractureNN, self).__init__(*args, **kwargs)
 
-
 @DATASETS.register_module()
 class RibFractureDet(CustomDatasetDet):
 
@@ -23,8 +22,6 @@ class RibFractureDet(CustomDatasetDet):
     def __init__(self, *args, **kwargs):
         super(RibFractureDet, self).__init__(*args, **kwargs)
 
-
-
 @DATASETS.register_module()
 class RibFractureDet3cls(CustomDatasetDet):
 
@@ -32,8 +29,6 @@ class RibFractureDet3cls(CustomDatasetDet):
 
     def __init__(self, *args, **kwargs):
         super(RibFractureDet3cls, self).__init__(*args, **kwargs)
-
-
 
 
 @DATASETS.register_module()

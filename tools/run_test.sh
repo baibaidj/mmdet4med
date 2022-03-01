@@ -15,12 +15,7 @@
 #     [--eval ${EVAL_METRICS}]
 
 task=ribfrac
-# model=retinanet3d_4l8c_vnet_1x_ribfrac_syncbn_ft1cls
-# model=retina_unet_r34_4l16c_rf1231_160x192x128_1cls_ohem_atssdy_vfl
-model=retina_unet_r34_4l16c_rf1231_160x192x128_1cls_ohem_atssdy_vfl #retinanet3d_4l8c_vnet_3x_ribfrac_1cls_syncbn
-# model=retinanet3d_4l8c_vnet_1x_ribfrac_1cls
-
-
+model=retina_unet_r34_4l16c_rf1231_160x192x128_1cls_ohem_atssdy_vfl
 CUDA_VISIBLE_DEVICES=0 python tools/test_med.py configs/${task}/${model}.py \
     work_dirs/${model}/latest.pth \
     --eval mAP

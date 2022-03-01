@@ -13,19 +13,21 @@ from monai.utils import fall_back_tuple, ensure_tuple_rep
 @PIPELINES.register_module()
 class Load1CaseDet:
     """
-    img_fp = f"{c}_image.nii"
-        np.ndarray
-    seg_fp = f"{c}_instance.npy"
-        np.ndarray
-    roi_fp = "{c}_ins2cls.json"
+    Expected files for one data sample 
 
-    rois: list[dict(), dict(), ...]
-    one_dict: {'instance' : int, start from 1
-                'bbox': list(int), e.g. (x1, y1, z1, x2, y2, z2)
-                'class': int, start from 1 
-                'center' : list(int), (x, y, z)
-                'spine_boudnary': list(int), (x, y) NOTE: x0x1y0y1, not x0y0x1y1
-                }
+    img_fp = f"{c}_image.nii", CT图像
+        np.ndarray
+    seg_fp = f"{c}_instance.nii", 病灶按instance存放的mask区域，每个病灶区域都是独立的序号，从1开始。
+        np.ndarray, 
+    roi_fp = "{c}_ins2cls.json", 图像中每个mask区域(instance)的信息，包括instance序号、类别、中心和bbox
+        rois: list[dict(), dict(), ...]
+            one_dict: {'instance' : int, start from 1
+                        'bbox': list(int), e.g. (x1, y1, z1, x2, y2, z2)
+                        'class': int, start from 1 
+                        'center' : list(int), (x, y, z)
+                        'spine_boudnary': list(int), (x, y) NOTE: x0x1y0y1, not x0y0x1y1
+                        }
+        
     """
     def __init__(self, keys = ('img', 'seg', 'roi'), 
                  meta_key = 'img_meta_dict', verbose = False,
@@ -42,6 +44,23 @@ class Load1CaseDet:
         # self.axis_reorder = axis_reorder
 
     def __call__(self, data):
+        """
+        
+        
+        args:
+            data['img_fp']: 图像路径
+            data['seg_fp']: 病灶mask路径
+            data['roi_fp']: 病灶信息路径
+        return:
+            data['img']: 图像数据
+            data['seg']: 病灶instance mask
+            data['img_meta_dict']: 图像信息 
+                dict(spatial_shape = (3,) array, 
+                    original_affine = (4x4) array, 
+                    filename_or_obj = path_to_image, 
+                    inst2cls_map = the class of each instance in the mask)
+
+        """
         data = dict(data)
         # a = [print('[loadnn]', k, v) for k, v in data.items()]
         data[self.meta_key] = dict(spatial_shape = None, original_affine = None, 
@@ -93,6 +112,14 @@ def sample_from_range(tic, toc):
 @PIPELINES.register_module()   
 class InstanceBasedCropDet:
     """
+    基于instance mask的裁剪，先找多个候选中心，然后结合中心点坐标与给定crop大小裁剪
+    每次抽取两个样本，理想情况是一个正样本，一个负样本。如果没有正样本，则采集两个负样本。
+    负样本中心的采样思路：
+        1. 在三个轴上找到采样中心的边界crop_center_range，即(patch_size //2, origin_size - patch_size //2)
+        2. z轴可在采样边界范围内随机取值
+        3. 对于xy轴， 先固定一个轴，选极值（极大值或极小值），另外一个轴在边界范围内随机取值。
+        详见self.rand_rib_region。
+    
     rois: list[dict(), dict(), ...]
     one_dict: {'instance' : int, start from 1
                 'bbox': list(int), e.g. (x1, y1, z1, x2, y2, z2)

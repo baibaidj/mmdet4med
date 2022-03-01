@@ -1,34 +1,34 @@
 _base_ = [
     '../_base_/models_med/retina_unet_r34_4l16c_atssnoc_160x192x128_vfl_1cls.py',
-    '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py'
-    # '../ribfrac/retina_unet_r18_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl.py',
-    # '../_base_/swa.py',
+    '../_base_/schedules/schedule_2x.py', '../_base_/default_runtime.py' # '../_base_/swa.py',
 ]
 
 img_dir = 'data/Task113_RibFrac_KYRe'
 key2suffix = {'img_fp': '_image.nii',  'seg_fp': '_instance.nii', 'roi_fp':'_ins2cls.json'}
 data = dict(samples_per_gpu = 3, workers_per_gpu= 9, 
-            train=dict(sample_rate = 1.0, json_filename = 'dataset_1231.json', img_dir=img_dir, key2suffix = key2suffix), 
-            val=dict(sample_rate = 0.5, json_filename = 'dataset_1231.json', img_dir=img_dir, key2suffix = key2suffix), 
-            test= dict(sample_rate = 0.1, json_filename = 'dataset_1231.json',img_dir=img_dir, key2suffix = key2suffix))
+            train=dict(sample_rate = 1.0, json_filename = 'dataset_1231.json', 
+                        img_dir=img_dir, key2suffix = key2suffix), 
+            val=dict(sample_rate = 0.5, json_filename = 'dataset_1231.json', 
+                        img_dir=img_dir, key2suffix = key2suffix), 
+            test= dict(sample_rate = 0.1, json_filename = 'dataset_1231.json',
+                        img_dir=img_dir, key2suffix = key2suffix))
 
-# densecl_cp = 'work_dirs/densecl_r34_4l16c_ct5k_bone_160x192x128_100eps/latest.pth'
 model = dict(
         neck = dict(upsample_cfg=dict(use_norm = True)),
         bbox_head = dict(verbose = False, use_vfl = True, 
                         loss_cls_vfl=dict(alpha=0.75, loss_weight=8.0),
                         loss_bbox=dict(loss_weight=0.4), 
-                        anchor_generator=dict(octave_base_scale=2, scales_per_octave=2, verbose = False)
+                        anchor_generator=dict(octave_base_scale=2, 
+                            scales_per_octave=2, verbose = False)
                         ), 
-        seg_head = dict(verbose = False, 
-                        loss_decode =dict( loss_weight=(1.0 * 0.3, 0.66 * 0.3)), 
+        seg_head = dict(loss_decode =dict( loss_weight=(1.0 * 0.3, 0.66 * 0.3)), 
                     ),
         train_cfg= dict(
             assigner = dict(topk = 8, center_within = False,  verbose = False), 
             sampler=dict(num = 64, pool_size = 20, pos_fraction=0.4)
             ), 
-
-        test_cfg = dict(nms_pre=300, score_thr=0.2, max_per_img=48, sw_batch_size = 8, overlap=0.4),                
+        test_cfg = dict(nms_pre=300, score_thr=0.2, max_per_img=48, 
+                        sw_batch_size = 8, overlap=0.4),                
     )
 
 find_unused_parameters=True
@@ -64,6 +64,6 @@ evaluation=dict(interval=2, start=0, metric='mAP',
 
 
 # CUDA_VISIBLE_DEVICES=5 python tools/train.py configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atss_vfl_upnorm_1231.py 
-# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29024 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atss_vfl_upnorm_1231.py 3 --gpus 3 #--no-validate
+# CUDA_VISIBLE_DEVICES=1,3,5 PORT=29024 bash ./tools/dist_train.sh configs/ribfrac/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atss_vfl_upnorm_1231.py 3
 
 # 32 epoch: 0.50@1 0.58@2 0.67@4 0.76@8 0.78@50

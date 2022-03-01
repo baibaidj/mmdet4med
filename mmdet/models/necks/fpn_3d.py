@@ -113,7 +113,8 @@ class FPN3D(BaseModule):
             self.add_extra_convs = 'on_input'
 
         self.out_channels = self.compute_output_channels(is_double_chn)
-        self.up_ops = self.build_upsample_layers(conv_cfg, norm_cfg = norm_cfg if self.upsample_use_norm else None)
+        self.up_ops = self.build_upsample_layers(conv_cfg, norm_cfg = norm_cfg 
+                                                    if self.upsample_use_norm else None)
         print(f'[FPN3D] input channels {self.in_channels} out channels {self.out_channels} upmode {self.up_ops[-1]}')
         self.lateral_convs = nn.ModuleList()
         self.fpn_convs = nn.ModuleList()
@@ -139,7 +140,6 @@ class FPN3D(BaseModule):
 
             self.lateral_convs.append(l_conv)
             self.fpn_convs.append(fpn_conv)
-
 
         # add extra conv layers (e.g., RetinaNet)
         extra_levels = num_outs - self.backbone_end_level + self.start_level
@@ -214,13 +214,10 @@ class FPN3D(BaseModule):
     def forward(self, inputs):
         """Forward function."""
         assert len(inputs) == len(self.in_channels)
-
-        # _ = [print_tensor(i, s) for i, s in enumerate(inputs)]
         # build laterals
         laterals = []
         for i, lateral_conv in enumerate(self.lateral_convs):
             lat_out = lateral_conv(inputs[i])
-            # ipdb.set_trace()
             if self.verbose: print_tensor(f'[FPN] Lateral conv level {i}', lat_out )
             laterals.append(lat_out)
 
@@ -228,9 +225,6 @@ class FPN3D(BaseModule):
         used_backbone_levels = len(laterals)
         for i in range(used_backbone_levels - 1, 0, -1): # 5,4,3,2,1
             # print_tensor(f'[fpn3d ups] {i} {self.up_ops[i]}', laterals[i])
-
-            # In some cases, fixing `scale factor` (e.g. 2) is preferred, but
-            #  it cannot co-exist with `size` in `F.interpolate`.
             up_feat = self.up_ops[i](laterals[i])
             if self.verbose: print_tensor(f'[FPN] UP level {i}', up_feat )
             laterals[i - 1] = laterals[i - 1] + up_feat
@@ -266,10 +260,11 @@ class FPN3D(BaseModule):
                         outs.append(self.fpn_convs[i](F.relu(outs[-1])))
                     else:
                         outs.append(self.fpn_convs[i](outs[-1]))
-        # ipdb.set_trace()
+
         # bb = [print_tensor(f'[FPNeck] inputlevel {i}', o) for i, o in enumerate(inputs)]
         # level_hasnan = [torch.isnan(a).any() for i, a in enumerate(outs)]
         # if self.verbose: 
-        #     aa = [print_tensor(f'[FPNeck] level {i}', o) for i, o in enumerate(outs)] #hasnan {level_hasnan[i]}
+        #     aa = [print_tensor(f'[FPNeck] level {i}', o) for i, o in 
+        #           enumerate(outs)] #hasnan {level_hasnan[i]}
         # if any(level_hasnan): ipdb.set_trace()
         return tuple(outs)

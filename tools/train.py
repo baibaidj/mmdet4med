@@ -5,10 +5,10 @@ import os, sys
 import os.path as osp
 import time
 import warnings
-mmseg_rt = '/home/dejuns/git/mmseg4med'
-monai_rt = '/home/dejuns/git/MONAI'
-if mmseg_rt in sys.path: sys.path.remove(mmseg_rt)
-if monai_rt in sys.path: sys.path.remove(monai_rt)
+user_home = os.environ['HOME']
+conflict_rts = [f'{user_home}/git/mmseg4med', f'{user_home}/git/MONAI']
+for rt in conflict_rts:
+    if rt in sys.path: sys.path.remove(rt)
 
 import mmcv
 import torch, pdb
