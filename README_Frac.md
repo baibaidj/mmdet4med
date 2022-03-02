@@ -184,6 +184,22 @@ CUDA_VISIBLE_DEVICES=1,3,5 PORT=29024 bash ./tools/dist_train.sh configs/ribfrac
 
 ~~~
 
+训练后存放的结果
+~~~
+work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1130
+├── 20220103_222624.log # 训练记录
+├── 20220103_222624.log.json
+├── best_mAP_epoch_10.pth # 基于mAP的最佳权重
+├── epoch_21.pth
+├── epoch_22.pth
+├── epoch_23.pth
+├── epoch_24.pth
+├── latest.pth -> epoch_24.pth
+├── publish-2afc5786.pth # 发布的权重
+└── retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atss_vfl_upnorm_1231.py # 配置文件，用于部署
+
+~~~
+
 
 # 训练后推理
 
@@ -204,7 +220,7 @@ bash scripts/infer_ribfrac1class.sh $gpuix $numfold
 
 输出结果
 ~~~
-
+work_dirs/retina_unet_r34_4l16c_3x_ribfrac_160x192x128_1cls_ohem_atssnoc_vfl_1130
  ├── visual_kyt30o40_test_cutoff0.5_nii
  │   ├── 1119674_20180511_fp16_det_roi_infos.json # 检测头预测的病灶信息
  │   ├── 1119674_20180511_fp16_roi_det_mask.nii.gz # 检测头预测的病灶mask，用做可视化
