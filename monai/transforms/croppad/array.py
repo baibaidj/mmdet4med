@@ -42,6 +42,7 @@ __all__ = [
     "RandCropByPosNegLabel",
     "ResizeWithPadOrCrop",
     "BoundingRect",
+    ""
 ]
 
 
@@ -688,3 +689,4 @@ class BoundingRect(Transform):
             bbox.append([i for k in zip(start_, end_) for i in k])
 
         return np.stack(bbox, axis=0)
+

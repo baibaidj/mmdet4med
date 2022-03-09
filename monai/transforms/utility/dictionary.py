@@ -125,6 +125,7 @@ __all__ = [
     "AddExtremePointsChannelDict",
     "TorchVisionD",
     "TorchVisionDict",
+    "CastToTyped_"
 ]
 
 
@@ -923,3 +924,39 @@ ConvertToMultiChannelBasedOnBratsClassesD = (
 AddExtremePointsChannelD = AddExtremePointsChannelDict = AddExtremePointsChanneld
 TorchVisionD = TorchVisionDict = TorchVisiond
 RandLambdaD = RandLambdaDict = RandLambdad
+
+
+class CastToTyped_(MapTransform):
+    """
+    Dictionary-based wrapper of :py:class:`monai.transforms.CastToType`.
+    """
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        dtype: Union[Sequence[Union[DtypeLike, torch.dtype]], DtypeLike, torch.dtype] = np.float32,
+        # allow_missing_keys: bool = False,
+    ) -> None:
+        """
+        Args:
+            keys: keys of the corresponding items to be transformed.
+                See also: :py:class:`monai.transforms.compose.MapTransform`
+            dtype: convert image to this data type, default is `np.float32`.
+                it also can be a sequence of dtypes or torch.dtype,
+                each element corresponds to a key in ``keys``.
+            allow_missing_keys: don't raise exception if key is missing.
+
+        """
+        MapTransform.__init__(self, keys)
+        self.dtype = ensure_tuple_rep(dtype, len(self.keys))
+        self.dtype = [np.float32 if 'float' == k else np.uint8 for k in self.dtype]
+        self.converter = CastToType()
+
+    def __call__(
+        self, data: Mapping[Hashable, Union[np.ndarray, torch.Tensor]]
+    ) -> Dict[Hashable, Union[np.ndarray, torch.Tensor]]:
+        d = dict(data)
+        for key, dtype in self.key_iterator(d, self.dtype):
+            d[key] = self.converter(d[key], dtype=dtype)
+
+        return d

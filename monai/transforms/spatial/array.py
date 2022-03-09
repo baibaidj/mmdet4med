@@ -1643,3 +1643,5 @@ class Rand3DElastic(Randomizable, Transform):
             grid[:3] += gaussian(offset)[0] * self.magnitude
             grid = self.rand_affine_grid(grid=grid)
         return self.resampler(img, grid, mode=mode or self.mode, padding_mode=padding_mode or self.padding_mode)
+
+

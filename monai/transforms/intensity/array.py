@@ -46,6 +46,7 @@ __all__ = [
     "GaussianSharpen",
     "RandGaussianSharpen",
     "RandHistogramShift",
+    "NormalizeIntensityGPU"
 ]
 
 
@@ -861,3 +862,4 @@ class RandHistogramShift(Randomizable, Transform):
         return np.asarray(
             np.interp(img, reference_control_points_scaled, floating_control_points_scaled), dtype=img.dtype
         )
+
